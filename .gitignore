@@ -1,0 +1,12 @@
+node_modules/
+.turbo/
+coverage/
+dist/
+*.tsbuildinfo
+.DS_Store
+.env
+.env.*
+!.env.example
+
+# Heniek state belongs in the resolved application home, never this repository.
+.heniek/

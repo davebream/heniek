@@ -1,0 +1,47 @@
+{
+  "$schema": "https://kombajn.dev/schemas/project-config/v1",
+  "schemaVersion": 4,
+  "orchestrator": {
+    "maxConcurrent": 1
+  },
+  "tracker": {
+    "adapter": "github"
+  },
+  "vcs": {
+    "host": "github",
+    "cli": "gh",
+    "mergeFlow": "pr",
+    "branchingStrategy": "flat"
+  },
+  "ci": {
+    "adapter": "github-actions",
+    "requiredForDone": true
+  },
+  "testRunner": {
+    "command": "pnpm check",
+    "timeout": 900000,
+    "retries": 2,
+    "serialize": true
+  },
+  "baseline": {
+    "commands": ["pnpm check"],
+    "fixerMaxAttempts": 2
+  },
+  "worktree": {
+    "setup": ["corepack enable && pnpm install --frozen-lockfile"]
+  },
+  "doneGates": ["tests-pass", "ci-green", "pr-merged"],
+  "epic": {
+    "autonomousDefault": true,
+    "exitAfterWave": false,
+    "maxContinuations": 3,
+    "dispatchTimeout": 2700,
+    "mergeStrategy": "serial",
+    "contractGateMode": "strict",
+    "contractRequirementsSource": "design-and-issue",
+    "coherenceContractTrust": "auto-generated-as-advisory"
+  },
+  "plugin": {
+    "pluginName": "kombajn-dev"
+  }
+}
