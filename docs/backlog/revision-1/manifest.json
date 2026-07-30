@@ -1,7 +1,7 @@
 {
   "schemaVersion": "heniek.backlog-manifest.v1",
   "revision": 1,
-  "state": "awaiting-launch-approval",
+  "state": "approved-awaiting-readiness",
   "queueHash": "61fee7f076d3946cfa2a4b82f73f3ec72cf9e8eba6c31cc891277dc7ddd7525a",
   "issueCount": 57,
   "parentEpic": {

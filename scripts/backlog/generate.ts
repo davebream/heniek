@@ -118,7 +118,7 @@ const renderedIssues = renderedWithoutBodyHashes;
 const manifest = {
   schemaVersion: "heniek.backlog-manifest.v1",
   revision: 1,
-  state: "awaiting-launch-approval",
+  state: "approved-awaiting-readiness",
   queueHash,
   issueCount: issues.length,
   parentEpic: {
@@ -169,12 +169,12 @@ const decisionAuditHash = await fileHash("docs/provenance/decision-audit-v0.1.md
 
 const approval = `# Heniek revision-1 backlog approval artifact
 
-Status: **not approved; publication and factory launch are disabled**
+Status: **approved for publication; factory launch remains readiness-gated**
 
 This document is the cold-read queue artifact for the single launch approval.
-Approval freezes this exact queue revision and authorizes publication and the
-bounded seven-day factory only when the separate machine-readable readiness
-report is also \`ready: true\`.
+The repository owner recorded approval of this exact queue revision on 31 July
+2026. Publication is authorized; the bounded seven-day factory may start only
+when the separate machine-readable readiness report is also \`ready: true\`.
 
 ## Canonical inputs
 
