@@ -13,3 +13,21 @@ dist/
 
 # kombajn CLI
 .kombajn/.state/
+
+# Agent, factory, and editor overlay files. Automation runs with a home
+# directory overlaid on the checkout root, so an unscoped `git add` would
+# otherwise sweep control artifacts into the repository.
+.factory/
+.claude/*
+!.claude/branch-policy
+.bash_profile
+.bashrc
+.profile
+.zprofile
+.zshrc
+.gitconfig
+.gitmodules
+.ripgreprc
+.mcp.json
+.idea
+.vscode

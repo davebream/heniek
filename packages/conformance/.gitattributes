@@ -1,0 +1,4 @@
+# scripts/generate.ts --check does a byte comparison against the committed
+# artifacts below, so a Windows checkout with core.autocrlf=true rewriting
+# LF to CRLF must not be allowed to change these files' line endings.
+generated/** text eol=lf
