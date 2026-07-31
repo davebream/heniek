@@ -8,11 +8,13 @@
   },
   "scripts": {
     "generate:check": "tsx scripts/generate.ts --check",
-    "generate": "tsx scripts/generate.ts"
+    "generate": "tsx scripts/generate.ts",
+    "test": "vitest run"
   },
   "dependencies": {
     "@sinclair/typebox": "catalog:",
-    "ajv": "catalog:"
+    "ajv": "catalog:",
+    "ajv-formats": "catalog:"
   },
   "devDependencies": {
     "tsx": "catalog:",

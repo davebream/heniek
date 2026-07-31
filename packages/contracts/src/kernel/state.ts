@@ -1,4 +1,4 @@
-import { Type, type Static, type TLiteral, type TUnion } from "@sinclair/typebox";
+import { type Static, type TLiteral, type TUnion, Type } from "@sinclair/typebox";
 
 export interface StateVocabulary<Terminal extends string, NonTerminal extends string> {
   readonly schema: TUnion<TLiteral<Terminal | NonTerminal>[]>;
@@ -13,7 +13,10 @@ export interface StateVocabulary<Terminal extends string, NonTerminal extends st
  * terminal/non-terminal partition — every vocabulary in this package must
  * be able to answer "is this value terminal?" without external knowledge.
  */
-export function defineStates<const Terminal extends string, const NonTerminal extends string>(config: {
+export function defineStates<
+  const Terminal extends string,
+  const NonTerminal extends string,
+>(config: {
   readonly terminal: readonly Terminal[];
   readonly nonTerminal: readonly NonTerminal[];
 }): StateVocabulary<Terminal, NonTerminal> {

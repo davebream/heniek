@@ -11,9 +11,10 @@
   "scripts": {
     "backlog:check": "tsx scripts/backlog/generate.ts --check",
     "backlog:generate": "tsx scripts/backlog/generate.ts",
-    "check": "pnpm format:check && pnpm backlog:check && pnpm typecheck && pnpm test",
+    "check": "pnpm format:check && pnpm backlog:check && pnpm generate:check && pnpm typecheck && pnpm test",
     "format": "biome check --write .",
     "format:check": "biome ci .",
+    "generate:check": "pnpm --filter @heniek/contracts generate:check",
     "test": "vitest run --passWithNoTests",
     "typecheck": "tsc --noEmit"
   },

@@ -1,4 +1,4 @@
-import { Type, type TProperties } from "@sinclair/typebox";
+import { type TProperties, Type } from "@sinclair/typebox";
 import { SCHEMA_REGISTRY } from "./registry.js";
 
 /**

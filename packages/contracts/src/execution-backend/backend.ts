@@ -1,6 +1,6 @@
 import type { Static } from "@sinclair/typebox";
-import { ArtifactId } from "../artifact/index.js";
-import { InteractionId } from "../interaction/index.js";
+import type { ArtifactId } from "../artifact/index.js";
+import type { InteractionId } from "../interaction/index.js";
 import type { ExecutionRequestV1, ExecutionResultV1, PendingInteractionV1 } from "./schemas.js";
 import type { ExecutionStatus } from "./state.js";
 

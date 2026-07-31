@@ -1,0 +1,97 @@
+{
+  "$id": "heniek://contract/TaskContext/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "sourceWorkItemId",
+    "sourceKind",
+    "objective",
+    "constraints",
+    "decisions",
+    "openQuestions",
+    "repositoryReferences",
+    "rawContentRef",
+    "revision"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "sourceWorkItemId": {
+      "minLength": 1,
+      "description": "Opaque SourceWorkItemId.",
+      "type": "string"
+    },
+    "sourceKind": {
+      "anyOf": [
+        {
+          "const": "parent_conversation",
+          "type": "string"
+        },
+        {
+          "const": "manual_text",
+          "type": "string"
+        },
+        {
+          "const": "github_issue",
+          "type": "string"
+        },
+        {
+          "const": "github_pull_request",
+          "type": "string"
+        },
+        {
+          "const": "local_file",
+          "type": "string"
+        },
+        {
+          "const": "existing_branch_or_pr",
+          "type": "string"
+        }
+      ]
+    },
+    "objective": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "constraints": {
+      "type": "array",
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      }
+    },
+    "decisions": {
+      "type": "array",
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      }
+    },
+    "openQuestions": {
+      "type": "array",
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      }
+    },
+    "repositoryReferences": {
+      "type": "array",
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      }
+    },
+    "rawContentRef": {
+      "minLength": 1,
+      "description": "Opaque ArtifactId.",
+      "type": "string"
+    },
+    "revision": {
+      "minimum": 1,
+      "type": "integer"
+    }
+  }
+}

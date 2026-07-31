@@ -1,0 +1,52 @@
+{
+  "$id": "heniek://contract/CheckStatus/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "name",
+    "state",
+    "required"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "name": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "state": {
+      "anyOf": [
+        {
+          "const": "queued",
+          "type": "string"
+        },
+        {
+          "const": "in_progress",
+          "type": "string"
+        },
+        {
+          "const": "succeeded",
+          "type": "string"
+        },
+        {
+          "const": "failed",
+          "type": "string"
+        },
+        {
+          "const": "skipped",
+          "type": "string"
+        }
+      ]
+    },
+    "required": {
+      "type": "boolean"
+    },
+    "detailsUrl": {
+      "format": "uri",
+      "type": "string"
+    }
+  }
+}

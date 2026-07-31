@@ -46,11 +46,34 @@ export const PendingInteractionV1 = versioned("PendingInteraction", 1, {
  * text repeats exactly those three literals rather than reusing the
  * broader union.
  */
+/**
+ * Key pattern shared by every open map on this contract. `artifacts`/`usage`
+ * are open by necessity (arbitrary stage-defined keys), which would
+ * otherwise be the one place a provider-shaped key (`claudeSessionId`,
+ * `codexRunId`, ...) could smuggle provider detail through a public
+ * contract despite `additionalProperties: false` on the fixed-shape fields.
+ * Closing the key namespace, not just the fixed properties, is what makes
+ * OR-8 actually hold for these two fields.
+ */
+const OPEN_MAP_KEY = Type.String({
+  pattern: "^(?!(claude|codex|cursor|github|anthropic|openai))[a-zA-Z0-9_.-]+$",
+  minLength: 1,
+});
+
 export const ExecutionResultV1 = versioned("ExecutionResult", 1, {
-  status: Type.Union([Type.Literal("succeeded"), Type.Literal("failed"), Type.Literal("cancelled")]),
+  status: Type.Union([
+    Type.Literal("succeeded"),
+    Type.Literal("failed"),
+    Type.Literal("cancelled"),
+  ]),
   summary: Type.String({ minLength: 1 }),
   providerSessionId: Type.Optional(Type.String({ minLength: 1 })),
   changedRepositories: Type.Array(RepositoryId),
-  artifacts: Type.Record(Type.String(), ArtifactId),
-  usage: Type.Optional(Type.Record(Type.String(), Type.Number())),
+  // `additionalProperties: false` is required, not decorative: TypeBox's
+  // `Record` emits only `patternProperties` by default, and JSON Schema
+  // treats `additionalProperties` as `true` when absent — so a key that
+  // does *not* match `OPEN_MAP_KEY` (e.g. a provider-shaped key) would be
+  // silently accepted with no value constraint at all without this.
+  artifacts: Type.Record(OPEN_MAP_KEY, ArtifactId, { additionalProperties: false }),
+  usage: Type.Optional(Type.Record(OPEN_MAP_KEY, Type.Number(), { additionalProperties: false })),
 });

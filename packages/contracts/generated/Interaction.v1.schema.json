@@ -1,0 +1,75 @@
+{
+  "$id": "heniek://contract/Interaction/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "interactionId",
+    "status",
+    "kind",
+    "prompt",
+    "createdAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "interactionId": {
+      "minLength": 1,
+      "description": "Opaque InteractionId.",
+      "type": "string"
+    },
+    "status": {
+      "anyOf": [
+        {
+          "const": "pending",
+          "type": "string"
+        },
+        {
+          "const": "answered",
+          "type": "string"
+        },
+        {
+          "const": "cancelled",
+          "type": "string"
+        }
+      ]
+    },
+    "kind": {
+      "anyOf": [
+        {
+          "const": "free_text",
+          "type": "string"
+        },
+        {
+          "const": "single_choice",
+          "type": "string"
+        },
+        {
+          "const": "multiple_choice",
+          "type": "string"
+        }
+      ]
+    },
+    "prompt": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "options": {
+      "type": "array",
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      }
+    },
+    "createdAt": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "resolvedAt": {
+      "format": "date-time",
+      "type": "string"
+    }
+  }
+}

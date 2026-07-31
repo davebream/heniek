@@ -9,7 +9,9 @@ import type {
 
 /** §21.6, verbatim signatures with IDs branded. v1 implements `GitHubForgeBackend`. */
 export interface ForgeBackend {
-  createPullRequest(input: Static<typeof CreatePullRequestInputV1>): Promise<Static<typeof PullRequestV1>>;
+  createPullRequest(
+    input: Static<typeof CreatePullRequestInputV1>,
+  ): Promise<Static<typeof PullRequestV1>>;
   markReady(id: PullRequestId): Promise<void>;
   getChecks(id: PullRequestId): Promise<Static<typeof CheckStatusV1>[]>;
   getFailedCheckLogs(id: PullRequestId): Promise<Static<typeof CheckFailureV1>[]>;
