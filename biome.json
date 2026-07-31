@@ -6,7 +6,12 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["**", "!docs/backlog/revision-1/issues", "!packages/contracts/generated"]
+    "includes": [
+      "**",
+      "!docs/backlog/revision-1/issues",
+      "!packages/contracts/generated",
+      "!packages/conformance/generated"
+    ]
   },
   "formatter": {
     "enabled": true,

@@ -1,0 +1,773 @@
+{
+  "schemaVersion": "heniek.conformance-matrix.v1",
+  "capabilities": [
+    "lifecycle",
+    "interaction",
+    "resume",
+    "cancellation",
+    "malformed-response",
+    "fault-disconnect",
+    "fault-rate-limit",
+    "fault-stale-ref",
+    "fault-conflict",
+    "fault-crash-recovery"
+  ],
+  "subjects": [
+    {
+      "id": "fake-execution-backend",
+      "label": "Fake ExecutionBackend",
+      "family": "ExecutionBackend",
+      "availability": "always",
+      "capabilities": [
+        "lifecycle",
+        "interaction",
+        "resume",
+        "cancellation",
+        "malformed-response",
+        "fault-disconnect",
+        "fault-rate-limit",
+        "fault-stale-ref",
+        "fault-crash-recovery"
+      ]
+    },
+    {
+      "id": "fake-task-source",
+      "label": "Fake TaskSource",
+      "family": "TaskSource",
+      "availability": "always",
+      "capabilities": [
+        "lifecycle",
+        "fault-rate-limit",
+        "fault-conflict"
+      ]
+    },
+    {
+      "id": "fake-forge-backend",
+      "label": "Fake ForgeBackend",
+      "family": "ForgeBackend",
+      "availability": "always",
+      "capabilities": [
+        "lifecycle",
+        "fault-conflict",
+        "fault-stale-ref",
+        "fault-disconnect",
+        "fault-rate-limit"
+      ]
+    },
+    {
+      "id": "smoke-subprocess-execution-backend",
+      "label": "Smoke subprocess ExecutionBackend (opt-in)",
+      "family": "ExecutionBackend",
+      "availability": "opt-in",
+      "capabilities": [
+        "lifecycle",
+        "interaction",
+        "cancellation",
+        "malformed-response",
+        "fault-stale-ref"
+      ],
+      "authRoute": "none",
+      "note": "Represents only the bundled subprocess adapter. Setting HENIEK_CONFORMANCE_SMOKE_MODULE substitutes a different, externally supplied adapter at runtime whose id, capabilities, and auth route are not reflected here — they cannot be known without executing that external module, which this generator never does. Its auth route is instead reported in the vitest describe title at runtime."
+    }
+  ],
+  "cases": [
+    {
+      "caseId": "execution/answer-is-rejected-after-terminal",
+      "family": "ExecutionBackend",
+      "requires": [
+        "interaction"
+      ],
+      "covers": [
+        "AC1:answer"
+      ]
+    },
+    {
+      "caseId": "execution/answer-rejects-unknown-interaction-id",
+      "family": "ExecutionBackend",
+      "requires": [
+        "interaction"
+      ],
+      "covers": [
+        "AC1:answer"
+      ]
+    },
+    {
+      "caseId": "execution/answer-resolves-the-pending-interaction",
+      "family": "ExecutionBackend",
+      "requires": [
+        "interaction"
+      ],
+      "covers": [
+        "AC1:answer",
+        "§23.5"
+      ]
+    },
+    {
+      "caseId": "execution/cancel-is-idempotent",
+      "family": "ExecutionBackend",
+      "requires": [
+        "cancellation"
+      ],
+      "covers": [
+        "AC1:cancellation"
+      ]
+    },
+    {
+      "caseId": "execution/cancel-transitions-to-cancelled-and-result-agrees",
+      "family": "ExecutionBackend",
+      "requires": [
+        "cancellation"
+      ],
+      "covers": [
+        "AC1:cancellation",
+        "§29"
+      ]
+    },
+    {
+      "caseId": "execution/crash-requires-explicit-recovery-then-resumes",
+      "family": "ExecutionBackend",
+      "requires": [
+        "fault-crash-recovery",
+        "resume"
+      ],
+      "covers": [
+        "AC2:crash-recovery",
+        "§18.2"
+      ]
+    },
+    {
+      "caseId": "execution/disconnect-is-classified-and-retryable",
+      "family": "ExecutionBackend",
+      "requires": [
+        "fault-disconnect"
+      ],
+      "covers": [
+        "AC2:disconnect",
+        "disconnects"
+      ]
+    },
+    {
+      "caseId": "execution/interaction-is-surfaced-as-contract-valid-pending-interaction",
+      "family": "ExecutionBackend",
+      "requires": [
+        "interaction"
+      ],
+      "covers": [
+        "AC1:interaction",
+        "§23.5"
+      ]
+    },
+    {
+      "caseId": "execution/interaction-moves-status-to-waiting-on-user",
+      "family": "ExecutionBackend",
+      "requires": [
+        "interaction"
+      ],
+      "covers": [
+        "AC1:interaction"
+      ]
+    },
+    {
+      "caseId": "execution/interactions-are-empty-when-not-waiting",
+      "family": "ExecutionBackend",
+      "requires": [
+        "lifecycle"
+      ],
+      "covers": [
+        "AC1:interaction",
+        "§22"
+      ]
+    },
+    {
+      "caseId": "execution/malformed-result-is-rejected-not-returned",
+      "family": "ExecutionBackend",
+      "requires": [
+        "malformed-response"
+      ],
+      "covers": [
+        "AC1:malformed",
+        "§23.5"
+      ]
+    },
+    {
+      "caseId": "execution/rate-limit-is-classified-and-retryable",
+      "family": "ExecutionBackend",
+      "requires": [
+        "fault-rate-limit"
+      ],
+      "covers": [
+        "AC2:rate-limit",
+        "rate limits"
+      ]
+    },
+    {
+      "caseId": "execution/result-is-rejected-before-terminal",
+      "family": "ExecutionBackend",
+      "requires": [
+        "lifecycle"
+      ],
+      "covers": [
+        "AC1:result",
+        "§22"
+      ]
+    },
+    {
+      "caseId": "execution/result-matches-execution-result-contract",
+      "family": "ExecutionBackend",
+      "requires": [
+        "lifecycle"
+      ],
+      "covers": [
+        "AC1:result",
+        "§23.5"
+      ]
+    },
+    {
+      "caseId": "execution/resume-continues-and-records-input-artifacts",
+      "family": "ExecutionBackend",
+      "requires": [
+        "resume"
+      ],
+      "covers": [
+        "AC1:resume",
+        "§23.5"
+      ]
+    },
+    {
+      "caseId": "execution/resume-rejects-unknown-run-id",
+      "family": "ExecutionBackend",
+      "requires": [
+        "resume",
+        "fault-stale-ref"
+      ],
+      "covers": [
+        "AC2:stale-ref",
+        "stale refs"
+      ]
+    },
+    {
+      "caseId": "execution/start-rejects-contract-invalid-request",
+      "family": "ExecutionBackend",
+      "requires": [
+        "lifecycle"
+      ],
+      "covers": [
+        "AC1:start",
+        "§22"
+      ]
+    },
+    {
+      "caseId": "execution/start-returns-opaque-run-id",
+      "family": "ExecutionBackend",
+      "requires": [
+        "lifecycle"
+      ],
+      "covers": [
+        "AC1:start",
+        "§22"
+      ]
+    },
+    {
+      "caseId": "execution/start-yields-distinct-run-ids",
+      "family": "ExecutionBackend",
+      "requires": [
+        "lifecycle"
+      ],
+      "covers": [
+        "AC1:start",
+        "§22"
+      ]
+    },
+    {
+      "caseId": "execution/status-is-non-terminal-immediately-after-start",
+      "family": "ExecutionBackend",
+      "requires": [
+        "lifecycle"
+      ],
+      "covers": [
+        "AC1:status",
+        "§22"
+      ]
+    },
+    {
+      "caseId": "execution/status-is-stable-once-terminal",
+      "family": "ExecutionBackend",
+      "requires": [
+        "lifecycle"
+      ],
+      "covers": [
+        "AC1:status",
+        "§22"
+      ]
+    },
+    {
+      "caseId": "execution/status-reaches-declared-terminal-state",
+      "family": "ExecutionBackend",
+      "requires": [
+        "lifecycle"
+      ],
+      "covers": [
+        "AC1:status",
+        "§22"
+      ]
+    },
+    {
+      "caseId": "execution/status-rejects-unknown-run-id",
+      "family": "ExecutionBackend",
+      "requires": [
+        "fault-stale-ref"
+      ],
+      "covers": [
+        "AC2:stale-ref",
+        "stale refs"
+      ]
+    },
+    {
+      "caseId": "forge/create-pull-request-honours-draft-true",
+      "family": "ForgeBackend",
+      "requires": [
+        "lifecycle"
+      ],
+      "covers": [
+        "AC1:lifecycle",
+        "§21.5"
+      ]
+    },
+    {
+      "caseId": "forge/create-pull-request-returns-contract-valid-pull-request",
+      "family": "ForgeBackend",
+      "requires": [
+        "lifecycle"
+      ],
+      "covers": [
+        "AC1:lifecycle",
+        "§21.6"
+      ]
+    },
+    {
+      "caseId": "forge/disconnect-is-classified-and-retryable",
+      "family": "ForgeBackend",
+      "requires": [
+        "fault-disconnect"
+      ],
+      "covers": [
+        "AC2:disconnect",
+        "disconnects"
+      ]
+    },
+    {
+      "caseId": "forge/enable-auto-merge-on-draft-pr-is-a-conflict",
+      "family": "ForgeBackend",
+      "requires": [
+        "fault-conflict"
+      ],
+      "covers": [
+        "AC2:conflict",
+        "§21.5"
+      ]
+    },
+    {
+      "caseId": "forge/enable-auto-merge-with-stale-head-is-a-conflict",
+      "family": "ForgeBackend",
+      "requires": [
+        "fault-conflict"
+      ],
+      "covers": [
+        "AC2:conflict",
+        "§29"
+      ]
+    },
+    {
+      "caseId": "forge/get-checks-returns-contract-valid-check-statuses",
+      "family": "ForgeBackend",
+      "requires": [
+        "lifecycle"
+      ],
+      "covers": [
+        "AC1:lifecycle",
+        "§21.6"
+      ]
+    },
+    {
+      "caseId": "forge/get-failed-check-logs-returns-only-failed-checks",
+      "family": "ForgeBackend",
+      "requires": [
+        "lifecycle"
+      ],
+      "covers": [
+        "AC1:lifecycle",
+        "§21.6"
+      ]
+    },
+    {
+      "caseId": "forge/mark-ready-clears-draft",
+      "family": "ForgeBackend",
+      "requires": [
+        "lifecycle",
+        "fault-conflict"
+      ],
+      "covers": [
+        "AC1:lifecycle",
+        "AC2:conflict",
+        "§21.5"
+      ]
+    },
+    {
+      "caseId": "forge/mark-ready-is-idempotent",
+      "family": "ForgeBackend",
+      "requires": [
+        "lifecycle"
+      ],
+      "covers": [
+        "AC1:lifecycle"
+      ]
+    },
+    {
+      "caseId": "forge/mark-ready-rejects-unknown-pull-request-id",
+      "family": "ForgeBackend",
+      "requires": [
+        "fault-stale-ref"
+      ],
+      "covers": [
+        "AC2:stale-ref",
+        "stale refs"
+      ]
+    },
+    {
+      "caseId": "forge/rate-limit-is-classified",
+      "family": "ForgeBackend",
+      "requires": [
+        "fault-rate-limit"
+      ],
+      "covers": [
+        "AC2:rate-limit",
+        "rate limits"
+      ]
+    },
+    {
+      "caseId": "task-source/load-classifies-conflict-fault-for-stale-revision",
+      "family": "TaskSource",
+      "requires": [
+        "fault-conflict"
+      ],
+      "covers": [
+        "AC2:conflict",
+        "conflicts"
+      ]
+    },
+    {
+      "caseId": "task-source/load-classifies-rate-limit-fault",
+      "family": "TaskSource",
+      "requires": [
+        "fault-rate-limit"
+      ],
+      "covers": [
+        "AC2:rate-limit",
+        "rate limits"
+      ]
+    },
+    {
+      "caseId": "task-source/load-increments-revision-after-re-snapshot",
+      "family": "TaskSource",
+      "requires": [
+        "lifecycle"
+      ],
+      "covers": [
+        "AC1:lifecycle",
+        "§13.3"
+      ]
+    },
+    {
+      "caseId": "task-source/load-is-deterministic-for-repeated-load-of-same-input",
+      "family": "TaskSource",
+      "requires": [
+        "lifecycle"
+      ],
+      "covers": [
+        "AC1:lifecycle",
+        "RT1",
+        "§13.3"
+      ]
+    },
+    {
+      "caseId": "task-source/load-rejects-malformed-input",
+      "family": "TaskSource",
+      "requires": [
+        "lifecycle"
+      ],
+      "covers": [
+        "AC1:lifecycle"
+      ]
+    },
+    {
+      "caseId": "task-source/load-rejects-unknown-source-kind",
+      "family": "TaskSource",
+      "requires": [
+        "lifecycle"
+      ],
+      "covers": [
+        "AC1:lifecycle",
+        "§13.1"
+      ]
+    },
+    {
+      "caseId": "task-source/load-returns-contract-valid-task-context",
+      "family": "TaskSource",
+      "requires": [
+        "lifecycle"
+      ],
+      "covers": [
+        "AC1:lifecycle",
+        "§13.1"
+      ]
+    }
+  ],
+  "cells": [
+    [
+      "covered",
+      "unsupported",
+      "unsupported",
+      "opt-in"
+    ],
+    [
+      "covered",
+      "unsupported",
+      "unsupported",
+      "opt-in"
+    ],
+    [
+      "covered",
+      "unsupported",
+      "unsupported",
+      "opt-in"
+    ],
+    [
+      "covered",
+      "unsupported",
+      "unsupported",
+      "opt-in"
+    ],
+    [
+      "covered",
+      "unsupported",
+      "unsupported",
+      "opt-in"
+    ],
+    [
+      "covered",
+      "unsupported",
+      "unsupported",
+      "unsupported"
+    ],
+    [
+      "covered",
+      "unsupported",
+      "unsupported",
+      "unsupported"
+    ],
+    [
+      "covered",
+      "unsupported",
+      "unsupported",
+      "opt-in"
+    ],
+    [
+      "covered",
+      "unsupported",
+      "unsupported",
+      "opt-in"
+    ],
+    [
+      "covered",
+      "unsupported",
+      "unsupported",
+      "opt-in"
+    ],
+    [
+      "covered",
+      "unsupported",
+      "unsupported",
+      "opt-in"
+    ],
+    [
+      "covered",
+      "unsupported",
+      "unsupported",
+      "unsupported"
+    ],
+    [
+      "covered",
+      "unsupported",
+      "unsupported",
+      "opt-in"
+    ],
+    [
+      "covered",
+      "unsupported",
+      "unsupported",
+      "opt-in"
+    ],
+    [
+      "covered",
+      "unsupported",
+      "unsupported",
+      "unsupported"
+    ],
+    [
+      "covered",
+      "unsupported",
+      "unsupported",
+      "unsupported"
+    ],
+    [
+      "covered",
+      "unsupported",
+      "unsupported",
+      "opt-in"
+    ],
+    [
+      "covered",
+      "unsupported",
+      "unsupported",
+      "opt-in"
+    ],
+    [
+      "covered",
+      "unsupported",
+      "unsupported",
+      "opt-in"
+    ],
+    [
+      "covered",
+      "unsupported",
+      "unsupported",
+      "opt-in"
+    ],
+    [
+      "covered",
+      "unsupported",
+      "unsupported",
+      "opt-in"
+    ],
+    [
+      "covered",
+      "unsupported",
+      "unsupported",
+      "opt-in"
+    ],
+    [
+      "covered",
+      "unsupported",
+      "unsupported",
+      "opt-in"
+    ],
+    [
+      "unsupported",
+      "unsupported",
+      "covered",
+      "unsupported"
+    ],
+    [
+      "unsupported",
+      "unsupported",
+      "covered",
+      "unsupported"
+    ],
+    [
+      "unsupported",
+      "unsupported",
+      "covered",
+      "unsupported"
+    ],
+    [
+      "unsupported",
+      "unsupported",
+      "covered",
+      "unsupported"
+    ],
+    [
+      "unsupported",
+      "unsupported",
+      "covered",
+      "unsupported"
+    ],
+    [
+      "unsupported",
+      "unsupported",
+      "covered",
+      "unsupported"
+    ],
+    [
+      "unsupported",
+      "unsupported",
+      "covered",
+      "unsupported"
+    ],
+    [
+      "unsupported",
+      "unsupported",
+      "covered",
+      "unsupported"
+    ],
+    [
+      "unsupported",
+      "unsupported",
+      "covered",
+      "unsupported"
+    ],
+    [
+      "unsupported",
+      "unsupported",
+      "covered",
+      "unsupported"
+    ],
+    [
+      "unsupported",
+      "unsupported",
+      "covered",
+      "unsupported"
+    ],
+    [
+      "unsupported",
+      "covered",
+      "unsupported",
+      "unsupported"
+    ],
+    [
+      "unsupported",
+      "covered",
+      "unsupported",
+      "unsupported"
+    ],
+    [
+      "unsupported",
+      "covered",
+      "unsupported",
+      "unsupported"
+    ],
+    [
+      "unsupported",
+      "covered",
+      "unsupported",
+      "unsupported"
+    ],
+    [
+      "unsupported",
+      "covered",
+      "unsupported",
+      "unsupported"
+    ],
+    [
+      "unsupported",
+      "covered",
+      "unsupported",
+      "unsupported"
+    ],
+    [
+      "unsupported",
+      "covered",
+      "unsupported",
+      "unsupported"
+    ]
+  ]
+}
