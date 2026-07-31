@@ -1,0 +1,21 @@
+{
+  "name": "@heniek/contracts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "generate:check": "tsx scripts/generate.ts --check",
+    "generate": "tsx scripts/generate.ts"
+  },
+  "dependencies": {
+    "@sinclair/typebox": "catalog:",
+    "ajv": "catalog:"
+  },
+  "devDependencies": {
+    "tsx": "catalog:",
+    "vitest": "catalog:"
+  }
+}
