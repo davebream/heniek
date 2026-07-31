@@ -1,0 +1,70 @@
+{
+  "$id": "heniek://contract/ExecutionResult/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "status",
+    "summary",
+    "changedRepositories",
+    "artifacts"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "status": {
+      "anyOf": [
+        {
+          "const": "succeeded",
+          "type": "string"
+        },
+        {
+          "const": "failed",
+          "type": "string"
+        },
+        {
+          "const": "cancelled",
+          "type": "string"
+        }
+      ]
+    },
+    "summary": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "providerSessionId": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "changedRepositories": {
+      "type": "array",
+      "items": {
+        "minLength": 1,
+        "description": "Opaque RepositoryId.",
+        "type": "string"
+      }
+    },
+    "artifacts": {
+      "additionalProperties": false,
+      "type": "object",
+      "patternProperties": {
+        "^(?!(claude|codex|cursor|github|anthropic|openai))[a-zA-Z0-9_.-]+$": {
+          "minLength": 1,
+          "description": "Opaque ArtifactId.",
+          "type": "string"
+        }
+      }
+    },
+    "usage": {
+      "additionalProperties": false,
+      "type": "object",
+      "patternProperties": {
+        "^(?!(claude|codex|cursor|github|anthropic|openai))[a-zA-Z0-9_.-]+$": {
+          "type": "number"
+        }
+      }
+    }
+  }
+}

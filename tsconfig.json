@@ -20,5 +20,10 @@
     "types": ["node"],
     "verbatimModuleSyntax": true
   },
-  "include": ["scripts/**/*.ts"]
+  "include": [
+    "scripts/**/*.ts",
+    "packages/*/src/**/*.ts",
+    "packages/*/test/**/*.ts",
+    "packages/*/scripts/**/*.ts"
+  ]
 }

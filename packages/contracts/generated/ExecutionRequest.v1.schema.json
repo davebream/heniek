@@ -1,0 +1,66 @@
+{
+  "$id": "heniek://contract/ExecutionRequest/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "stageId",
+    "profileId",
+    "workspaceId",
+    "workingDirectory",
+    "inputArtifactRefs",
+    "outputContract",
+    "limits"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "stageId": {
+      "minLength": 1,
+      "description": "Opaque StageId.",
+      "type": "string"
+    },
+    "profileId": {
+      "minLength": 1,
+      "description": "Opaque ProfileId.",
+      "type": "string"
+    },
+    "workspaceId": {
+      "minLength": 1,
+      "description": "Opaque WorkspaceId.",
+      "type": "string"
+    },
+    "workingDirectory": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "inputArtifactRefs": {
+      "type": "array",
+      "items": {
+        "minLength": 1,
+        "description": "Opaque ArtifactId.",
+        "type": "string"
+      }
+    },
+    "outputContract": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "limits": {
+      "additionalProperties": false,
+      "type": "object",
+      "properties": {
+        "maxDurationMs": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "maxTurns": {
+          "minimum": 1,
+          "type": "integer"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "$id": "heniek://contract/PendingInteraction/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "id",
+    "kind",
+    "prompt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "id": {
+      "minLength": 1,
+      "description": "Opaque InteractionId.",
+      "type": "string"
+    },
+    "kind": {
+      "anyOf": [
+        {
+          "const": "free_text",
+          "type": "string"
+        },
+        {
+          "const": "single_choice",
+          "type": "string"
+        },
+        {
+          "const": "multiple_choice",
+          "type": "string"
+        }
+      ]
+    },
+    "prompt": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "options": {
+      "type": "array",
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      }
+    }
+  }
+}

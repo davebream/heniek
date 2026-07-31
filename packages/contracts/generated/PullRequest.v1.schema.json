@@ -1,0 +1,62 @@
+{
+  "$id": "heniek://contract/PullRequest/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "pullRequestId",
+    "repositoryId",
+    "number",
+    "url",
+    "state",
+    "draft",
+    "headSha"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "pullRequestId": {
+      "minLength": 1,
+      "description": "Opaque PullRequestId.",
+      "type": "string"
+    },
+    "repositoryId": {
+      "minLength": 1,
+      "description": "Opaque RepositoryId.",
+      "type": "string"
+    },
+    "number": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "url": {
+      "format": "uri",
+      "type": "string"
+    },
+    "state": {
+      "anyOf": [
+        {
+          "const": "open",
+          "type": "string"
+        },
+        {
+          "const": "closed",
+          "type": "string"
+        },
+        {
+          "const": "merged",
+          "type": "string"
+        }
+      ]
+    },
+    "draft": {
+      "type": "boolean"
+    },
+    "headSha": {
+      "minLength": 1,
+      "type": "string"
+    }
+  }
+}

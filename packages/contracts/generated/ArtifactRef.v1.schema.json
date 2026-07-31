@@ -1,0 +1,36 @@
+{
+  "$id": "heniek://contract/ArtifactRef/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "artifactId",
+    "path",
+    "contentHash",
+    "createdAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "artifactId": {
+      "minLength": 1,
+      "description": "Opaque ArtifactId.",
+      "type": "string"
+    },
+    "path": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "contentHash": {
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "sha256, hex-encoded",
+      "type": "string"
+    },
+    "createdAt": {
+      "format": "date-time",
+      "type": "string"
+    }
+  }
+}
