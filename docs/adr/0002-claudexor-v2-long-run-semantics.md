@@ -109,19 +109,82 @@ cannot drift from the contract silently.
 
 ### O4 — Parent independence
 
-<!-- CANARY-1 -->
+**Supported.** Two runs of the same canary, both reported:
+
+| run | postKillMs | post-kill events | state at kill | daemon after kill | outcome |
+|---|---|---|---|---|---|
+| duration | 1 370 779 (22.8 min) | 350 | `running` | alive | **supported** |
+| terminal | 1 027 738 (17.1 min) | 2 824 | `running` | alive | `degraded` (below the floor) |
+
+An intermediate launcher process started the daemon and the run, then was `SIGKILL`ed by
+pid — never by process group, which would have killed the daemon too and faked a failure.
+In both runs the launcher died, the daemon survived, and a **fresh** client reconnected to
+`GET /v2/runs/:id` and to the SSE stream afterwards.
+
+The measured interval is `terminal − kill`, not `run.created − terminal`: a long run whose
+parent dies in its final seconds demonstrates seconds of independence, and the issue asks
+for a long session **and** a parent kill. The kill landed 45–60 s into each run.
+
+Continued **progress** was required, not mere survival. Post-kill frames include
+`plan.progress` and `harness.event`, so the run was working, not idling. The terminal run
+carried all the way to `succeeded` with 2 824 post-kill events; the duration run passed the
+20-minute floor and was still `running` when the observation harness was torn down — the
+run outlived the observer as well as the parent.
+
+The duration run is reported as the one satisfying the ≥20-minute constraint; the terminal
+run is reported alongside it, `degraded`, because it settled at 17.1 min. Both appear in the
+evidence rather than only the favourable one.
+
+**Caveat, stated plainly:** the daemon is spawned `detached` with `stdio: "ignore"`, and on
+POSIX such a process outlives its parent regardless of the engine. This arm therefore shows
+that Claudexor's run *keeps working* after the parent dies — which spawn flags alone do not
+give you — but it does not isolate the engine's contribution to process survival. The
+non-detached arm that would isolate it is specified in the canary and **was not run**; see
+"Not covered" below.
 
 ### O5 — Questions, answers and same-session resume
 
-<!-- CANARY-2 -->
+**Supported.** A run was started with a prompt requiring a clarifying question. The engine
+emitted `interaction.requested`, `summary.waitingOnUser` became true, the canary answered
+through `POST /v2/runs/:id/interactions/:id/answer`, and **the same `runId` continued to a
+terminal state** — §17.2's "answer sent to the same worker session", observed rather than
+assumed.
+
+Two shape facts matter for an adapter, and both cost a false negative before they were found:
+
+- The answer body is a **list** of per-question answers
+  (`{answers: [{questionId, selectedLabels, freeText}]}`), not a single string.
+- The `interactionId` and each `questionId` live in the **`interaction.requested` event
+  payload**, not in the run summary. An adapter polling only `GET /v2/runs/:id` can observe
+  that a question exists but cannot answer it.
+
+Before these were corrected the canary reported same-session resume as *unsupported* — a
+limitation the engine does not have.
 
 ### O6 — Cancellation and process-tree cleanup
 
-<!-- CANARY-3 -->
+**Supported.** `POST /v2/runs/:id/control` with `{control: {kind: "cancel"}}` was accepted,
+the run settled as `cancelled` within ~20 s, and no descendant processes of the daemon
+survived the settle window.
+
+The control body carries `control` as an **object**, not a bare verb string. Sending the
+string is rejected as `invalid_request`; the first cancellation canary did exactly that and
+reported "cancellation unsupported" — again a limitation the engine does not have. Both
+shapes are now pinned by tests.
 
 ### O7 — The restart boundary
 
-<!-- CANARY-4 -->
+**Supported, and this settles the `interrupted` mapping.** A run was started, the daemon was
+`SIGKILL`ed mid-run, and a new daemon was started on the same home. The run handle was still
+readable afterwards, and the run's state was **`interrupted`** — observed twice, on
+independent executions.
+
+That is what §18.2 describes: an attempt whose outcome the runtime cannot vouch for, needing
+an explicit resume/retry/fail decision rather than a silent retry. `interrupted →
+recovery_required` therefore stands on an observation rather than on the enum member's name.
+It remains flagged `INTERRUPTED_MAPPING_IS_PROVISIONAL` in code until an adapter consumes it
+in anger, because these observations show what a *daemon kill* produces and do not enumerate
+every path to `interrupted`.
 
 ### O8 — Auth route: the subscription route is NOT proven on this host
 
@@ -166,16 +229,25 @@ rather than passed over:
   `{"authRequest":"subscription","source":"native_session"}` on such a host and confirm
   `availability: available`, then re-run canary 1.
 
+## Not covered by this spike
+
+- **The non-detached parent-independence arm.** Specified in `canaries.ts` and reported
+  separately by design, but not executed. Without it, O4 shows the run keeps working after
+  the parent dies, but does not separate the engine's contribution from `spawn`'s.
+- **Subscription-only auth-route verification** (O8).
+- Codex and Cursor external profiles, isolated write attempts, artifact/diff retrieval,
+  malformed-output and unsupported-model handling — all belong to later issues.
+
 ## §23.5 coverage from this spike
 
 | §23.5 item | Status |
 |---|---|
-| 20-minute external planning run | see O4 |
-| free-text question and same-session continuation | see O5 |
-| cancellation and process-tree cleanup | see O6 |
+| 20-minute external planning run | **verified** — 22.8 min post-kill (O4) |
+| free-text question and same-session continuation | **verified** (O5) |
+| cancellation and process-tree cleanup | **verified** (O6) |
 | subscription-only auth-route verification | **unverified** (O8) |
 | session resume | partially — SSE `Last-Event-ID` reconnect exercised in O4 |
-| daemon restart/recovery classification | see O7 |
+| daemon restart/recovery classification | **verified** (O7) |
 | event/result normalization | exercised via the trace's redaction + state mapping |
 | Claude external profile | exercised |
 | Codex / Cursor external profiles | out of scope for Q003 |
