@@ -108,10 +108,7 @@ describe("assertAppendOnly (design D2, D3, C1)", () => {
 
   it("rejects a list whose first version is not 1", () => {
     const mutated: Migration[] = [{ ...MIGRATION_1, version: 2 }];
-    expectMigrationError(
-      () => assertAppendOnly(mutated),
-      /the first migration must be version 1/,
-    );
+    expectMigrationError(() => assertAppendOnly(mutated), /the first migration must be version 1/);
   });
 
   it("rejects a gap in versions", () => {
