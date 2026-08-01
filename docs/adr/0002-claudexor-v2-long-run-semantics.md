@@ -48,8 +48,9 @@ node <pin>/packages/cli/dist/claudexord.js                            # HOME=<sc
 HENIEK_CONFORMANCE_SMOKE=1 \
 HENIEK_CONFORMANCE_SMOKE_AUTH_ROUTE=none \
 HENIEK_CONFORMANCE_SMOKE_CLAUDEXOR_ROOT=$CLAUDEXOR_ROOT \
-HENIEK_CONFORMANCE_SMOKE_TRACE_OUT=docs/adr/evidence/0002-claudexor-v2-event-trace.md \
 pnpm vitest run packages/conformance/test/claudexor.smoke.test.ts
+# HENIEK_CONFORMANCE_SMOKE_TRACE_OUT=... is read by gate.ts but consumed only by the
+# uncommitted long-run driver; the committed suite writes no trace.
 ```
 
 `AUTH_ROUTE=none` is deliberate: it declares that this gate provisions no auth route of its own. It is
@@ -92,7 +93,9 @@ its durable handle"* with `idempotency: key_required` and `completion: durable_h
 handle this spike is about is a first-class, self-described property rather than an inference.
 
 The operations that carry Heniek's §17/§18 requirements are `POST /v2/runs`, `GET /v2/runs/:id`,
-`GET /v2/runs/:id/events` (SSE, `Last-Event-ID` resume cursor), `POST /v2/runs/:id/control`,
+`GET /v2/runs/:id/events` (SSE; the `Last-Event-ID` resume cursor is declared by the engine's own
+`/v2/operations` descriptor for that route — this ADR does not claim to have exercised it),
+`POST /v2/runs/:id/control`,
 `POST /v2/runs/:id/interactions/:id/answer`, `POST /v2/threads/:id/turns`,
 `GET /v2/recovery/partitions/:id` and `POST /v2/harnesses/:id/auth-readiness`.
 
@@ -134,7 +137,13 @@ afterwards. The observing client was **not** torn down and re-created across the
 
 The measured interval is `terminal − kill`, not `run.created − terminal`: a long run whose
 parent dies in its final seconds demonstrates seconds of independence, and the issue asks
-for a long session **and** a parent kill. The kill landed 45–60 s into each run.
+for a long session **and** a parent kill. The kill landed 45 s into the duration run, corroborated by
+its trace.
+
+Both rows above are **hand-transcribed from the driver's JSON with hand-assigned outcomes**: the
+driver did not record `killAtFractionOfBudget`, so the kill-timing gate that
+`classifyParentIndependence` implements — and that the defects table below credits — was **not
+evaluated on either reported run**. The gate is unit-tested; it did not gate these numbers.
 
 Continued **progress** was required, not mere survival. Post-kill frames include
 `plan.progress` and `harness.event`, so the run was working, not idling. The terminal run
@@ -191,8 +200,8 @@ shapes are now pinned by tests.
 
 **Supported, and this settles the `interrupted` mapping.** A run was started, the daemon was
 `SIGKILL`ed mid-run, and a new daemon was started on the same home. The run handle was still
-readable afterwards, and the run's state was **`interrupted`** — observed on two independent
-executions of the canary. `GET /v2/recovery/partitions/:id` was **not** called; the
+readable afterwards, and the run's state was **`interrupted`**. The evidence file carries one such
+row, so this is a single recorded observation, not a replication. `GET /v2/recovery/partitions/:id` was **not** called; the
 `recoveryPartitionReadable` field in the evidence records only that the restarted daemon answered
 `/healthz`, and should not be read as a statement about the recovery-partition API.
 
@@ -279,7 +288,8 @@ rather than passed over:
 ## Decision
 
 Claudexor `/v2` is accepted as the v1 `ExecutionBackend` surface for long-running, daemon-owned work,
-subject to the bounded fallbacks below and to the unverified §23.5 items above.
+subject to the unverified §23.5 items above, the "Not covered" list, and the per-canary bounded
+fallbacks carried in `packages/conformance/src/smoke/claudexor/canaries.ts`.
 
 The integration must:
 

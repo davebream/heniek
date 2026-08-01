@@ -95,5 +95,8 @@ include `plan.progress` and `harness.event`, i.e. continued work rather than idl
 | 52 | 2026-08-01T06:42:35.747Z | event | harness.event | run-87514f5cb5e3 | task-175f22dbb387 | - | - | payload.harness_id, payload.attempt_id, payload.session_id, payload.ts, payload.type, payload.title, payload.text, payload.credential_route, payload.tool |
 | 53 | 2026-08-01T06:42:37.397Z | event | harness.event | run-87514f5cb5e3 | task-175f22dbb387 | - | - | payload.harness_id, payload.attempt_id, payload.session_id, payload.ts, payload.type, payload.title, payload.text, payload.credential_route, payload.tool, payload.payload |
 
+_`postKillEventCount` counts frames seen after the kill; the row count below counts all recorded
+rows including pre-kill frames and process markers, so the two figures differ by construction._
+
 _Trace truncated: 367 recorded rows in the full run._
 
