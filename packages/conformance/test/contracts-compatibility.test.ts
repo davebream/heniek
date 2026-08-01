@@ -19,14 +19,25 @@ const manifestPath = resolve(packageRoot, "../contracts/generated/manifest.json"
  * breaking is that the other twelve entries below are byte-identical to their
  * previous values, so no existing consumer's payload changed shape.
  *
- * Q007 updated the `ArtifactRef/v1` sha256 (from `d0c79064…` to `331609e8…`)
- * to cover six added fields (`name`, `byteLength`, `mediaType`,
- * `contentSchemaId`, `producer`, `sourceLineage`). The schema was extended in
- * place rather than versioned to `v2` because it had zero non-test consumers
- * at the time (`grep -c artifactId packages/conformance/generated/*.json` →
- * 0), so no existing payload's shape changed. The other thirteen entries stay
- * byte-identical and the schema count stays 14 — this single pin update is
- * itself the deliberate versioning act the gate exists to force.
+ * General rule: an already-pinned schema digest may change in place —
+ * without bumping to a new version — only while that schema's consumer set
+ * is provably empty, and the proof must be recorded with the change. Bumping
+ * a digest for a schema with even one real consumer would silently change
+ * the shape of a payload someone already depends on; that is exactly the
+ * breaking change this gate exists to catch.
+ *
+ * Q007 updated the `ArtifactRef/v1` sha256 (from `d0c79064…` to
+ * `28e5297c…`) to cover six added fields (`name`, `byteLength`, `mediaType`,
+ * `contentSchemaId`, `producer`, `sourceLineage`). Proof this instance
+ * satisfies the rule above: `ArtifactRefV1` had zero non-test consumers at
+ * the time, verified repo-wide (a recursive grep for `artifactId` under
+ * every sibling package's `src` directory, excluding `packages/contracts`
+ * itself, found none, and the two files under
+ * `packages/conformance/generated` — this package's own generated fixtures —
+ * contain no `artifactId` field either), so no existing payload's shape
+ * changed. The other thirteen entries stay byte-identical and the schema
+ * count stays 14 — this single pin update is itself the deliberate
+ * versioning act the gate exists to force.
  */
 const EXPECTED_SCHEMAS: readonly {
   readonly schemaId: string;
@@ -43,7 +54,7 @@ const EXPECTED_SCHEMAS: readonly {
   {
     schemaId: "heniek://contract/ArtifactRef/v1",
     schemaVersion: 1,
-    sha256: "331609e8e110768c346051640ce31d8a301df46a7a645b3ac96274d4ec9d4b44",
+    sha256: "28e5297ca3640dd02ced14b47f86036308c1d6b48914f2166837c5bb1cf82295",
     path: "generated/ArtifactRef.v1.schema.json",
   },
   {

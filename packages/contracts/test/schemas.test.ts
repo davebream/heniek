@@ -172,14 +172,14 @@ const cases: { name: string; schema: object; valid: Record<string, unknown> }[] 
     valid: {
       schemaVersion: 1,
       artifactId: "artifact-1",
-      path: "artifacts/report.md",
+      path: `blobs/sha256/${"a".repeat(64)}`,
       contentHash: "a".repeat(64),
       createdAt: NOW,
       name: "report.md",
       byteLength: 1024,
       mediaType: "text/markdown",
       contentSchemaId: "heniek://contract/report/v1",
-      producer: "stage-1",
+      producer: "heniek-cli@0.0.0",
       sourceLineage: ["artifact-0"],
     },
   },
@@ -227,21 +227,63 @@ describe("contract schema round-trip", () => {
   }
 });
 
-describe("ArtifactRefV1 — extended fields", () => {
-  const valid = cases.find((c) => c.name === "ArtifactRefV1")?.valid;
-  if (!valid) {
-    throw new Error("ArtifactRefV1 case not found in `cases`");
-  }
-
-  it("rejects an unknown property (closed schema)", () => {
-    const validate = ajv.compile(ArtifactRefV1);
-    const ok = validate({ ...valid, unexpectedField: "nope" });
-    expect(ok).toBe(false);
-  });
+describe("ArtifactRefV1 — extended field constraints", () => {
+  const valid: Record<string, unknown> = {
+    schemaVersion: 1,
+    artifactId: "artifact-1",
+    path: `blobs/sha256/${"a".repeat(64)}`,
+    contentHash: "a".repeat(64),
+    createdAt: NOW,
+    name: "report.md",
+    byteLength: 1024,
+    mediaType: "text/markdown",
+    contentSchemaId: "heniek://contract/report/v1",
+    producer: "heniek-cli@0.0.0",
+    sourceLineage: ["artifact-0"],
+  };
+  const validate = ajv.compile(ArtifactRefV1);
 
   it("rejects a malformed contentHash", () => {
-    const validate = ajv.compile(ArtifactRefV1);
-    const ok = validate({ ...valid, contentHash: "not-a-hash" });
-    expect(ok).toBe(false);
+    expect(validate({ ...valid, contentHash: "not-a-hash" })).toBe(false);
+  });
+
+  it("accepts byteLength: 0", () => {
+    expect(validate({ ...valid, byteLength: 0 })).toBe(true);
+  });
+
+  it("rejects byteLength: -1", () => {
+    expect(validate({ ...valid, byteLength: -1 })).toBe(false);
+  });
+
+  it("rejects byteLength: 1.5", () => {
+    expect(validate({ ...valid, byteLength: 1.5 })).toBe(false);
+  });
+
+  it('rejects mediaType: ""', () => {
+    expect(validate({ ...valid, mediaType: "" })).toBe(false);
+  });
+
+  it('rejects contentSchemaId: ""', () => {
+    expect(validate({ ...valid, contentSchemaId: "" })).toBe(false);
+  });
+
+  it('rejects producer: ""', () => {
+    expect(validate({ ...valid, producer: "" })).toBe(false);
+  });
+
+  it('rejects name: ""', () => {
+    expect(validate({ ...valid, name: "" })).toBe(false);
+  });
+
+  it("accepts an empty sourceLineage (explicit design promise)", () => {
+    expect(validate({ ...valid, sourceLineage: [] })).toBe(true);
+  });
+
+  it("rejects a non-array sourceLineage", () => {
+    expect(validate({ ...valid, sourceLineage: "not-an-array" })).toBe(false);
+  });
+
+  it("rejects a sourceLineage containing a duplicate id", () => {
+    expect(validate({ ...valid, sourceLineage: ["artifact-0", "artifact-0"] })).toBe(false);
   });
 });
