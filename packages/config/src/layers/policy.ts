@@ -127,6 +127,15 @@ export function privacyRank(
   value: JsonValue,
   strictestFirst: readonly JsonPrimitive[],
 ): number | undefined {
+  // `strictestFirst` only ever holds `JsonPrimitive`s (spec §27.1's privacy
+  // values are all strings or booleans), so an array/object `value` can never
+  // appear in it — narrowing here (rather than a `findIndex` predicate) is
+  // both what lets `Array.prototype.indexOf` type-check against
+  // `JsonPrimitive` and what Biome's `useIndexOf` rule prefers over an
+  // equivalent `findIndex((candidate) => candidate === value)`.
+  if (typeof value === "object" && value !== null) {
+    return undefined;
+  }
   const index = strictestFirst.indexOf(value);
   return index === -1 ? undefined : index;
 }
