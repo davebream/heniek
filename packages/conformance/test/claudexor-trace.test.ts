@@ -1,27 +1,40 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { createEventTrace, InvalidTraceEventError } from "../src/smoke/claudexor/trace.js";
+import {
+  EXPECTED_ENGINE_SHA,
+  EXPECTED_ENGINE_VERSION,
+  EXPECTED_PROTOCOL_MAJOR,
+} from "../src/smoke/claudexor/protocol.js";
+import { createEventTrace, type EventRecord } from "../src/smoke/claudexor/trace.js";
 import { resolveRepoRoot } from "../src/smoke/env.js";
 
-const DAEMON_TOKEN = "5f1c9a2e-daemon-token-3b7d-4c11-9e02";
+/**
+ * Deliberately allowlist-admissible and short, so the ONLY thing that denies
+ * it is the daemon-token clause. A 36-char UUID-ish token would be caught by
+ * the generic token-run rule instead, leaving the clause that guards the live
+ * secret with no coverage at all.
+ */
+const DAEMON_TOKEN = "tok.9e02.4c11";
 
 /**
- * Values that the deny layer alone must reject. Each is chosen so the narrow
- * allowlist would NOT have caught it on its own — otherwise the deny layer
- * could be deleted and these tests would still pass.
+ * One fixture per deny clause, each caught by exactly that clause. If any
+ * single clause is deleted, at least one of these must fail — that property is
+ * the point, and it is asserted in "deny-clause coverage" below.
  */
-const DENY_EXCLUSIVE = {
-  midStringPat: `note.ghp_${"a".repeat(36)}`,
-  jwt: "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NSJ9.dBjftJeZ4CVPmB92K27uhbUJU1p1r-2f",
-  opaqueRun: "b".repeat(40),
-  daemonToken: DAEMON_TOKEN,
+const CLAUSE_EXCLUSIVE = {
+  credentialPrefix: "sk-1a2b3c4d",
+  jwtTriple: `${"a".repeat(15)}.${"b".repeat(15)}.${"c".repeat(15)}`,
+  tokenRun: "b".repeat(40),
+  daemonTokenContainment: "run.tok.9e02.4c11.end",
 } as const;
 
-const ALLOWLIST_ALSO_REJECTS = {
+/** Plan-mandated extra cases. */
+const ALSO_DENIED = {
+  midStringPat: `note.ghp_${"a".repeat(36)}`,
   prompt: "Reply with exactly: CANARY_OK please",
-  answer: "The model said something with spaces",
   homePath: "/home/dave/.ssh/id_rsa",
+  longKey: "z".repeat(120),
 } as const;
 
 function baseEvent(): Record<string, unknown> {
@@ -38,78 +51,172 @@ function serialised(trace: ReturnType<typeof createEventTrace>): string {
   return `${JSON.stringify(trace.entries())}\n${trace.toMarkdown()}`;
 }
 
-describe("createEventTrace — happy path", () => {
+function asEvent(record: ReturnType<ReturnType<typeof createEventTrace>["recordEvent"]>) {
+  if (record.kind !== "event") throw new Error(`expected an event, got ${record.kind}`);
+  return record as EventRecord;
+}
+
+describe("createEventTrace — real engine shapes", () => {
   // Regression: a credential-prefix test without a word boundary denies every
-  // real Claudexor task id, because "task-a9b1ea142bc5" contains "sk-". The
-  // first canary run would then have recorded no task ids at all.
-  it("keeps real Claudexor run and task ids, which contain credential-like substrings", () => {
-    const trace = createEventTrace();
-    const entry = trace.recordEvent(baseEvent());
+  // real Claudexor task id, because "task-a9b1ea142bc5" contains "sk-".
+  it("keeps ids that contain credential-like substrings", () => {
+    const entry = asEvent(createEventTrace().recordEvent(baseEvent()));
     expect("task-a9b1ea142bc5").toContain("sk-");
     expect(entry.taskId).toBe("task-a9b1ea142bc5");
     expect(entry.droppedFields).toEqual([]);
   });
 
-  it("keeps the allowlisted engine fields", () => {
-    const trace = createEventTrace({ daemonToken: DAEMON_TOKEN });
-    const entry = trace.recordEvent({ ...baseEvent(), payload: { mode: "agent", turns: 3 } });
-    expect(entry.seq).toBe(1);
-    expect(entry.type).toBe("run.created");
-    expect(entry.runId).toBe("run-d2fb12fa3051");
-    expect(entry.taskId).toBe("task-a9b1ea142bc5");
-    expect(entry.payload).toEqual({ mode: "agent", turns: 3 });
-    expect(entry.droppedFields).toEqual([]);
+  // Regression: including `-` in the token-run character class made a canonical
+  // UUID (36 unbroken chars) look like a secret, so a UUID-shaped run_id was
+  // silently dropped and every row of the committed trace lost its
+  // correlation key.
+  it("keeps a UUID-shaped run id", () => {
+    const uuid = "550e8400-e29b-41d4-a716-446655440000";
+    const entry = asEvent(createEventTrace().recordEvent({ ...baseEvent(), run_id: uuid }));
+    expect(entry.runId).toBe(uuid);
   });
 
-  it("records process observations with pid and timestamp", () => {
-    const trace = createEventTrace();
-    trace.recordProcess({ label: "launcher", pid: 4242, at: "2026-07-31T23:34:50.090Z" });
-    const markdown = trace.toMarkdown();
-    expect(markdown).toContain("4242");
-    expect(markdown).toContain("2026-07-31T23:34:50.090Z");
-    expect(markdown).toContain("launcher");
+  // Regression: `+` is absent from the value allowlist, so offset-form
+  // ISO-8601 was rejected — and, before the recorder was made total, threw
+  // mid-stream and destroyed the rest of an expensive run's evidence.
+  it.each([
+    ["Z form", "2026-07-31T23:34:50.090Z"],
+    ["positive offset", "2026-07-31T23:34:50.090+02:00"],
+    ["negative offset", "2026-07-31T23:34:50-05:00"],
+  ])("accepts an ISO-8601 timestamp in %s", (_label, ts) => {
+    expect(asEvent(createEventTrace().recordEvent({ ...baseEvent(), ts })).ts).toBe(ts);
+  });
+
+  it("accepts a numeric epoch timestamp", () => {
+    expect(asEvent(createEventTrace().recordEvent({ ...baseEvent(), ts: 1785000000000 })).ts).toBe(
+      "epoch:1785000000000",
+    );
   });
 });
 
-describe("createEventTrace — redaction", () => {
-  it.each(Object.entries(DENY_EXCLUSIVE))(
-    "drops payload value %s that the allowlist alone would admit",
-    (name, dirty) => {
+describe("createEventTrace — totality", () => {
+  // The recorder consumes a live SSE stream from a >=20-minute, effectively
+  // non-repeatable run. Throwing on one bad frame destroys the artifact it
+  // exists to produce.
+  it.each([
+    ["a non-object frame", 42],
+    ["a missing seq", { ts: "2026-07-31T23:34:50.090Z", type: "x" }],
+    ["a fractional seq", { ...baseEvent(), seq: 1.5 }],
+    ["a path-like ts", { ...baseEvent(), ts: "/home/dave/secret.txt" }],
+    ["a whitespace-bearing type", { ...baseEvent(), type: "two words" }],
+  ])("records %s as a rejection instead of throwing", (_label, frame) => {
+    const trace = createEventTrace();
+    let result: ReturnType<typeof trace.recordEvent> | undefined;
+    expect(() => {
+      result = trace.recordEvent(frame);
+    }).not.toThrow();
+    expect(result?.kind).toBe("rejected");
+    expect(trace.entries()).toHaveLength(1);
+  });
+
+  it("keeps recording after a rejected frame", () => {
+    const trace = createEventTrace();
+    trace.recordEvent({ ...baseEvent(), type: "bad type" });
+    const good = trace.recordEvent({ ...baseEvent(), seq: 2 });
+    expect(good.kind).toBe("event");
+    expect(trace.entries()).toHaveLength(2);
+  });
+
+  it("does not surface the message of a throwing engine accessor", () => {
+    const payload = {} as Record<string, unknown>;
+    Object.defineProperty(payload, "state", {
+      enumerable: true,
+      get() {
+        throw new Error("boom TRANSCRIPT SECRET");
+      },
+    });
+    const trace = createEventTrace();
+    const result = trace.recordEvent({ ...baseEvent(), payload });
+    expect(result.kind).toBe("rejected");
+    expect(serialised(trace)).not.toContain("TRANSCRIPT");
+  });
+});
+
+describe("createEventTrace — deny layer", () => {
+  it.each(Object.entries(CLAUSE_EXCLUSIVE))(
+    "denies %s, which only that clause catches",
+    (_name, dirty) => {
       const trace = createEventTrace({ daemonToken: DAEMON_TOKEN });
-      const entry = trace.recordEvent({ ...baseEvent(), payload: { [name]: dirty } });
+      const entry = asEvent(trace.recordEvent({ ...baseEvent(), payload: { state: dirty } }));
       expect(entry.payload).toEqual({});
-      expect(entry.droppedFields).toContain(`payload.${name}`);
+      expect(entry.droppedFields).toContain("payload.state");
       expect(serialised(trace)).not.toContain(dirty);
     },
   );
 
-  it.each(Object.entries(ALLOWLIST_ALSO_REJECTS))("drops payload value %s", (name, dirty) => {
+  it.each(Object.entries(ALSO_DENIED))("denies %s", (_name, dirty) => {
     const trace = createEventTrace({ daemonToken: DAEMON_TOKEN });
-    trace.recordEvent({ ...baseEvent(), payload: { [name]: dirty } });
+    trace.recordEvent({ ...baseEvent(), payload: { state: dirty } });
     expect(serialised(trace)).not.toContain(dirty);
   });
 
-  // A key can itself be the secret. Sanitising values only would publish it.
-  it("redacts a payload KEY that is a filesystem path", () => {
+  // A dedicated assertion that the daemon-token clause has real work to do:
+  // this value is short, dotted, and allowlist-admissible, so no other clause
+  // would stop it.
+  it("denies a value merely CONTAINING the daemon token", () => {
     const trace = createEventTrace({ daemonToken: DAEMON_TOKEN });
-    const entry = trace.recordEvent({
-      ...baseEvent(),
-      payload: { [ALLOWLIST_ALSO_REJECTS.homePath]: 1 },
-    });
+    trace.recordEvent({ ...baseEvent(), payload: { state: "run.tok.9e02.4c11.end" } });
+    expect(serialised(trace)).not.toContain(DAEMON_TOKEN);
+  });
+
+  it("keeps the same value when no daemon token is configured", () => {
+    const trace = createEventTrace();
+    const entry = asEvent(
+      trace.recordEvent({ ...baseEvent(), payload: { state: "run.tok.9e02.4c11.end" } }),
+    );
+    expect(entry.payload["state"]).toBe("run.tok.9e02.4c11.end");
+  });
+});
+
+describe("createEventTrace — disclosure budget", () => {
+  // The realistic leak is not an adversarial engine crafting a JWT; it is an
+  // ordinary engine emitting an ordinary metadata scalar. Payload keys are
+  // therefore allowlisted, and unknown keys are dropped whatever their value
+  // looks like — including numbers.
+  it.each([
+    ["operator identity", { user: "dave" }],
+    ["host identity", { hostname: "daves-workstation" }],
+    ["project identity", { project: "acme-merger-diligence" }],
+    ["workload size", { input_tokens: 48213, output_tokens: 9902 }],
+    ["cost", { cost_usd: 1.34 }],
+  ])("drops %s even though the value shape is innocuous", (_label, payload) => {
+    const trace = createEventTrace();
+    const entry = asEvent(trace.recordEvent({ ...baseEvent(), payload }));
     expect(entry.payload).toEqual({});
-    expect(serialised(trace)).not.toContain(ALLOWLIST_ALSO_REJECTS.homePath);
-    expect(serialised(trace)).not.toContain("/home/");
+    for (const value of Object.values(payload)) {
+      expect(serialised(trace)).not.toContain(String(value));
+    }
   });
 
-  it("redacts a payload KEY that is a credential", () => {
-    const key = `ghp_${"c".repeat(36)}`;
-    const trace = createEventTrace({ daemonToken: DAEMON_TOKEN });
-    trace.recordEvent({ ...baseEvent(), payload: { [key]: 1 } });
-    expect(serialised(trace)).not.toContain(key);
+  it("keeps enumerated lifecycle keys", () => {
+    const trace = createEventTrace();
+    const entry = asEvent(
+      trace.recordEvent({
+        ...baseEvent(),
+        payload: { state: "running", waiting_on_user: false, attempt: 2 },
+      }),
+    );
+    expect(entry.payload).toEqual({ state: "running", waiting_on_user: false, attempt: 2 });
   });
 
-  it("redacts a >100 character object KEY", () => {
-    const key = "k".repeat(120);
+  it("reports a wholly withheld non-object payload rather than an empty dropped column", () => {
+    const trace = createEventTrace();
+    const entry = asEvent(trace.recordEvent({ ...baseEvent(), payload: ["secret"] }));
+    expect(entry.droppedFields).toContain("payload");
+  });
+});
+
+describe("createEventTrace — names as data", () => {
+  it.each([
+    ["a filesystem path", ALSO_DENIED.homePath],
+    ["a credential", `ghp_${"c".repeat(36)}`],
+    ["a >100 character key", ALSO_DENIED.longKey],
+  ])("redacts a payload KEY that is %s", (_label, key) => {
     const trace = createEventTrace();
     trace.recordEvent({ ...baseEvent(), payload: { [key]: 1 } });
     expect(serialised(trace)).not.toContain(key);
@@ -122,123 +229,142 @@ describe("createEventTrace — redaction", () => {
     expect(serialised(trace)).not.toContain(key);
   });
 
-  // `ts` and `type` are engine-controlled and must pass the same deny layer.
-  it("rejects an event whose type carries the daemon token", () => {
+  it("reports dropped FIELD NAMES only, never dropped values", () => {
     const trace = createEventTrace({ daemonToken: DAEMON_TOKEN });
-    expect(() => trace.recordEvent({ ...baseEvent(), type: DAEMON_TOKEN })).toThrow(
-      InvalidTraceEventError,
+    const entry = asEvent(
+      trace.recordEvent({
+        ...baseEvent(),
+        payload: { state: CLAUSE_EXCLUSIVE.tokenRun, project: "acme" },
+      }),
     );
-    expect(serialised(trace)).not.toContain(DAEMON_TOKEN);
-  });
-
-  it("rejects an event whose ts is a filesystem path", () => {
-    const trace = createEventTrace();
-    expect(() =>
-      trace.recordEvent({ ...baseEvent(), ts: "/home/dave/secret/transcript.txt" }),
-    ).toThrow(InvalidTraceEventError);
-  });
-
-  // A newline in `type` would forge an extra row in the rendered table.
-  it("rejects a type containing a newline, so Markdown rows cannot be forged", () => {
-    const trace = createEventTrace();
-    expect(() =>
-      trace.recordEvent({ ...baseEvent(), type: "ok\n| 99 | forged | event |" }),
-    ).toThrow(InvalidTraceEventError);
-    expect(trace.toMarkdown()).not.toContain("forged");
-  });
-
-  it("never lets a thrown error echo the offending value", () => {
-    const trace = createEventTrace({ daemonToken: DAEMON_TOKEN });
-    try {
-      trace.recordEvent({ ...baseEvent(), type: DAEMON_TOKEN });
-      expect.unreachable("should have thrown");
-    } catch (error) {
-      expect((error as Error).message).toContain("type");
-      expect((error as Error).message).not.toContain(DAEMON_TOKEN);
-    }
+    expect(entry.droppedFields).toContain("payload.state");
+    expect(entry.droppedFields.join("|")).not.toContain(CLAUSE_EXCLUSIVE.tokenRun);
+    expect(entry.droppedFields.join("|")).not.toContain("acme");
   });
 
   it("does not pick up values from the prototype chain", () => {
-    const payload = Object.create({ inherited: "INHERITED-FROM-PROTOTYPE" }) as Record<
-      string,
-      unknown
-    >;
+    const payload = Object.create({ state: "INHERITED" }) as Record<string, unknown>;
     payload["mode"] = "agent";
     const trace = createEventTrace();
     trace.recordEvent({ ...baseEvent(), payload });
-    expect(serialised(trace)).not.toContain("INHERITED-FROM-PROTOTYPE");
+    expect(serialised(trace)).not.toContain("INHERITED");
   });
 
   it("records a __proto__ payload key as dropped rather than losing it silently", () => {
     const payload = JSON.parse('{"__proto__": {"polluted": true}}') as Record<string, unknown>;
-    const trace = createEventTrace();
-    const entry = trace.recordEvent({ ...baseEvent(), payload });
-    expect(entry.droppedFields.length).toBeGreaterThan(0);
-    expect(Object.keys(entry.payload)).not.toContain("polluted");
+    const entry = asEvent(createEventTrace().recordEvent({ ...baseEvent(), payload }));
+    expect(entry.droppedFields).toContain("payload.__proto__");
     expect(({} as Record<string, unknown>)["polluted"]).toBeUndefined();
   });
 
-  it("reports dropped FIELD NAMES only, never dropped values", () => {
-    const trace = createEventTrace({ daemonToken: DAEMON_TOKEN });
-    const entry = trace.recordEvent({
-      ...baseEvent(),
-      payload: { secret: DENY_EXCLUSIVE.opaqueRun, prompt: ALLOWLIST_ALSO_REJECTS.prompt },
-    });
-    expect(entry.droppedFields).toContain("payload.secret");
-    for (const dirty of [DENY_EXCLUSIVE.opaqueRun, ALLOWLIST_ALSO_REJECTS.prompt]) {
-      expect(entry.droppedFields.join("|")).not.toContain(dirty);
-    }
+  it("cannot forge a Markdown row through type or a payload value", () => {
+    const trace = createEventTrace();
+    trace.recordEvent({ ...baseEvent(), type: "ok\n| 99 | forged |" });
+    trace.recordEvent({ ...baseEvent(), seq: 2, payload: { state: "x\n| 98 | forged |" } });
+    expect(trace.toMarkdown()).not.toContain("forged");
   });
 
   it("does not hand back mutable internals", () => {
-    const trace = createEventTrace();
-    const entry = trace.recordEvent({ ...baseEvent(), payload: { mode: "agent" } });
+    const entry = asEvent(
+      createEventTrace().recordEvent({ ...baseEvent(), payload: { mode: "agent" } }),
+    );
     expect(Object.isFrozen(entry.payload)).toBe(true);
     expect(Object.isFrozen(entry.droppedFields)).toBe(true);
-    expect(Object.isFrozen(trace.entries())).toBe(true);
+  });
+});
+
+describe("createEventTrace — provenance", () => {
+  // The pinned sha is 40 unbroken token characters, so the generic heuristics
+  // deny it on purpose. It is admitted by equality with the compile-time pin,
+  // never by pattern, so only known public values can ever be printed.
+  it("records the pinned engine identity and renders it as a header", () => {
+    const trace = createEventTrace();
+    const record = trace.recordProvenance({
+      protocolMajor: EXPECTED_PROTOCOL_MAJOR,
+      operationsPath: "/v2/operations",
+      engineVersion: EXPECTED_ENGINE_VERSION,
+      engineSha: EXPECTED_ENGINE_SHA,
+    });
+    expect(record.matchesPin).toBe(true);
+    const markdown = trace.toMarkdown();
+    expect(markdown).toContain(EXPECTED_ENGINE_SHA);
+    expect(markdown).toContain(EXPECTED_ENGINE_VERSION);
+    expect(markdown).toContain("matches pin");
+  });
+
+  it("never echoes a mismatched engine identity", () => {
+    const trace = createEventTrace();
+    const record = trace.recordProvenance({
+      protocolMajor: EXPECTED_PROTOCOL_MAJOR,
+      operationsPath: "/v2/operations",
+      engineVersion: "9.9.9-attacker",
+      engineSha: "f".repeat(40),
+    });
+    expect(record.matchesPin).toBe(false);
+    expect(serialised(trace)).not.toContain("attacker");
+    expect(serialised(trace)).not.toContain("f".repeat(40));
+  });
+
+  it("rejects a hostile operations path", () => {
+    const trace = createEventTrace();
+    const record = trace.recordProvenance({
+      protocolMajor: EXPECTED_PROTOCOL_MAJOR,
+      operationsPath: "http://attacker.example/x",
+      engineVersion: EXPECTED_ENGINE_VERSION,
+      engineSha: EXPECTED_ENGINE_SHA,
+    });
+    expect(record.operationsPath).toBe("<rejected>");
+    expect(serialised(trace)).not.toContain("attacker.example");
   });
 });
 
 /**
- * Repository-level guard over the committed ADR evidence. Biome does not lint
- * Markdown (`biome ci <md>` reports "Checked 0 files"), so this test is the
- * only automated barrier protecting the committed trace from a future edit.
+ * Repository-level guard over everything committed under `docs/adr/`. Biome
+ * does not lint Markdown (`biome ci <md>` reports "Checked 0 files"), so this
+ * is the only automated barrier protecting the ADR and its evidence file.
  */
-const EVIDENCE_PATH = join(resolveRepoRoot(), "docs/adr/evidence/0002-claudexor-v2-event-trace.md");
+const ADR_DIR = join(resolveRepoRoot(), "docs/adr");
 
-/** Plain substrings, plus credential prefixes matched on a word boundary. */
-const FORBIDDEN_SUBSTRINGS = ["/home/", "/root/", "Bearer "] as const;
+const FORBIDDEN_SUBSTRINGS = ["/home/", "/root/", "/Users/", "/tmp/", "/data/", "Bearer "] as const;
 const FORBIDDEN_PATTERNS = [/\bsk-/, /\bghp_/, /\bgho_/, /\bgithub_pat_/, /\bxox[baprs]-/] as const;
 
-describe("committed ADR evidence redaction guard", () => {
-  // Negative control: proves the constant lists can actually fire, so a
-  // hollowed-out list cannot make the guard below pass vacuously.
+function markdownFilesUnder(dir: string): string[] {
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir, { recursive: true, withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".md"))
+    .map((entry) => join(entry.parentPath, entry.name));
+}
+
+describe("committed ADR redaction guard", () => {
+  // Negative control: proves the constant lists can fire, so a hollowed-out
+  // list cannot make the guard pass vacuously.
   it("detects a synthetic dirty string", () => {
-    const dirty = `/home/dave secret Bearer abc sk-abc ghp_${"a".repeat(36)}`;
+    const dirty = `/home/dave /tmp/x Bearer abc sk-abc ghp_${"a".repeat(36)}`;
     expect(FORBIDDEN_SUBSTRINGS.some((s) => dirty.includes(s))).toBe(true);
     expect(FORBIDDEN_PATTERNS.some((p) => p.test(dirty))).toBe(true);
   });
 
-  // `"task-".includes("sk-")` is true, so raw substring matching would
-  // false-positive on every real Claudexor task id.
+  // `"task-".includes("sk-")` is true, so raw substring matching on the
+  // credential prefixes would false-positive on every real Claudexor task id.
   it("does not false-positive on real Claudexor identifiers", () => {
     const clean = "task-a9b1ea142bc5 run-d2fb12fa3051 local_session";
     expect(FORBIDDEN_SUBSTRINGS.some((s) => clean.includes(s))).toBe(false);
     expect(FORBIDDEN_PATTERNS.some((p) => p.test(clean))).toBe(false);
   });
 
-  describe.skipIf(!existsSync(EVIDENCE_PATH))(
-    "docs/adr/evidence/0002-claudexor-v2-event-trace.md [skipped until the canary run writes it]",
-    () => {
-      it("contains no credential, transcript, or home-path material", () => {
-        const contents = readFileSync(EVIDENCE_PATH, "utf8");
-        for (const forbidden of FORBIDDEN_SUBSTRINGS) {
-          expect(contents, `evidence contains ${forbidden}`).not.toContain(forbidden);
-        }
-        for (const pattern of FORBIDDEN_PATTERNS) {
-          expect(pattern.test(contents), `evidence matches ${pattern}`).toBe(false);
-        }
-      });
-    },
-  );
+  it("finds at least the existing ADR, so the scan cannot pass vacuously", () => {
+    expect(markdownFilesUnder(ADR_DIR).length).toBeGreaterThan(0);
+  });
+
+  it("keeps every committed ADR document free of credential or path material", () => {
+    for (const file of markdownFilesUnder(ADR_DIR)) {
+      const contents = readFileSync(file, "utf8");
+      for (const forbidden of FORBIDDEN_SUBSTRINGS) {
+        expect(contents, `${file} contains ${forbidden}`).not.toContain(forbidden);
+      }
+      for (const pattern of FORBIDDEN_PATTERNS) {
+        expect(pattern.test(contents), `${file} matches ${pattern}`).toBe(false);
+      }
+    }
+  });
 });

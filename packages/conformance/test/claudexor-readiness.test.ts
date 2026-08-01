@@ -1,54 +1,49 @@
 import { describe, expect, it } from "vitest";
-import {
-  type DaemonReadinessProbe,
-  isDaemonReady,
-  resolveReadiness,
-} from "../src/smoke/claudexor/readiness.js";
+import { type DaemonReadinessProbe, isDaemonReady } from "../src/smoke/claudexor/readiness.js";
 
-describe("resolveReadiness", () => {
-  it("becomes ready on a healthz 200", () => {
-    expect(resolveReadiness([{ source: "healthz", status: 200 }])).toEqual({
-      ready: true,
-      via: "healthz",
-    });
-  });
-
-  it("is not ready on a healthz non-200", () => {
-    expect(resolveReadiness([{ source: "healthz", status: 503 }]).ready).toBe(false);
-  });
-
-  // Regression: the daemon log is NOT truncated by a new daemon, so a stale
-  // `control-api listening` line left by a previous process reads as "ready"
-  // while nothing is listening. That produced a false ready during this spike.
-  // No quantity of log observations, and no content within them, may authorise
-  // readiness.
-  it("never becomes ready from log lines, however convincing", () => {
-    const staleLog: readonly DaemonReadinessProbe[] = [
-      { source: "log", line: "[2026-07-31T23:24:25.110Z] claudexord listening on ...sock" },
-      { source: "log", line: "[2026-07-31T23:24:25.114Z] claudexor control-api listening on ..." },
-      { source: "log", line: "ready" },
-    ];
-    expect(resolveReadiness(staleLog)).toEqual({ ready: false, via: null });
-  });
-
-  it("ignores preceding log noise once a healthz 200 arrives", () => {
-    expect(
-      resolveReadiness([
-        { source: "log", line: "control-api listening" },
-        { source: "healthz", status: 200 },
-      ]),
-    ).toEqual({ ready: true, via: "healthz" });
-  });
-
-  it("is not ready with no observations at all", () => {
-    expect(resolveReadiness([]).ready).toBe(false);
-  });
-});
+const PORT = 47311;
 
 describe("isDaemonReady", () => {
-  it("authorises only healthz 200", () => {
-    expect(isDaemonReady({ source: "healthz", status: 200 })).toBe(true);
-    expect(isDaemonReady({ source: "healthz", status: 500 })).toBe(false);
-    expect(isDaemonReady({ source: "log", line: "control-api listening" })).toBe(false);
+  it("authorises a fresh healthz 200 on the expected port", () => {
+    expect(isDaemonReady({ source: "healthz", status: 200, port: PORT, attempt: 1 }, PORT)).toBe(
+      true,
+    );
+  });
+
+  it("does not authorise a non-200", () => {
+    expect(isDaemonReady({ source: "healthz", status: 503, port: PORT, attempt: 1 }, PORT)).toBe(
+      false,
+    );
+  });
+
+  // The daemon log is not truncated by a new daemon, so a stale
+  // `control-api listening` line reads as ready while nothing is listening.
+  // That produced a false ready during this spike.
+  it("never authorises readiness from a log line, however convincing", () => {
+    const staleLines: readonly DaemonReadinessProbe[] = [
+      { source: "log", line: "[2026-07-31T23:24:25.110Z] claudexord listening on ...sock" },
+      { source: "log", line: "claudexor control-api listening on http://127.0.0.1:47311" },
+      { source: "log", line: "ready" },
+    ];
+    for (const probe of staleLines) {
+      expect(isDaemonReady(probe, PORT)).toBe(false);
+    }
+  });
+
+  // `/healthz` is unauthenticated and outside `/v2`, so it carries no engine
+  // identity: a leftover daemon from a previous canary answers 200 just as
+  // happily. Canary 4 restarts the daemon on the same home, so a 200 observed
+  // against a different port must not authorise this instance.
+  it("does not authorise a 200 observed against a different port", () => {
+    expect(isDaemonReady({ source: "healthz", status: 200, port: 47399, attempt: 1 }, PORT)).toBe(
+      false,
+    );
+  });
+
+  // Regression against the shape of the original defect: readiness is decided
+  // from ONE latest observation, never from "any probe ever seen", which is
+  // how a pre-restart 200 would authorise a post-restart daemon.
+  it("takes a single probe rather than a history", () => {
+    expect(isDaemonReady.length).toBe(2);
   });
 });

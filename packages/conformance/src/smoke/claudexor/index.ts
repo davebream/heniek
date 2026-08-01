@@ -12,17 +12,12 @@ export {
   ProtocolMajorMismatchError,
   protocolHeaders,
 } from "./protocol.js";
-export {
-  type DaemonReadinessProbe,
-  isDaemonReady,
-  type ReadinessOutcome,
-  resolveReadiness,
-} from "./readiness.js";
+export { type DaemonReadinessProbe, isDaemonReady } from "./readiness.js";
 export {
   CLAUDEXOR_RUN_STATES,
   type ClaudexorRunObservation,
   type ClaudexorRunState,
-  type HeniekRunState,
+  INTERRUPTED_MAPPING_IS_PROVISIONAL,
   toHeniekRunState,
   UnknownClaudexorRunStateError,
 } from "./state-map.js";
@@ -31,7 +26,8 @@ export {
   type EventRecord,
   type EventTrace,
   type EventTraceOptions,
-  InvalidTraceEventError,
   type ProcessRecord,
+  type ProvenanceRecord,
+  type RejectedRecord,
   type TraceRecord,
 } from "./trace.js";

@@ -64,12 +64,21 @@ export class EnginePinMismatchError extends Error {
     readonly observed: EngineIdentity,
     readonly expected: EngineIdentity,
   ) {
+    // The observed halves are engine-controlled and end up in CI logs, so they
+    // are bounded and stripped before interpolation. The expected halves are
+    // compile-time constants and are safe verbatim.
     super(
-      `engine is not the pinned revision: observed ${observed.version}/${observed.sha}, ` +
+      `engine is not the pinned revision: observed ${bounded(observed.version)}/${bounded(observed.sha)}, ` +
         `expected ${expected.version}/${expected.sha}`,
     );
     this.name = "EnginePinMismatchError";
   }
+}
+
+/** Render an engine-controlled value for an error message, bounded and safe. */
+function bounded(value: string): string {
+  const cleaned = value.replace(/[^A-Za-z0-9_.:-]/g, "");
+  return cleaned.length === 0 ? "<unprintable>" : cleaned.slice(0, 64);
 }
 
 function asRecord(value: unknown, field: string): Record<string, unknown> {
@@ -104,7 +113,19 @@ export function negotiateProtocol(response: unknown): NegotiatedProtocol {
     throw new ProtocolMajorMismatchError(major, EXPECTED_PROTOCOL_MAJOR);
   }
 
+  // `operationsPath` is engine-controlled and the client joins it to the base
+  // URL while attaching `Authorization: Bearer <daemon token>`. An absolute
+  // URL ("http://elsewhere/x") or a scheme-relative one ("//elsewhere/x")
+  // would resolve to a foreign origin and walk the daemon token out with the
+  // request, so it must be a same-origin path under the known prefix.
   const operationsPath = asString(record, "operationsPath", "operationsPath");
+  if (
+    !operationsPath.startsWith(`${CLAUDEXOR_PATH_PREFIX}/`) ||
+    operationsPath.startsWith("//") ||
+    operationsPath.includes(":")
+  ) {
+    throw new InvalidHandshakeResponseError("operationsPath");
+  }
   const engineRecord = asRecord(
     Object.hasOwn(record, "engine") ? record["engine"] : undefined,
     "engine",
