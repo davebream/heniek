@@ -14,7 +14,12 @@
 
 import { internalHandle, type StateDatabase } from "../database/open.js";
 import { readUserVersion } from "../database/pragma.js";
-import { MigrationError, SchemaVersionError, StateStoreError } from "../errors.js";
+import {
+  MigrationError,
+  SchemaVersionError,
+  StateDatabaseCorruptionError,
+  StateStoreError,
+} from "../errors.js";
 import { MIGRATIONS } from "./list.js";
 import { type Migration, migrationStatementHash } from "./migration.js";
 
@@ -39,6 +44,19 @@ export interface MigrationRunReport {
 
 /** `PRAGMA user_version` is a signed 32-bit integer — the bounds `runMigrationList` asserts before interpolating (V16). */
 const MAX_SCHEMA_VERSION = 2_147_483_647;
+
+/**
+ * `statementIndex` sentinel meaning the failure happened during the
+ * version-bump step (`PRAGMA user_version = …` immediately followed by
+ * `COMMIT`), after every DDL statement in `migration.statements` already
+ * succeeded — distinct from any real statement index, which is always in
+ * `[0, migration.statements.length)`. Previously this reused
+ * `migration.statements.length` itself (Phase 2 fix supplement, deferred to
+ * Phase 3): a value that happens to equal the array's length reads as "one
+ * past the last statement" rather than as a deliberately distinct phase of
+ * the step, and nothing about it signals that it is not a real index.
+ */
+const VERSION_BUMP_FAILED = -2;
 
 function toManifestEntry(migration: Migration): MigrationManifestEntry {
   return {
@@ -80,6 +98,20 @@ export function runMigrationList(
 ): MigrationRunReport {
   const handle = internalHandle(db);
   const fromVersion = readUserVersion(handle);
+  // A legitimate `PRAGMA user_version` is never negative — every migration
+  // step interpolates a `version` already asserted `> 0` (below) before
+  // writing it, so the only way this connection could observe a negative
+  // value is a foreign write to the file outside this package's migrator
+  // (issue #7, Phase 2 fix supplement, deferred to Phase 3). Refused, not
+  // guessed: treating it as "0, migrate from scratch" would attempt to
+  // recreate tables that may already exist for a database that is actually
+  // corrupt, not merely unmigrated.
+  if (fromVersion < 0) {
+    throw new StateDatabaseCorruptionError(
+      `state database PRAGMA user_version is negative (${fromVersion}) — not a valid schema ` +
+        "version marker",
+    );
+  }
   // The highest version anywhere in `migrations`, not `migrations.at(-1)` —
   // `pending` below is sorted before use precisely because callers are not
   // required to supply this list pre-sorted, and `.at(-1)` would silently
@@ -152,7 +184,7 @@ export function runMigrationList(
         statementIndex = index;
         handle.exec(statement);
       }
-      statementIndex = migration.statements.length;
+      statementIndex = VERSION_BUMP_FAILED;
       // PRAGMA user_version cannot be parameterised (verified: `near "?":
       // syntax error`) — `version` is bounds-asserted immediately above, so
       // this is the one string-built statement in the package and it is

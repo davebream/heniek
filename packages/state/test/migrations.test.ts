@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { internalHandle, openStateDatabase } from "../src/database/open.js";
 import { readUserVersion } from "../src/database/pragma.js";
-import { MigrationError, SchemaVersionError } from "../src/errors.js";
+import { MigrationError, SchemaVersionError, StateDatabaseCorruptionError } from "../src/errors.js";
 import { MIGRATIONS } from "../src/migrations/list.js";
 import {
   currentSchemaVersion,
@@ -320,11 +320,12 @@ describe("runMigrations (design D2, C1, AC1)", () => {
     const db = openDb();
     try {
       const handle = internalHandle(db);
-      runMigrations(db); // Advances to version 1 "out of band" of the call below.
-      expect(readUserVersion(handle)).toBe(1);
+      runMigrations(db); // Advances to the terminal version "out of band" of the call below.
+      expect(readUserVersion(handle)).toBe(currentSchemaVersion());
 
-      const report = runMigrationList(db, MIGRATIONS); // fromVersion read here is 1, so pending is already empty —
-      // exercise the in-transaction guard directly via targetVersion instead.
+      const report = runMigrationList(db, MIGRATIONS); // fromVersion read here is already
+      // the terminal version, so pending is already empty — exercise the
+      // in-transaction guard directly via targetVersion instead.
       expect(report.applied).toHaveLength(0);
     } finally {
       db.close();
@@ -397,6 +398,79 @@ describe("runMigrationList targetVersion validation (issue #7, Phase 2 fix G5)",
       expect(() => runMigrationList(db, [MIGRATION_1, outOfBounds])).toThrow(
         /outside the PRAGMA user_version interpolation bounds/,
       );
+    } finally {
+      db.close();
+    }
+  });
+});
+
+describe("PRAGMA user_version integrity (issue #7, Phase 2 fix supplement, deferred to Phase 3)", () => {
+  it("refuses a negative PRAGMA user_version as a corrupt version marker, rather than treating it as version 0", () => {
+    const db = openDb();
+    try {
+      const handle = internalHandle(db);
+      // A legitimate migration step never writes a negative version — this
+      // simulates a foreign write to the file outside this package's
+      // migrator (e.g. a hand-edited or corrupted database).
+      handle.exec("PRAGMA user_version = -1");
+
+      let caught: unknown;
+      try {
+        runMigrationList(db, MIGRATIONS);
+      } catch (error) {
+        caught = error;
+      }
+      expect(caught).toBeInstanceOf(StateDatabaseCorruptionError);
+      expect((caught as Error).message).toMatch(/is negative \(-1\)/);
+
+      // No migration ran: the refusal happens before `pending` is even computed.
+      const objectCount = handle
+        .prepare(
+          "SELECT COUNT(*) AS n FROM sqlite_schema WHERE name NOT LIKE 'sqlite\\_%' ESCAPE '\\'",
+        )
+        .get();
+      expect(objectCount?.n).toBe(0);
+    } finally {
+      db.close();
+    }
+  });
+});
+
+describe("migrator statementIndex sentinels (issue #7, Phase 2 fix supplement, deferred to Phase 3)", () => {
+  it("reports the version-bump sentinel, not a real statement index, when every DDL statement succeeds but the version bump itself fails", () => {
+    const db = openDb();
+    try {
+      const handle = internalHandle(db);
+      const originalExec = handle.exec.bind(handle);
+      handle.exec = ((sql: string) => {
+        if (sql.startsWith("PRAGMA user_version =")) {
+          throw new Error("simulated version-bump failure");
+        }
+        return originalExec(sql);
+      }) as typeof handle.exec;
+
+      let caught: unknown;
+      try {
+        runMigrationList(db, [MIGRATION_1]);
+      } catch (error) {
+        caught = error;
+      } finally {
+        handle.exec = originalExec;
+      }
+
+      expect(caught).toBeInstanceOf(MigrationError);
+      const migrationError = caught as MigrationError;
+      // The version-bump sentinel is a fixed, distinct negative value — never
+      // a real statement index (always in [0, MIGRATION_1.statements.length))
+      // and never merely "one past the last statement" (issue #7, Phase 2 fix
+      // supplement — the previous behaviour reused
+      // `migration.statements.length` for this, which reads as exactly that).
+      expect(migrationError.statementIndex).toBe(-2);
+      expect(migrationError.statementIndex).not.toBe(MIGRATION_1.statements.length);
+
+      // The failed transaction still rolled back cleanly.
+      expect(readUserVersion(handle)).toBe(0);
+      expect(handle.isTransaction).toBe(false);
     } finally {
       db.close();
     }

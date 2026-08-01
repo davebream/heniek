@@ -59,6 +59,16 @@ if (MIGRATION_1 === undefined) {
   throw new Error("MIGRATIONS must contain at least one migration for this suite to run");
 }
 
+// Derived, never hand-written (G7): the terminal version is whatever the last
+// shipped migration says it is, so appending migration 4 in a later phase
+// re-points every "terminal" assertion below automatically instead of leaving
+// them silently pinned to an older version.
+const TERMINAL_MIGRATION = MIGRATIONS[MIGRATIONS.length - 1];
+if (TERMINAL_MIGRATION === undefined) {
+  throw new Error("MIGRATIONS must contain at least one migration for this suite to run");
+}
+const TERMINAL_VERSION = TERMINAL_MIGRATION.version;
+
 function pin(version: number): FingerprintFixtureEntry {
   const entry = SCHEMA_FINGERPRINTS[String(version)];
   if (entry === undefined) {
@@ -98,6 +108,23 @@ async function fingerprintOfHandWritten(sql: string): Promise<SchemaFingerprint>
   } finally {
     await cleanup();
   }
+}
+
+/**
+ * The stored, un-normalised `CREATE TABLE run_projection` text, straight from
+ * `sqlite_schema` — the one place this suite looks at raw DDL rather than at a
+ * digest of it. Returns `null` if the table is absent, so a caller can assert
+ * presence explicitly instead of comparing two silent nulls.
+ */
+function readRunProjectionDdl(handle: DatabaseSync): string | null {
+  const row = handle
+    .prepare("SELECT sql FROM sqlite_schema WHERE type = 'table' AND name = 'run_projection'")
+    .get();
+  if (row === undefined) {
+    return null;
+  }
+  const { sql } = row;
+  return typeof sql === "string" ? sql : null;
 }
 
 /** Opens two independent temp dbs, builds each with `buildA`/`buildB`, and returns both fingerprints. */
@@ -163,8 +190,8 @@ describe("the AC1 four-lineage matrix", () => {
     }
 
     expect(upgradedFingerprint).toStrictEqual(freshFingerprint);
-    expect(freshFingerprint.structural).toBe(pin(MIGRATION_1.version).structural);
-    expect(freshFingerprint.declared).toBe(pin(MIGRATION_1.version).declared);
+    expect(freshFingerprint.structural).toBe(pin(TERMINAL_VERSION).structural);
+    expect(freshFingerprint.declared).toBe(pin(TERMINAL_VERSION).declared);
 
     // interrupted — target version 1 (the first migration) with its last
     // statement replaced to throw mid-step; the fingerprint must equal the
@@ -238,29 +265,75 @@ describe("recorded SQLite/Node version alongside the fingerprint pins (G7)", () 
 });
 
 describe("terminal-schema.sql — the independent, hand-written witness", () => {
-  it("its structural digest matches the terminal migrated version, and so does declared (G1)", async () => {
+  it("its structural digest matches the terminal migrated version — the ALTER is invisible to PRAGMA introspection (G1)", async () => {
     const fingerprint = await fingerprintOfHandWritten(TERMINAL_SCHEMA_SQL);
-    expect(fingerprint.structural).toBe(pin(MIGRATION_1.version).structural);
-    // `declared` closing the loop is the whole point of a hand-written
-    // witness: after the shared normal form (whitespace-collapse, then sort
-    // by (type, name)) the fixture's *content* must be byte-identical to
-    // the migration DDL's, even though its formatting, line breaks, and
-    // statement order are deliberately different (see the fixture's own
-    // header comment) — a real content divergence (the `CHECK`, a dropped
-    // `STRICT`, a `COLLATE`) would trip this the same way it trips the
-    // migrated-lineage pin above. Task 3.1's `ALTER TABLE ADD COLUMN` is the
-    // documented point where this is expected to start diverging (G1a) —
-    // an `ALTER`-rewritten column's stored DDL text differs from the
-    // hand-written fixture's fresh `CREATE` text, even for the identical
-    // logical schema.
-    expect(fingerprint.declared).toBe(pin(MIGRATION_1.version).declared);
+    // This is the assertion the hand-written witness exists for. `structural`
+    // reads normalised PRAGMA introspection, which records only *what* the
+    // schema is, never *how* it got there — so a `run_projection` whose
+    // `workspace_id` arrived by `ALTER TABLE … ADD COLUMN` (migration 3) must
+    // be indistinguishable from this fixture's fresh inline `CREATE`, even
+    // though the fixture's formatting and statement ordering are deliberately
+    // different. A real content divergence (a dropped `STRICT`, a changed
+    // `NOT NULL`, a missing FK, a reordered column) trips this immediately.
+    //
+    // The column-order caveat is load-bearing (finding C2): `readTableXInfo`
+    // reads `ORDER BY cid` and an `ALTER`-appended column always takes the
+    // highest `cid`, which is exactly why the fixture must place
+    // `workspace_id` last in `run_projection`'s column list.
+    expect(fingerprint.structural).toBe(pin(TERMINAL_VERSION).structural);
   });
 
-  // Task 3.1 adds `ALTER TABLE run_projection ADD COLUMN workspace_id` as
-  // migration 3's last statement and converts this into a real assertion
-  // (`expect(freshSql).not.toBe(handWrittenSql)`) in the same commit — this
-  // phase ships migration 1 only, so there is no ALTER yet to exercise.
-  it.todo("literal DDL diverges once migration 3 ALTERs run_projection — Task 3.1");
+  it("its declared digest does NOT match, because declared hashes stored DDL text and the ALTER rewrote it (G1a, Task 3.1)", async () => {
+    const fingerprint = await fingerprintOfHandWritten(TERMINAL_SCHEMA_SQL);
+    // The deliberate asymmetry, and the reason two digests exist at all
+    // (plan Task 3.1: the inline-vs-`ALTER` difference "is precisely what the
+    // structural digest must see through and the declared digest must not").
+    //
+    // Through version 1 these two digests agreed, because migration 1 is all
+    // fresh `CREATE`s and the shared normal form (collapse whitespace runs,
+    // trim, sort by (type, name)) erased every formatting difference between
+    // the fixture and the migration DDL. Migration 3's `ALTER TABLE
+    // run_projection ADD COLUMN workspace_id TEXT` breaks that: SQLite
+    // rewrites the stored `CREATE TABLE run_projection` text by splicing
+    // `, workspace_id TEXT` in ahead of the closing paren, which normalises
+    // to `… updated_at TEXT NOT NULL , workspace_id TEXT) STRICT` — text no
+    // hand-written inline `CREATE` would ever produce. Asserting inequality
+    // *positively* is what keeps this honest: if a future refactor made the
+    // migrated and hand-written DDL text converge, this test fails loudly
+    // rather than silently weakening into a tautology.
+    expect(fingerprint.declared).not.toBe(pin(TERMINAL_VERSION).declared);
+  });
+
+  it("the literal, un-normalised run_projection DDL differs between the migrated lineage and the hand-written fixture (Task 3.1 — was it.todo through Phase 2)", async () => {
+    const migratedTemp = await openTempDb();
+    let migratedSql: string | null;
+    try {
+      runMigrations(migratedTemp.db);
+      migratedSql = readRunProjectionDdl(internalHandle(migratedTemp.db));
+    } finally {
+      await migratedTemp.cleanup();
+    }
+
+    const handWrittenTemp = await openTempDb();
+    let handWrittenSql: string | null;
+    try {
+      internalHandle(handWrittenTemp.db).exec(TERMINAL_SCHEMA_SQL);
+      handWrittenSql = readRunProjectionDdl(internalHandle(handWrittenTemp.db));
+    } finally {
+      await handWrittenTemp.cleanup();
+    }
+
+    // Both must actually exist — otherwise `null !== null` would be a vacuous
+    // pass and this case would prove nothing.
+    expect(migratedSql).not.toBeNull();
+    expect(handWrittenSql).not.toBeNull();
+    expect(migratedSql).not.toBe(handWrittenSql);
+    // Pin the *reason* rather than just the inequality: the migrated text
+    // carries SQLite's spliced-in ALTER fragment, the hand-written one has
+    // `workspace_id` as an ordinary inline column.
+    expect(migratedSql).toContain(", workspace_id TEXT)");
+    expect(handWrittenSql).not.toContain(", workspace_id TEXT)");
+  });
 });
 
 describe("discrimination cases (D3, D17, R1) — matched pairs differing in exactly one feature", () => {
@@ -354,6 +427,26 @@ describe("discrimination cases (D3, D17, R1) — matched pairs differing in exac
     const [a, b] = await fingerprintPair(
       (handle) => handle.exec("CREATE TABLE t (a TEXT) STRICT"),
       (handle) => handle.exec("CREATE TABLE t (a TEXT COLLATE NOCASE) STRICT"),
+    );
+    expect(a.structural).toBe(b.structural);
+    expect(a.declared).not.toBe(b.declared);
+  });
+
+  // Deferred to Phase 3 (Phase 2 fix supplement, G7 blind-spot list item 1,
+  // via `fingerprint.ts`'s own header comment): `AUTOINCREMENT` is banned
+  // outright from `MIGRATIONS` by `assertAppendOnly` (design D3), so this
+  // case necessarily goes through `fingerprintPair`'s raw-schema helper
+  // rather than through any shipped migration — there is no way to exercise
+  // it via `MIGRATIONS` at all. Measured directly (this suite's own probe):
+  // neither `pragma_table_xinfo` nor `pragma_table_list.strict` records
+  // whether a rowid-alias column carries `AUTOINCREMENT` — both are
+  // byte-identical with and without it — so `structural` is blind to it
+  // exactly like `CHECK` and `COLLATE` above, and only `declared` (which
+  // hashes the stored DDL text) sees it.
+  it("structural is equal but declared differs for AUTOINCREMENT", async () => {
+    const [a, b] = await fingerprintPair(
+      (handle) => handle.exec("CREATE TABLE t (a INTEGER PRIMARY KEY) STRICT"),
+      (handle) => handle.exec("CREATE TABLE t (a INTEGER PRIMARY KEY AUTOINCREMENT) STRICT"),
     );
     expect(a.structural).toBe(b.structural);
     expect(a.declared).not.toBe(b.declared);

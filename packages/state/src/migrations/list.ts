@@ -77,5 +77,108 @@ const MIGRATION_0001_JOURNAL: Migration = {
 Object.freeze(MIGRATION_0001_JOURNAL.statements);
 Object.freeze(MIGRATION_0001_JOURNAL);
 
-export const MIGRATIONS: readonly Migration[] = Object.freeze([MIGRATION_0001_JOURNAL]);
+/**
+ * Migration 2 — the run projection substrate (design D8, plan Task 3.1).
+ * `workspace_id` is deliberately absent from this `CREATE TABLE` — it
+ * arrives in migration 3 via `ALTER TABLE … ADD COLUMN` (plan P6), which
+ * exercises the migrator's `ALTER` path at least once. `codebase_id` is
+ * denormalised here for query convenience and carries no FK to `codebase`
+ * (revisit at Q010, design open question 3).
+ */
+const MIGRATION_0002_RUN_PROJECTION: Migration = {
+  version: 2,
+  name: "run_projection",
+  statements: [
+    `CREATE TABLE run_projection (
+      run_id               TEXT    NOT NULL PRIMARY KEY,
+      status               TEXT    NOT NULL,
+      revision             INTEGER NOT NULL,
+      last_event_sequence  INTEGER NOT NULL REFERENCES state_event(sequence),
+      codebase_id          TEXT    NOT NULL,
+      updated_at           TEXT    NOT NULL
+    ) STRICT`,
+    `CREATE TRIGGER run_projection_first_revision BEFORE INSERT ON run_projection
+      WHEN NEW.revision <> 1
+      BEGIN SELECT RAISE(ABORT, 'first projection revision must be 1'); END`,
+    `CREATE TRIGGER run_projection_causal_update BEFORE UPDATE ON run_projection
+      WHEN NEW.last_event_sequence <= OLD.last_event_sequence OR NEW.revision <> OLD.revision + 1
+      BEGIN SELECT RAISE(ABORT, 'projection update must advance revision by 1 and cite a newer event'); END`,
+  ],
+};
+Object.freeze(MIGRATION_0002_RUN_PROJECTION.statements);
+Object.freeze(MIGRATION_0002_RUN_PROJECTION);
+
+/**
+ * Migration 3 — the identity substrate: `codebase`, `repository`, `workspace`
+ * (design D8, D9; plan P2), each with the same `last_event_sequence` FK
+ * discipline and the same guard-trigger pair as `run_projection`. No
+ * lifecycle/status/name/URL/branch columns — those are Q010/Q011/Q034
+ * (design D9 rows 2-3); the relationship columns (`repository.codebase_id`,
+ * `workspace.codebase_id`) are included because they are identities *and
+ * relationships* (§16.3), and omitting them would be the speculative
+ * under-reach X4 equally bans.
+ *
+ * The final statement adds `run_projection.workspace_id` by `ALTER TABLE …
+ * ADD COLUMN` (plan P6, finding C2) — nullable and with no default, which
+ * `ALTER TABLE ADD COLUMN` permits on a `STRICT` table. `workspace_id` is
+ * nullable deliberately: a run exists for a moment before its workspace is
+ * provisioned (Q011). This column MUST stay the last statement of this
+ * migration: `pragma_table_xinfo` orders by `cid`, and an `ALTER`-appended
+ * column always receives the highest `cid` — `test/fixtures/terminal-schema.sql`
+ * must place `workspace_id` last in `run_projection`'s column list to match
+ * (finding C2).
+ */
+const MIGRATION_0003_IDENTITY: Migration = {
+  version: 3,
+  name: "identity",
+  statements: [
+    `CREATE TABLE codebase (
+      codebase_id          TEXT    NOT NULL PRIMARY KEY,
+      revision             INTEGER NOT NULL,
+      last_event_sequence  INTEGER NOT NULL REFERENCES state_event(sequence),
+      updated_at           TEXT    NOT NULL
+    ) STRICT`,
+    `CREATE TRIGGER codebase_first_revision BEFORE INSERT ON codebase
+      WHEN NEW.revision <> 1
+      BEGIN SELECT RAISE(ABORT, 'first projection revision must be 1'); END`,
+    `CREATE TRIGGER codebase_causal_update BEFORE UPDATE ON codebase
+      WHEN NEW.last_event_sequence <= OLD.last_event_sequence OR NEW.revision <> OLD.revision + 1
+      BEGIN SELECT RAISE(ABORT, 'projection update must advance revision by 1 and cite a newer event'); END`,
+    `CREATE TABLE repository (
+      repository_id        TEXT    NOT NULL PRIMARY KEY,
+      codebase_id          TEXT    NOT NULL REFERENCES codebase(codebase_id),
+      revision             INTEGER NOT NULL,
+      last_event_sequence  INTEGER NOT NULL REFERENCES state_event(sequence),
+      updated_at           TEXT    NOT NULL
+    ) STRICT`,
+    `CREATE TRIGGER repository_first_revision BEFORE INSERT ON repository
+      WHEN NEW.revision <> 1
+      BEGIN SELECT RAISE(ABORT, 'first projection revision must be 1'); END`,
+    `CREATE TRIGGER repository_causal_update BEFORE UPDATE ON repository
+      WHEN NEW.last_event_sequence <= OLD.last_event_sequence OR NEW.revision <> OLD.revision + 1
+      BEGIN SELECT RAISE(ABORT, 'projection update must advance revision by 1 and cite a newer event'); END`,
+    `CREATE TABLE workspace (
+      workspace_id         TEXT    NOT NULL PRIMARY KEY,
+      codebase_id          TEXT    NOT NULL REFERENCES codebase(codebase_id),
+      revision             INTEGER NOT NULL,
+      last_event_sequence  INTEGER NOT NULL REFERENCES state_event(sequence),
+      updated_at           TEXT    NOT NULL
+    ) STRICT`,
+    `CREATE TRIGGER workspace_first_revision BEFORE INSERT ON workspace
+      WHEN NEW.revision <> 1
+      BEGIN SELECT RAISE(ABORT, 'first projection revision must be 1'); END`,
+    `CREATE TRIGGER workspace_causal_update BEFORE UPDATE ON workspace
+      WHEN NEW.last_event_sequence <= OLD.last_event_sequence OR NEW.revision <> OLD.revision + 1
+      BEGIN SELECT RAISE(ABORT, 'projection update must advance revision by 1 and cite a newer event'); END`,
+    "ALTER TABLE run_projection ADD COLUMN workspace_id TEXT",
+  ],
+};
+Object.freeze(MIGRATION_0003_IDENTITY.statements);
+Object.freeze(MIGRATION_0003_IDENTITY);
+
+export const MIGRATIONS: readonly Migration[] = Object.freeze([
+  MIGRATION_0001_JOURNAL,
+  MIGRATION_0002_RUN_PROJECTION,
+  MIGRATION_0003_IDENTITY,
+]);
 assertAppendOnly(MIGRATIONS);

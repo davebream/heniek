@@ -2,5 +2,13 @@
   "1": {
     "name": "journal",
     "statementHash": "d9b0432a951644d74cad99e34be6f9bf70cd70a09cb649bf4eb6c0020848ee7d"
+  },
+  "2": {
+    "name": "run_projection",
+    "statementHash": "5abccecca5ee155ab7526d1f11804b9751393d75cb3df706a1461eaa5e4fb3de"
+  },
+  "3": {
+    "name": "identity",
+    "statementHash": "4bf29f695b4aa90fde4de732d08275eff2d27f1b93376c2c8e3756bc906c8ef6"
   }
 }

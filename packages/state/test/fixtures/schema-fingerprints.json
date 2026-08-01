@@ -6,5 +6,13 @@
   "1": {
     "structural": "a4e193ffb726c25ad1f59e617465e41a220814618dc722f175861f2838084e34",
     "declared": "16aa08086f7c6d5748beb61bbfbf9cae3c3ee424917ca2847f1709ed803f3a65"
+  },
+  "2": {
+    "structural": "e14d2fe279a8a1c80ce548e02aadb2fea5b378645a7cfdbeebc045e40fc079fb",
+    "declared": "86599659b66b2564a36a612e677b15f1a6f7f510ab48ff9a8a74a962a967873c"
+  },
+  "3": {
+    "structural": "1e4e39af945e0eaf7d5ebf07339b7463f0eb570d4e7289baef6bd154dfde0349",
+    "declared": "8be5e2a27ff92c9adca800ec1014d43442fba8995c378989cc5b8a1e3839f062"
   }
 }

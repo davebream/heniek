@@ -15,6 +15,15 @@ export {
   StateDatabaseCorruptionError,
   StateStoreError,
 } from "./errors.js";
+export type {
+  AppendEventInput,
+  CausationEventId,
+  CorrelationId,
+  EventId,
+  EventSequence,
+  StateEvent,
+} from "./journal/event.js";
+export { latestSequence, readEvents, readEventsForRun } from "./journal/read.js";
 export type { JsonValue } from "./json.js";
 export { MIGRATIONS, type Migration } from "./migrations/list.js";
 export {
@@ -25,3 +34,14 @@ export {
   migrationManifest,
   runMigrations,
 } from "./migrations/migrate.js";
+export {
+  type CodebaseRow,
+  type RepositoryRow,
+  readIdentity,
+  type WorkspaceRow,
+} from "./projection/identity.js";
+export {
+  type RunProjectionRow,
+  readAllRunProjections,
+  readRunProjection,
+} from "./projection/run.js";

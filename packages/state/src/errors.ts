@@ -51,7 +51,16 @@ export class SchemaVersionError extends StateStoreError {
   }
 }
 
-/** D2 — a migration statement failed; names the migration version and the failing statement's index. */
+/**
+ * D2 — a migration statement failed; names the migration version and the
+ * failing statement's index. `statementIndex` is `-1` when the failure
+ * happened before any statement ran (e.g. `assertAppendOnly`'s own callers,
+ * or `BEGIN IMMEDIATE` itself throwing) and the migrator's own
+ * `VERSION_BUMP_FAILED` sentinel (`-2`) when every statement in
+ * `migration.statements` succeeded but the version-bump step (`PRAGMA
+ * user_version = …` / `COMMIT`) failed — neither is a real statement index,
+ * which is always in `[0, migration.statements.length)`.
+ */
 export class MigrationError extends StateStoreError {
   readonly version: number;
   readonly statementIndex: number;
