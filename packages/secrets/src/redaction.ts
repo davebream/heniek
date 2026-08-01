@@ -153,7 +153,21 @@ function redactValue(value: unknown, ancestors: Set<object>, depth: number): Jso
           : looksLikeCredentialKey(key)
             ? REDACTION_PLACEHOLDER
             : redactValue(entryValue, ancestors, depth + 1);
-      Object.defineProperty(out, key, {
+      // The *key itself* can be the credential (a raw token pasted into an
+      // object literal as a key rather than a value) — `key` is checked
+      // against the value-shape patterns (`looksLikeCredentialValue`),
+      // separately from `looksLikeCredentialKey` above, which only ever
+      // decides whether the *value under* a normally-named key is sensitive
+      // and previously left a credential-shaped key name to survive into the
+      // output verbatim (C7). Mirrors the identical fix on the
+      // restricted-YAML guard's `Pair` keys (`@heniek/config`'s
+      // `restricted.ts`), so the two packages can never disagree about a
+      // credential accepted in key position. Two distinct credential-shaped
+      // keys in the same object both collapse onto the literal
+      // `REDACTION_PLACEHOLDER` string; the second silently overwrites the
+      // first, which is preferable to leaking either.
+      const outputKey = looksLikeCredentialValue(key) ? REDACTION_PLACEHOLDER : key;
+      Object.defineProperty(out, outputKey, {
         value: redacted,
         writable: true,
         enumerable: true,

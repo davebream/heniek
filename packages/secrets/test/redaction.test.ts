@@ -212,6 +212,25 @@ describe("redactJson", () => {
     expect(result).toEqual(["hello", REDACTION_PLACEHOLDER]);
   });
 
+  // C7: a credential-shaped *key* (not value) previously survived redactJson
+  // verbatim — the key-shape check (`looksLikeCredentialKey`) only ever
+  // decided whether the *value under* a key was sensitive, never whether the
+  // key text itself was a raw credential.
+  it("redacts a credential-shaped object key, not just credential-shaped values (C7)", () => {
+    const token = `ghp_${"a".repeat(36)}`;
+    const result = redactJson({ [token]: "enabled" }) as Record<string, unknown>;
+
+    expect(Object.keys(result)).toEqual([REDACTION_PLACEHOLDER]);
+    expect(JSON.stringify(result)).not.toContain(token);
+  });
+
+  it("does not redact an ordinary key even though its value is separately redacted (C7)", () => {
+    const result = redactJson({ name: `ghp_${"a".repeat(36)}` }) as Record<string, unknown>;
+
+    expect(Object.keys(result)).toEqual(["name"]);
+    expect(result.name).toBe(REDACTION_PLACEHOLDER);
+  });
+
   it("leaves unrelated values untouched and returns a new structure", () => {
     const input = { name: "ok", count: 3, enabled: true, note: null };
     const result = redactJson(input);

@@ -1,6 +1,21 @@
 import { describe, expect, it } from "vitest";
 import { parseRestrictedYaml } from "../src/yaml/restricted.js";
 
+/**
+ * Asserts `result` failed with *exactly* the given list of diagnostic codes
+ * (in any order) — not merely "contains a diagnostic with this code" (C1).
+ * The former assertion style passed against an implementation that also
+ * emitted arbitrary spurious diagnostics alongside the expected one; this
+ * one does not.
+ */
+function expectRejection(
+  result: ReturnType<typeof parseRestrictedYaml>,
+  codes: readonly string[],
+): void {
+  expect(result.ok).toBe(false);
+  expect(result.diagnostics.map((d) => d.code).sort()).toEqual([...codes].sort());
+}
+
 /** Asserts `result` failed with exactly one diagnostic matching `code`/`line`/`column`. */
 function expectSingleRejection(
   result: ReturnType<typeof parseRestrictedYaml>,
@@ -8,9 +23,8 @@ function expectSingleRejection(
   line: number,
   column: number,
 ): void {
-  expect(result.ok).toBe(false);
-  const diagnostic = result.diagnostics.find((entry) => entry.code === code);
-  expect(diagnostic).toBeDefined();
+  expectRejection(result, [code]);
+  const diagnostic = result.diagnostics[0];
   expect(diagnostic?.line).toBe(line);
   expect(diagnostic?.column).toBe(column);
 }
@@ -74,7 +88,7 @@ describe("parseRestrictedYaml — accepted subset", () => {
   });
 });
 
-describe("parseRestrictedYaml — rejection rules", () => {
+describe("parseRestrictedYaml — rejection rules (C1: exact diagnostic sets)", () => {
   it("yaml.syntax-error: a malformed document is rejected without echoing the source line", () => {
     const result = parseRestrictedYaml('key: "unterminated\n');
     expectSingleRejection(result, "yaml.syntax-error", 2, 1);
@@ -92,8 +106,10 @@ describe("parseRestrictedYaml — rejection rules", () => {
   });
 
   it("yaml.alias-not-supported: an alias node is rejected", () => {
+    // Also carries `yaml.anchor-not-supported` for the `&anchor` definition
+    // itself — both are independently, legitimately true of this source.
     const result = parseRestrictedYaml("a: &anchor 1\nb: *anchor\n");
-    expect(result.ok).toBe(false);
+    expectRejection(result, ["yaml.alias-not-supported", "yaml.anchor-not-supported"]);
     const alias = result.diagnostics.find((d) => d.code === "yaml.alias-not-supported");
     expect(alias?.line).toBe(2);
     expect(alias?.column).toBe(4);
@@ -124,21 +140,66 @@ describe("parseRestrictedYaml — rejection rules", () => {
     expectSingleRejection(result, "yaml.non-string-key-not-supported", 1, 3);
   });
 
+  // B6: an explicit-empty key parses `pair.key` as the JS literal `null`,
+  // which carries no `range` of its own — the diagnostic must still fall
+  // back to the pair's own position instead of silently losing line/column.
+  it("yaml.non-string-key-not-supported: an explicit-empty key falls back to the pair's position (B6)", () => {
+    const result = parseRestrictedYaml("? \n: value\n");
+    expectRejection(result, ["yaml.non-string-key-not-supported"]);
+    const diagnostic = result.diagnostics[0];
+    expect(diagnostic?.line).toBeDefined();
+    expect(diagnostic?.column).toBeDefined();
+  });
+
   it("yaml.non-json-value: unquoted .nan/.inf scalars are rejected", () => {
     const result = parseRestrictedYaml("a: .nan\nb: .inf\n");
-    expect(result.ok).toBe(false);
-    const codes = result.diagnostics.map((d) => d.code);
-    expect(codes).toEqual(["yaml.non-json-value", "yaml.non-json-value"]);
+    expectRejection(result, ["yaml.non-json-value", "yaml.non-json-value"]);
     expect(result.diagnostics[0]).toMatchObject({ line: 1, column: 4 });
     expect(result.diagnostics[1]).toMatchObject({ line: 2, column: 4 });
   });
 
   it("yaml.max-depth-exceeded: nesting past the configured maxDepth is rejected", () => {
     const result = parseRestrictedYaml("a:\n  b:\n    c: 1\n", { maxDepth: 1 });
+    expectRejection(result, ["yaml.max-depth-exceeded"]);
+    expect(result.diagnostics[0]?.message).toContain("1");
+  });
+
+  // B2: `maxDepth: Infinity` must not disable the guard entirely — it is
+  // clamped to a hard ceiling (well above the default, well below a stack
+  // overflow) rather than trusted verbatim. 1,500 levels of flow-sequence
+  // nesting exceeds that ceiling, but `yaml`'s own composer independently
+  // enforces its own internal nesting limit on flow collections and gives
+  // up (a `yaml.syntax-error`) *before* traversal ever reaches this guard —
+  // so either code is an acceptable "rejected safely" outcome here; the
+  // invariant under test is "does not honour `Infinity` and does not
+  // silently accept", not "which layer detects it first".
+  it("maxDepth: Infinity is clamped, not honoured verbatim — rejected safely either way (B2)", () => {
+    const deep = `${"[".repeat(1_500)}1${"]".repeat(1_500)}\n`;
+    const result = parseRestrictedYaml(deep, { maxDepth: Number.POSITIVE_INFINITY });
     expect(result.ok).toBe(false);
-    const diagnostic = result.diagnostics.find((d) => d.code === "yaml.max-depth-exceeded");
-    expect(diagnostic).toBeDefined();
-    expect(diagnostic?.message).toContain("1");
+    expect(
+      result.diagnostics.some(
+        (d) => d.code === "yaml.max-depth-exceeded" || d.code === "yaml.syntax-error",
+      ),
+    ).toBe(true);
+  });
+
+  // B2: a pathologically deeply nested source must not throw a raw
+  // `RangeError` out of this Result-typed function.
+  it("does not throw on deeply nested input — returns a diagnostic instead (B2)", () => {
+    const deep = `${"[".repeat(200_000)}1${"]".repeat(200_000)}\n`;
+    expect(() => parseRestrictedYaml(deep)).not.toThrow();
+    const result = parseRestrictedYaml(deep);
+    expect(result.ok).toBe(false);
+  });
+
+  // B2: an oversized source must fail fast with a diagnostic rather than
+  // being handed to the underlying parser unbounded.
+  it("yaml.source-too-large: an oversized source is rejected before parsing (B2)", () => {
+    const huge = `a: "${"x".repeat(2_100_000)}"\n`;
+    const result = parseRestrictedYaml(huge);
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.some((d) => d.code === "yaml.source-too-large")).toBe(true);
   });
 
   it("yaml.sensitive-value-not-allowed: a credential-shaped key holding a scalar string is rejected", () => {
@@ -157,9 +218,27 @@ describe("parseRestrictedYaml — rejection rules", () => {
   it("yaml.sensitive-value-not-allowed: a credential-shaped value under an innocuous key is still rejected", () => {
     const token = "ghp_abcdefghijklmnopqrstuvwxyz0123456789";
     const result = parseRestrictedYaml(`note: contact ${token} for access\n`);
-    expect(result.ok).toBe(false);
-    expect(result.diagnostics[0]?.code).toBe("yaml.sensitive-value-not-allowed");
+    expectRejection(result, ["yaml.sensitive-value-not-allowed"]);
     expect(result.diagnostics[0]?.message).not.toContain(token);
+  });
+
+  // A6: __proto__/constructor/prototype must never survive as an own
+  // mapping key — rejected outright, with position, rather than merely
+  // "handled safely downstream".
+  it.each(["__proto__", "constructor", "prototype"])(
+    "yaml.reserved-key-not-supported: %s is rejected as a mapping key (A6)",
+    (key) => {
+      const result = parseRestrictedYaml(`${key}: 1\n`);
+      expectRejection(result, ["yaml.reserved-key-not-supported"]);
+      expect(result.diagnostics[0]?.line).toBe(1);
+      expect(result.diagnostics[0]?.column).toBe(1);
+    },
+  );
+
+  it("yaml.reserved-key-not-supported: a nested reserved key is also rejected (A6)", () => {
+    const result = parseRestrictedYaml("a:\n  __proto__:\n    polluted: true\n");
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.some((d) => d.code === "yaml.reserved-key-not-supported")).toBe(true);
   });
 
   it("sourcePath is attached to every diagnostic when provided", () => {
@@ -171,18 +250,31 @@ describe("parseRestrictedYaml — rejection rules", () => {
   });
 });
 
+describe("parseRestrictedYaml — B3: empty-stream errors/warnings are not discarded", () => {
+  it("a directive-only stream that yaml rejects is not silently reported as a successfully parsed empty document", () => {
+    const result = parseRestrictedYaml("%YAML 1.3\n");
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.length).toBeGreaterThan(0);
+  });
+
+  it("a stream of only comments still parses as an accepted empty document (no errors to surface)", () => {
+    const result = parseRestrictedYaml("# just a comment\n");
+    expect(result).toEqual({ ok: true, value: null, diagnostics: [] });
+  });
+});
+
 describe("parseRestrictedYaml — yaml.ambiguous-scalar (warning)", () => {
   it("warns on the YAML-1.1 boolean word 'yes' left unquoted", () => {
     const result = parseRestrictedYaml("flag: yes\n");
     expect(result.ok).toBe(true);
     expect(result.diagnostics).toEqual([
-      {
+      expect.objectContaining({
         code: "yaml.ambiguous-scalar",
         severity: "warning",
         message: expect.stringContaining("yes"),
         line: 1,
         column: 7,
-      },
+      }),
     ]);
     if (result.ok) {
       expect(result.value).toEqual({ flag: "yes" });
@@ -218,13 +310,13 @@ describe("parseRestrictedYaml — yaml.ambiguous-scalar (warning)", () => {
     const result = parseRestrictedYaml("code: 007\n");
     expect(result.ok).toBe(true);
     expect(result.diagnostics).toEqual([
-      {
+      expect.objectContaining({
         code: "yaml.ambiguous-scalar",
         severity: "warning",
         message: expect.stringContaining("007"),
         line: 1,
         column: 7,
-      },
+      }),
     ]);
     if (result.ok) {
       expect(result.value).toEqual({ code: 7 });

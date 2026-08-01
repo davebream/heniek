@@ -23,19 +23,36 @@ export interface JsonObject {
  * `T` is preserved rather than widened to `JsonValue` so callers keep the
  * precise type of whatever they froze (a `ResolvedConfiguration`, an
  * `ApplicationHome`, …) instead of losing it to the generic JSON shape.
+ *
+ * Cycle detection uses a `WeakSet` of nodes visited *by this call*, not
+ * `Object.isFrozen`. `Object.isFrozen` conflates two different things: "this
+ * node was already visited earlier in this same call" and "this node
+ * happened to already be frozen before this call started" (e.g. a
+ * caller-supplied object literal that was shallow-frozen for an unrelated
+ * reason). Treating the latter as a visited node would return it untouched
+ * without ever recursing into its children, silently leaving them mutable —
+ * exactly the shallow-freeze bug this helper exists to prevent.
  */
 export function deepFreeze<T>(value: T): T {
-  if (value === null || typeof value !== "object" || Object.isFrozen(value)) {
+  return deepFreezeVisiting(value, new WeakSet<object>());
+}
+
+function deepFreezeVisiting<T>(value: T, visiting: WeakSet<object>): T {
+  if (value === null || typeof value !== "object") {
     return value;
   }
-  // Freeze the container first, so a cyclic structure (impossible for JSON
-  // proper, but this helper is also used on TypeScript object literals that
-  // could in principle be cyclic) cannot recurse forever: `Object.isFrozen`
-  // above stops recursion into an already-visited node the next time it is
-  // reached.
+  if (visiting.has(value)) {
+    return value;
+  }
+  // Recorded before recursing (not after freezing), so a cyclic structure
+  // (impossible for JSON proper, but this helper is also used on
+  // TypeScript object literals that could in principle be cyclic) cannot
+  // recurse forever: the next time the same node is reached, `visiting.has`
+  // above short-circuits.
+  visiting.add(value);
   Object.freeze(value);
   for (const key of Object.keys(value as Record<string, unknown>)) {
-    deepFreeze((value as Record<string, unknown>)[key]);
+    deepFreezeVisiting((value as Record<string, unknown>)[key], visiting);
   }
   return value;
 }

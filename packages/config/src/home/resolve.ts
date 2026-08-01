@@ -1,5 +1,18 @@
 import { homedir } from "node:os";
-import { isAbsolute, join, resolve } from "node:path";
+// Explicitly `node:path/posix`, not the ambient `node:path`: the
+// cross-platform determinism this module promises (AC1, "deterministic on
+// macOS and Linux") only holds because darwin and linux share POSIX path
+// semantics. Importing the ambient module would make `isAbsolute`/`join`/
+// `resolve` behave per the *host* platform's rules, not per the *injected*
+// `source.platform` — on a win32 host, `isAbsolute("/x")` is `true` and
+// `join` emits backslashes, so the same injected `platform: "linux"` input
+// would resolve differently depending on where the code happens to run.
+// Using `path.posix` unconditionally makes every path decision here a pure
+// function of `source`, matching the module's own purity docstring below.
+// This module is documented and tested against POSIX-shaped inputs only
+// (darwin/linux/`.heniek` fallback); it does not attempt to produce
+// win32-correct paths for the "other" platform bucket.
+import { posix } from "node:path";
 import type { Diagnostic } from "../diagnostics.js";
 import { createDiagnostic, sortDiagnostics } from "../diagnostics.js";
 import { deepFreeze } from "../json.js";
@@ -70,7 +83,7 @@ function containsNulByte(value: string): boolean {
 }
 
 function joinRelative(base: string, relative: string): string {
-  return relative === "." ? base : join(base, relative);
+  return relative === "." ? base : posix.join(base, relative);
 }
 
 function rootsFromBase(
@@ -96,28 +109,30 @@ function rootsFromBase(
 export function resolveApplicationHome(source: ApplicationHomeSource): ApplicationHome {
   const { platform, env, homeDirectory } = source;
 
-  // Nothing downstream — the `.heniek` fallback, and every XDG category
-  // that falls through to it — can be deterministic without a usable home
-  // directory, so this is checked first, regardless of which branch below
-  // ultimately fires (even a HENIEK_HOME override does not need
-  // `homeDirectory`, but requiring it unconditionally keeps the function's
-  // precondition simple and independent of which branch is taken).
-  if (homeDirectory === "" || !isAbsolute(homeDirectory)) {
-    throw new ApplicationHomeResolutionError(
-      "home.user-directory-invalid",
-      "The resolved user home directory must be a non-empty absolute path.",
-    );
-  }
-
   const diagnostics: Diagnostic[] = [];
   const override = env[HENIEK_HOME_VAR];
 
+  // §7 line 429 / design §2.2 step 1: "use HENIEK_HOME when set to a
+  // *non-empty* absolute path". An empty value (`HENIEK_HOME=""`, e.g. from
+  // `systemd Environment="HENIEK_HOME="` or `export HENIEK_HOME=$UNSET_VAR`)
+  // is ordinary, not a caller mistake, and must fall through to step 2/3
+  // exactly like an unset variable — it is deliberately *not* routed into
+  // `resolveOverrideRoots`, which is reserved for a present-and-non-empty
+  // value that fails validation (relative, whitespace-only, NUL-bearing).
+  //
+  // `homeDirectory` is validated lazily, inside `resolveLinuxRoots` and the
+  // `.heniek`-fallback branch below — the only branches that actually
+  // consume it — rather than as an unconditional precondition of this
+  // function. A `HENIEK_HOME` override does not need `homeDirectory` at all,
+  // so a host where `os.homedir()` returns `""` (a container or CI runner
+  // with `HOME` unset) must not defeat the exact override the variable
+  // exists for.
   const roots =
-    override !== undefined
-      ? resolveOverrideRoots(override, env, diagnostics)
+    override !== undefined && override !== ""
+      ? resolveOverrideRoots(override, env, platform, diagnostics)
       : platform === "linux"
         ? resolveLinuxRoots(env, homeDirectory, diagnostics)
-        : rootsFromBase(resolve(homeDirectory, ".heniek"), "user-home-fallback");
+        : rootsFromBase(resolveFallbackBase(homeDirectory), "user-home-fallback");
 
   // Deeply frozen — a caller that holds a reference to `home.roots.config`
   // or `home.paths` (rather than the root `home` object) must not be able to
@@ -131,6 +146,23 @@ export function resolveApplicationHome(source: ApplicationHomeSource): Applicati
 }
 
 /**
+ * Validates `homeDirectory` and resolves the `.heniek` fallback base from
+ * it (design §2.2 step 3). Called only from the branches that actually
+ * consume `homeDirectory` — never unconditionally — so a `HENIEK_HOME`
+ * override, or a Linux host whose XDG variables cover every category, never
+ * fails on an unusable `homeDirectory` it never needed.
+ */
+function resolveFallbackBase(homeDirectory: string): string {
+  if (homeDirectory === "" || !posix.isAbsolute(homeDirectory) || containsNulByte(homeDirectory)) {
+    throw new ApplicationHomeResolutionError(
+      "home.user-directory-invalid",
+      "The resolved user home directory must be a non-empty absolute path.",
+    );
+  }
+  return posix.resolve(homeDirectory, ".heniek");
+}
+
+/**
  * Step 1 of §7's resolution order: `HENIEK_HOME` is present (its mere
  * presence is the gate — an empty value is rejected below by the
  * absoluteness check, rather than being treated as "unset", since a
@@ -139,13 +171,15 @@ export function resolveApplicationHome(source: ApplicationHomeSource): Applicati
 function resolveOverrideRoots(
   override: string,
   env: Readonly<Record<string, string | undefined>>,
+  platform: ApplicationHomePlatform,
   diagnostics: Diagnostic[],
 ): Record<ApplicationHomeRootCategory, ApplicationHomeRoot> {
-  // Checked first: an empty string, a whitespace-only string, and any
-  // relative path all fail `isAbsolute` (none starts with a path
-  // separator), so all three land on this one, more specific diagnosis
-  // rather than the generic "invalid content" branch below.
-  if (!isAbsolute(override)) {
+  // Checked first: a whitespace-only string and any relative path both fail
+  // `isAbsolute` (neither starts with a path separator), so both land on
+  // this one, more specific diagnosis rather than the generic "invalid
+  // content" branch below. (An empty override never reaches this function —
+  // see the fall-through in `resolveApplicationHome`.)
+  if (!posix.isAbsolute(override)) {
     throw new ApplicationHomeResolutionError(
       "home.override-not-absolute",
       `${HENIEK_HOME_VAR} must be set to a non-empty absolute path when present.`,
@@ -162,48 +196,66 @@ function resolveOverrideRoots(
     );
   }
 
-  const ignoredXdgVars = (Object.keys(XDG_VARS) as ApplicationHomeRootCategory[])
-    .map((category) => XDG_VARS[category])
-    .filter((variable) => env[variable] !== undefined)
-    .sort();
-  if (ignoredXdgVars.length > 0) {
-    // Info, not a warning: this is expected, documented behaviour ("HENIEK_HOME
-    // overrides platform defaults"), not a misconfiguration — but a silent
-    // override could otherwise look like the XDG variables were simply
-    // never noticed, so the conflict is still surfaced.
-    diagnostics.push(
-      createDiagnostic(
-        "home.xdg-ignored-under-override",
-        "info",
-        `${HENIEK_HOME_VAR} overrides platform defaults; ignoring: ${ignoredXdgVars.join(", ")}.`,
-      ),
-    );
+  // XDG is a Linux-only platform default (spec §7 step 2); on darwin it was
+  // never consulted in the first place, so reporting that the override
+  // "ignored" it would be false and would contradict the very reason XDG is
+  // absent from the darwin branch below.
+  if (platform === "linux") {
+    const ignoredXdgVars = (Object.keys(XDG_VARS) as ApplicationHomeRootCategory[])
+      .map((category) => XDG_VARS[category])
+      .filter((variable) => env[variable] !== undefined)
+      .sort();
+    if (ignoredXdgVars.length > 0) {
+      // Info, not a warning: this is expected, documented behaviour ("HENIEK_HOME
+      // overrides platform defaults"), not a misconfiguration — but a silent
+      // override could otherwise look like the XDG variables were simply
+      // never noticed, so the conflict is still surfaced.
+      diagnostics.push(
+        createDiagnostic(
+          "home.xdg-ignored-under-override",
+          "info",
+          `${HENIEK_HOME_VAR} overrides platform defaults; ignoring: ${ignoredXdgVars.join(", ")}.`,
+        ),
+      );
+    }
   }
 
-  return rootsFromBase(resolve(override), "heniek-home-variable");
+  return rootsFromBase(posix.resolve(override), "heniek-home-variable");
 }
 
-/** Step 2 of §7's resolution order: per-category XDG Base Directory variables, Linux only. */
+/**
+ * Step 2 of §7's resolution order: per-category XDG Base Directory
+ * variables, Linux only. `homeDirectory` is only validated (and only
+ * resolved into a fallback base) the first time some category actually
+ * falls through to it — a Linux host with all four `XDG_*` variables set
+ * validly never touches `homeDirectory` at all, so it never fails on one
+ * that happens to be unusable.
+ */
 function resolveLinuxRoots(
   env: Readonly<Record<string, string | undefined>>,
   homeDirectory: string,
   diagnostics: Diagnostic[],
 ): Record<ApplicationHomeRootCategory, ApplicationHomeRoot> {
-  const fallbackBase = resolve(homeDirectory, ".heniek");
+  let fallbackBaseCache: string | undefined;
+  const getFallbackBase = (): string => {
+    fallbackBaseCache ??= resolveFallbackBase(homeDirectory);
+    return fallbackBaseCache;
+  };
+
   return {
-    config: resolveXdgCategory("config", env, fallbackBase, diagnostics),
-    data: resolveXdgCategory("data", env, fallbackBase, diagnostics),
-    state: resolveXdgCategory("state", env, fallbackBase, diagnostics),
-    runtime: resolveXdgCategory("runtime", env, fallbackBase, diagnostics),
+    config: resolveXdgCategory("config", env, getFallbackBase, diagnostics),
+    data: resolveXdgCategory("data", env, getFallbackBase, diagnostics),
+    state: resolveXdgCategory("state", env, getFallbackBase, diagnostics),
+    runtime: resolveXdgCategory("runtime", env, getFallbackBase, diagnostics),
   };
 }
 
 function fallbackRoot(
   category: ApplicationHomeRootCategory,
-  fallbackBase: string,
+  getFallbackBase: () => string,
 ): ApplicationHomeRoot {
   return {
-    path: joinRelative(fallbackBase, BASE_RELATIVE_ROOT[category]),
+    path: joinRelative(getFallbackBase(), BASE_RELATIVE_ROOT[category]),
     origin: "user-home-fallback",
   };
 }
@@ -211,7 +263,7 @@ function fallbackRoot(
 function resolveXdgCategory(
   category: ApplicationHomeRootCategory,
   env: Readonly<Record<string, string | undefined>>,
-  fallbackBase: string,
+  getFallbackBase: () => string,
   diagnostics: Diagnostic[],
 ): ApplicationHomeRoot {
   const variable = XDG_VARS[category];
@@ -222,10 +274,10 @@ function resolveXdgCategory(
   // unconfigured category ("categories are independent, so a partially
   // configured Linux host is still deterministic").
   if (value === undefined || value === "") {
-    return fallbackRoot(category, fallbackBase);
+    return fallbackRoot(category, getFallbackBase);
   }
 
-  if (!isAbsolute(value) || containsNulByte(value)) {
+  if (!posix.isAbsolute(value) || containsNulByte(value)) {
     diagnostics.push(
       createDiagnostic(
         "home.xdg-variable-not-absolute",
@@ -233,10 +285,10 @@ function resolveXdgCategory(
         `${variable} is set but is not an absolute path; falling back to the .heniek default for this category.`,
       ),
     );
-    return fallbackRoot(category, fallbackBase);
+    return fallbackRoot(category, getFallbackBase);
   }
 
-  return { path: join(resolve(value), "heniek"), origin: "xdg-base-directory" };
+  return { path: posix.join(posix.resolve(value), "heniek"), origin: "xdg-base-directory" };
 }
 
 function buildPaths(
