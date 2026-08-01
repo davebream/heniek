@@ -47,7 +47,7 @@ const compiledValidators = new WeakMap<object, ValidateFunction>();
  *    identity) is reused instead of recompiled;
  *  - any other Ajv compile-time error (an unknown keyword under
  *    `strict: true`, a malformed schema) is caught and converted into a
- *    `configuration.schema-violation` diagnostic via `AjvCompileError`,
+ *    `configuration.schema-invalid` diagnostic via `AjvCompileError` (M2),
  *    rather than propagating out of `loadRestrictedYamlDocument` — a
  *    Result-typed function must not throw for a caller mistake it can
  *    describe as a diagnostic instead.
@@ -105,12 +105,16 @@ export function loadRestrictedYamlDocument<T>(
     validateFn = compile(schema);
   } catch (error) {
     if (error instanceof AjvCompileError) {
+      // M2: a distinct code from `configuration.schema-violation` — that
+      // code means "the *document* violates a valid schema"; this means
+      // "the *schema itself* could not be compiled", a caller/config
+      // defect one level up from any document instance.
       return {
         ok: false,
         diagnostics: sortDiagnostics([
           ...parsed.diagnostics,
           createDiagnostic(
-            "configuration.schema-violation",
+            "configuration.schema-invalid",
             "error",
             `Invalid schema: ${error.message}`,
             {

@@ -226,19 +226,82 @@ describe("parseRestrictedYaml — rejection rules (C1: exact diagnostic sets)", 
   // mapping key — rejected outright, with position, rather than merely
   // "handled safely downstream".
   it.each(["__proto__", "constructor", "prototype"])(
-    "yaml.reserved-key-not-supported: %s is rejected as a mapping key (A6)",
+    "yaml.unsafe-key-not-supported: %s is rejected as a mapping key (A6)",
     (key) => {
       const result = parseRestrictedYaml(`${key}: 1\n`);
-      expectRejection(result, ["yaml.reserved-key-not-supported"]);
+      expectRejection(result, ["yaml.unsafe-key-not-supported"]);
       expect(result.diagnostics[0]?.line).toBe(1);
       expect(result.diagnostics[0]?.column).toBe(1);
     },
   );
 
-  it("yaml.reserved-key-not-supported: a nested reserved key is also rejected (A6)", () => {
+  it("yaml.unsafe-key-not-supported: a nested reserved key is also rejected (A6)", () => {
     const result = parseRestrictedYaml("a:\n  __proto__:\n    polluted: true\n");
     expect(result.ok).toBe(false);
-    expect(result.diagnostics.some((d) => d.code === "yaml.reserved-key-not-supported")).toBe(true);
+    expect(result.diagnostics.some((d) => d.code === "yaml.unsafe-key-not-supported")).toBe(true);
+  });
+
+  // C2: a *valid* parse must never carry an injected prototype member —
+  // the reserved-key rejection above proves the document is refused, this
+  // proves a document that never used a reserved key comes back completely
+  // ordinary.
+  it("C2: a valid parse result's prototype is untouched Object.prototype, with no injected members", () => {
+    const result = parseRestrictedYaml("a: 1\nb:\n  c: 2\n");
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(Object.getPrototypeOf(result.value)).toBe(Object.prototype);
+      expect(Object.prototype).not.toHaveProperty("polluted");
+    }
+  });
+
+  // C5: a credential-shaped key holding a *sequence* of scalar strings —
+  // the guard was previously scoped to scalar values only. `api_key`
+  // (singular) is used, not `api_keys`: `looksLikeCredentialKey`'s pattern
+  // requires the credential word to be followed by a `[._-]` separator or
+  // end-of-string, so a trailing plural "s" (`api_keys`, `passwords`) is
+  // deliberately excluded by that pattern — see `patterns.ts`.
+  it("yaml.sensitive-value-not-allowed: a credential-shaped key holding a sequence of scalar strings is rejected (C5)", () => {
+    const result = parseRestrictedYaml("api_key:\n  - hunter2\n");
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.some((d) => d.code === "yaml.sensitive-value-not-allowed")).toBe(
+      true,
+    );
+    expect(result.diagnostics.every((d) => !d.message.includes("hunter2"))).toBe(true);
+  });
+
+  // C5 (decision #1, not relitigated): a credential-shaped key holding a
+  // *mapping* value stays legal — this is the sanctioned reference form.
+  it("accepts a credential-shaped key holding a mapping value — the sanctioned reference form (C5)", () => {
+    const result = parseRestrictedYaml('credentials:\n  - store: "file"\n');
+    // A sequence *containing a mapping* (not a scalar string) must not be
+    // rejected — only sequences of scalar strings are in scope for C5.
+    expect(result).toEqual({
+      ok: true,
+      value: { credentials: [{ store: "file" }] },
+      diagnostics: [],
+    });
+  });
+
+  // C6a: a credential in *key* position (rather than value position) was
+  // previously invisible to the value-shape scan entirely.
+  it("yaml.sensitive-value-not-allowed: a credential-shaped key text (not just credential-shaped value) is rejected (C6a)", () => {
+    const token = `ghp_${"a".repeat(36)}`;
+    const result = parseRestrictedYaml(`${token}: enabled\n`);
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.some((d) => d.code === "yaml.sensitive-value-not-allowed")).toBe(
+      true,
+    );
+  });
+
+  // C6b: no diagnostic message may ever contain the raw credential, even
+  // when the credential is the key text itself.
+  it("no diagnostic message ever contains the raw credential, including when it is in key position (C6b)", () => {
+    const token = `ghp_${"a".repeat(36)}`;
+    const result = parseRestrictedYaml(`${token}: enabled\n`);
+    expect(result.ok).toBe(false);
+    for (const diagnostic of result.diagnostics) {
+      expect(diagnostic.message).not.toContain(token);
+    }
   });
 
   it("sourcePath is attached to every diagnostic when provided", () => {
@@ -331,5 +394,42 @@ describe("parseRestrictedYaml — yaml.ambiguous-scalar (warning)", () => {
   it("a warning alone does not make the document unusable", () => {
     const result = parseRestrictedYaml("flag: yes\n");
     expect(result.ok).toBe(true);
+  });
+
+  // C8b: YAML-1.1 sexagesimal (base-60) notation — the core schema leaves it
+  // as a string, but a YAML-1.1 reader resolves it to a number.
+  it("warns on a YAML-1.1 sexagesimal-looking scalar (C8b)", () => {
+    const result = parseRestrictedYaml("duration: 12:30\n");
+    expect(result.ok).toBe(true);
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({ code: "yaml.ambiguous-scalar", severity: "warning" }),
+    ]);
+    if (result.ok) {
+      expect(result.value).toEqual({ duration: "12:30" });
+    }
+  });
+
+  it("does not warn on an ordinary port-mapping-shaped string (C8b false-positive guard)", () => {
+    const result = parseRestrictedYaml("ports: 8080:8080\n");
+    expect(result).toEqual({ ok: true, value: { ports: "8080:8080" }, diagnostics: [] });
+  });
+
+  // C8b: the `~`/`Null`/`NULL` null spellings — readability ambiguity, not
+  // cross-parser disagreement (both YAML 1.1 and the core schema resolve
+  // them identically), but easy to misread as a sentinel string.
+  it.each(["~", "Null", "NULL"])("warns on the null spelling %s (C8b)", (spelling) => {
+    const result = parseRestrictedYaml(`flag: ${spelling}\n`);
+    expect(result.ok).toBe(true);
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({ code: "yaml.ambiguous-scalar", severity: "warning" }),
+    ]);
+    if (result.ok) {
+      expect(result.value).toEqual({ flag: null });
+    }
+  });
+
+  it("does not warn on the canonical lowercase 'null' spelling (C8b)", () => {
+    const result = parseRestrictedYaml("flag: null\n");
+    expect(result).toEqual({ ok: true, value: { flag: null }, diagnostics: [] });
   });
 });

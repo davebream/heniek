@@ -70,33 +70,75 @@ function sortedEntries(value: JsonObject): readonly (readonly [string, JsonValue
  * produce byte-identical output, which is what makes a resolved-configuration
  * snapshot (design §4, "byte-identical snapshot for equivalent inputs")
  * meaningful as a diff target.
+ *
+ * H5: total, not partial. `JSON.stringify` silently *lies* about two input
+ * shapes rather than failing: a non-finite number (`Infinity`/`NaN`) becomes
+ * the literal `null` (indistinguishable from an actual `null` value once
+ * serialised), and `undefined` — reachable here despite `JsonValue` excluding
+ * it, since nothing prevents a caller from constructing a `JsonObject` at
+ * runtime with a stray `undefined` property despite the type — is not even
+ * turned into valid JSON text at all (`JSON.stringify(undefined) ===
+ * undefined`, the JS value, which the surrounding template literal would
+ * then coerce to the *string* `"undefined"`, embedding invalid JSON in
+ * otherwise-valid output). Both are rejected outright with a clear error
+ * instead: this is phase 3's declared substrate for a frozen configuration
+ * snapshot, and a silent lie there is worse than a loud failure. The
+ * recursive walk also carries the same cycle guard `deepFreeze` has (a
+ * `Set` of nodes currently on the ancestor path, not a global "already
+ * seen" set — two sibling branches that happen to reference the same object
+ * are not a cycle) — a cyclic structure is impossible for `JsonValue`
+ * proper, but this is also called on hand-built object literals that could
+ * in principle be cyclic, and an infinite recursion there must fail with a
+ * clear error, not a stack overflow.
  */
 export function canonicalJsonStringify(value: JsonValue): string {
-  return `${stringifyIndented(value, 0)}\n`;
+  return `${stringifyIndented(value, 0, new Set<object>())}\n`;
 }
 
-function stringifyIndented(value: JsonValue, depth: number): string {
+function stringifyIndented(value: JsonValue, depth: number, visiting: Set<object>): string {
+  if (value === undefined) {
+    throw new TypeError(
+      "canonicalJsonStringify: cannot represent `undefined` as JSON — omit the property instead.",
+    );
+  }
+  if (typeof value === "number" && !Number.isFinite(value)) {
+    throw new TypeError(
+      `canonicalJsonStringify: cannot represent a non-finite number (${String(value)}) as JSON.`,
+    );
+  }
   if (value === null || typeof value !== "object") {
     return JSON.stringify(value);
   }
-  const indent = "  ".repeat(depth + 1);
-  const closingIndent = "  ".repeat(depth);
-  if (Array.isArray(value)) {
-    if (value.length === 0) {
-      return "[]";
+  if (visiting.has(value)) {
+    throw new TypeError("canonicalJsonStringify: cannot represent a cyclic structure as JSON.");
+  }
+  visiting.add(value);
+  try {
+    const indent = "  ".repeat(depth + 1);
+    const closingIndent = "  ".repeat(depth);
+    if (Array.isArray(value)) {
+      if (value.length === 0) {
+        return "[]";
+      }
+      const items = value.map((item) => `${indent}${stringifyIndented(item, depth + 1, visiting)}`);
+      return `[\n${items.join(",\n")}\n${closingIndent}]`;
     }
-    const items = value.map((item) => `${indent}${stringifyIndented(item, depth + 1)}`);
-    return `[\n${items.join(",\n")}\n${closingIndent}]`;
+    const entries = sortedEntries(value as JsonObject);
+    if (entries.length === 0) {
+      return "{}";
+    }
+    const lines = entries.map(
+      ([key, entryValue]) =>
+        `${indent}${JSON.stringify(key)}: ${stringifyIndented(entryValue, depth + 1, visiting)}`,
+    );
+    return `{\n${lines.join(",\n")}\n${closingIndent}}`;
+  } finally {
+    // Removed once this branch of the recursion finishes, so two sibling
+    // fields that happen to reference the same object (a diamond, not a
+    // cycle) are each rendered independently rather than one being flagged
+    // circular — mirrors `@heniek/secrets`' `redactJson` ancestor-tracking.
+    visiting.delete(value);
   }
-  const entries = sortedEntries(value as JsonObject);
-  if (entries.length === 0) {
-    return "{}";
-  }
-  const lines = entries.map(
-    ([key, entryValue]) =>
-      `${indent}${JSON.stringify(key)}: ${stringifyIndented(entryValue, depth + 1)}`,
-  );
-  return `{\n${lines.join(",\n")}\n${closingIndent}}`;
 }
 
 /**

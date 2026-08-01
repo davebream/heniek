@@ -85,20 +85,55 @@ describe("canonicalJsonStringify", () => {
   });
 
   /**
-   * `JsonValue` types `number` without excluding `Infinity`/`NaN`, which JSON
-   * cannot represent. The behaviour inherited from `JSON.stringify` — emit
-   * `null` — is pinned here deliberately rather than left implicit: a
-   * non-finite number reaching a resolved-configuration snapshot is a caller
-   * defect, and the layer-resolution stage is where it must be rejected, not
-   * silently coerced. This test exists so that a later change to reject them
-   * outright is a visible, intentional break rather than an accident.
+   * H5: `JsonValue` types `number` without excluding `Infinity`/`NaN`, which
+   * JSON cannot represent — `JSON.stringify` silently coerces either to the
+   * literal `null`, indistinguishable from an actual `null` value once
+   * serialised. A non-finite number reaching a resolved-configuration
+   * snapshot is a caller defect and must fail loudly here (the declared
+   * substrate for that snapshot), not be silently rendered as a lie.
    */
-  it("emits null for non-finite numbers, the documented JSON coercion", () => {
-    expect(canonicalJsonStringify({ n: Number.POSITIVE_INFINITY })).toBe(
-      ["{", '  "n": null', "}", ""].join("\n"),
-    );
-    expect(canonicalJsonStringify({ n: Number.NaN })).toBe(
-      ["{", '  "n": null', "}", ""].join("\n"),
+  it("throws a clear error instead of silently coercing a non-finite number to null (H5)", () => {
+    expect(() => canonicalJsonStringify({ n: Number.POSITIVE_INFINITY })).toThrow(/non-finite/);
+    expect(() => canonicalJsonStringify({ n: Number.NEGATIVE_INFINITY })).toThrow(/non-finite/);
+    expect(() => canonicalJsonStringify({ n: Number.NaN })).toThrow(/non-finite/);
+    expect(() => canonicalJsonStringify([Number.NaN])).toThrow(/non-finite/);
+  });
+
+  /**
+   * H5: `undefined` is reachable here at runtime despite `JsonValue`
+   * excluding it (nothing prevents a caller from building a `JsonObject`
+   * with a stray `undefined` property at runtime despite the type).
+   * `JSON.stringify(undefined)` returns the *JS value* `undefined`, not a
+   * string — the surrounding template literal used to coerce that to the
+   * literal text `"undefined"`, embedding invalid JSON in otherwise-valid
+   * output. Rejected outright instead.
+   */
+  it("throws a clear error instead of emitting the literal text 'undefined' (H5)", () => {
+    // biome-ignore lint/suspicious/noExplicitAny: deliberately bypassing JsonValue to exercise the runtime guard.
+    expect(() => canonicalJsonStringify({ a: undefined } as any)).toThrow(/undefined/);
+    // biome-ignore lint/suspicious/noExplicitAny: deliberately bypassing JsonValue to exercise the runtime guard.
+    expect(() => canonicalJsonStringify([undefined] as any)).toThrow(/undefined/);
+  });
+
+  /**
+   * H5: the recursive walk carries the same cycle guard `deepFreeze` has —
+   * a cyclic structure is impossible for `JsonValue` proper, but this is
+   * also called on hand-built object literals that could in principle be
+   * cyclic, and must fail with a clear error rather than a stack overflow.
+   */
+  it("throws a clear error instead of overflowing the stack on a cyclic structure (H5)", () => {
+    const node: Record<string, unknown> = { name: "root" };
+    node.self = node;
+
+    // biome-ignore lint/suspicious/noExplicitAny: deliberately cyclic, incompatible with JsonValue by construction.
+    expect(() => canonicalJsonStringify(node as any)).toThrow(/cyclic/);
+  });
+
+  it("does not flag a non-cyclic diamond reference (two siblings pointing at the same object) as circular (H5)", () => {
+    const shared: JsonValue = { x: 1 };
+    expect(() => canonicalJsonStringify({ a: shared, b: shared })).not.toThrow();
+    expect(canonicalJsonStringify({ a: shared, b: shared })).toBe(
+      ["{", '  "a": {', '    "x": 1', "  },", '  "b": {', '    "x": 1', "  }", "}", ""].join("\n"),
     );
   });
 

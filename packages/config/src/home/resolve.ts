@@ -67,7 +67,8 @@ const XDG_VARS: Readonly<Record<ApplicationHomeRootCategory, string>> = {
  * children instead of nested under a `config/` directory, which would NOT
  * reproduce §7's tree — the explicit acceptance requirement is byte-for-byte
  * tree reproduction, so this table, not the literal prose, is what is
- * implemented. See the phase-2 build report for this call.)
+ * implemented. See `.factory/kombajn/plans/2026-08-01-q005-design.md` §2.2
+ * for the full resolution procedure this table backs.)
  */
 const BASE_RELATIVE_ROOT: Readonly<Record<ApplicationHomeRootCategory, string>> = {
   config: "config",
@@ -163,10 +164,11 @@ function resolveFallbackBase(homeDirectory: string): string {
 }
 
 /**
- * Step 1 of §7's resolution order: `HENIEK_HOME` is present (its mere
- * presence is the gate — an empty value is rejected below by the
- * absoluteness check, rather than being treated as "unset", since a
- * present-but-empty override is a caller mistake, not the absence of one).
+ * Step 1 of §7's resolution order: `HENIEK_HOME` is present *and non-empty*
+ * (R1) — a present-but-empty override is treated as unset by the caller
+ * above and never reaches this function at all; only a genuinely invalid
+ * non-empty value (relative, whitespace-only, NUL-bearing) is diagnosed
+ * here.
  */
 function resolveOverrideRoots(
   override: string,
@@ -203,7 +205,11 @@ function resolveOverrideRoots(
   if (platform === "linux") {
     const ignoredXdgVars = (Object.keys(XDG_VARS) as ApplicationHomeRootCategory[])
       .map((category) => XDG_VARS[category])
-      .filter((variable) => env[variable] !== undefined)
+      // An empty XDG_* value is already treated as unset everywhere else in
+      // this module (see `resolveXdgCategory` below) — surfacing it here as
+      // "ignored" would report a variable that was never actually going to
+      // apply in the first place.
+      .filter((variable) => env[variable] !== undefined && env[variable] !== "")
       .sort();
     if (ignoredXdgVars.length > 0) {
       // Info, not a warning: this is expected, documented behaviour ("HENIEK_HOME
@@ -277,12 +283,23 @@ function resolveXdgCategory(
     return fallbackRoot(category, getFallbackBase);
   }
 
-  if (!posix.isAbsolute(value) || containsNulByte(value)) {
+  const notAbsolute = !posix.isAbsolute(value);
+  const hasNulByte = containsNulByte(value);
+  if (notAbsolute || hasNulByte) {
+    // LOW: the two conditions are genuinely different failures — a relative
+    // path and an absolute-but-NUL-bearing path — and only one of them makes
+    // "is set but is not an absolute path" a true statement. The code stays
+    // the single `home.xdg-variable-not-absolute` (both are still "ignore
+    // and fall back to the .heniek default" outcomes), but the message no
+    // longer claims something false about a NUL-bearing absolute value.
+    const reason = notAbsolute
+      ? "is set but is not an absolute path"
+      : "is set but contains a NUL byte";
     diagnostics.push(
       createDiagnostic(
         "home.xdg-variable-not-absolute",
         "warning",
-        `${variable} is set but is not an absolute path; falling back to the .heniek default for this category.`,
+        `${variable} ${reason}; falling back to the .heniek default for this category.`,
       ),
     );
     return fallbackRoot(category, getFallbackBase);
@@ -310,9 +327,18 @@ function buildPaths(
  * `packages/conformance/src/smoke/env.ts`'s injected-input convention).
  * Parameters default to the real ambient values so production call sites
  * need no arguments, while tests can inject any combination.
+ *
+ * R2: `env` defaults to a *snapshot* (`{ ...process.env }`), not a live
+ * reference to `process.env` itself. `resolveApplicationHome` is documented
+ * and tested as pure, and a caller is expected to be able to hold a
+ * previously-read `ApplicationHomeSource` and resolve it later without its
+ * meaning silently changing; a live `process.env` reference would let an
+ * unrelated later mutation of the ambient environment (elsewhere in the
+ * process, between when the source was read and when it is resolved)
+ * retroactively change what an already-captured source describes.
  */
 export function readApplicationHomeSource(
-  env: NodeJS.ProcessEnv = process.env,
+  env: NodeJS.ProcessEnv = { ...process.env },
   platform: NodeJS.Platform = process.platform,
   homeDirectory: string = homedir(),
 ): ApplicationHomeSource {

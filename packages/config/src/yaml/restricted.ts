@@ -88,6 +88,37 @@ const AMBIGUOUS_SCALAR_WORDS = new Set([
 /** A plain integer-looking scalar with a leading zero — ambiguous with YAML 1.1 octal notation. */
 const LEADING_ZERO_PATTERN = /^[+-]?0[0-9]+$/;
 
+/** A plain, unsigned/signed decimal integer scalar with no leading zero — the shape `M4`'s precision check applies to. */
+const PLAIN_INTEGER_PATTERN = /^[+-]?[0-9]+$/;
+
+/**
+ * True when `source` is a plain integer literal (M4) whose exact value
+ * cannot be represented as a JS `number` — the same "not faithfully
+ * JSON-representable" class `.nan`/`.inf` are already rejected for.
+ * `a: 12345678901234567890` silently resolves to `12345678901234567000`
+ * today; quoting the value (making it a string) is the documented
+ * workaround, exactly as for `.nan`/`.inf`.
+ *
+ * Compares the *exact* `BigInt` parse of the source text against the
+ * `BigInt` of the already-`Number`-rounded resolved value: if rounding lost
+ * no precision, the two `BigInt`s are equal. A leading-zero integer
+ * (`007`) is excluded — that is a distinct, already-flagged ambiguity
+ * (`yaml.ambiguous-scalar`), not a precision loss (`007` loses nothing by
+ * becoming `7`).
+ */
+function integerLosesPrecision(source: string, resolved: number): boolean {
+  if (!PLAIN_INTEGER_PATTERN.test(source) || LEADING_ZERO_PATTERN.test(source)) {
+    return false;
+  }
+  const normalized = source.startsWith("+") ? source.slice(1) : source;
+  try {
+    return BigInt(normalized) !== BigInt(Math.trunc(resolved));
+  } catch {
+    /* c8 ignore next -- PLAIN_INTEGER_PATTERN already guarantees a valid BigInt literal */
+    return false;
+  }
+}
+
 /**
  * A plain scalar in YAML-1.1's sexagesimal (base-60) int/float notation
  * (`12:30`, `1:20:30.5`) — the core (YAML 1.2) schema does not recognise this
@@ -155,20 +186,34 @@ function maxDepthExceededDiagnostic(maxDepth: number, sourcePath: string | undef
   );
 }
 
+/** LOW: bound on how much of `keyText` a diagnostic message ever echoes — see `credentialKeyMessage`. */
+const MAX_DIAGNOSTIC_KEY_LENGTH = 64;
+
 /**
  * The message for a `yaml.sensitive-value-not-allowed` diagnostic raised
  * against a mapping *key* (a credential-shaped key name, or a key whose text
- * itself matches a credential value shape). `keyText` is routed through
- * `redactText` before interpolation: for the credential-shaped-key-name case
- * (`password`, `api_key`, …) `redactText` is a no-op, but for the
+ * itself matches a credential value shape). `keyText` is truncated to
+ * `MAX_DIAGNOSTIC_KEY_LENGTH` characters and routed through `redactText`
+ * before interpolation (in that order — truncating an already-redacted
+ * placeholder could not accidentally re-expose anything, but truncating
+ * *first* keeps the bound meaningful regardless of what `redactText` does
+ * to the text, and avoids running the credential-shape scan over an
+ * unbounded string): for the credential-shaped-key-name case (`password`,
+ * `api_key`, …) `redactText` is a no-op, but for the
  * credential-*in-key-position* case (`ghp_<36 chars>: enabled`) the key text
  * itself is the credential, and interpolating it verbatim would leak it right
  * back out through the diagnostic message, logs, and the required snapshot
- * (C6b).
+ * (C6b). The length bound guards the same message against an unbounded key
+ * (there is no upper bound on a YAML mapping key's length) blowing up a log
+ * line or diagnostic snapshot.
  */
 function credentialKeyMessage(keyText: string): string {
+  const truncated =
+    keyText.length > MAX_DIAGNOSTIC_KEY_LENGTH
+      ? `${keyText.slice(0, MAX_DIAGNOSTIC_KEY_LENGTH)}…`
+      : keyText;
   return (
-    `The value for "${redactText(keyText)}" looks like a credential and is not allowed in YAML ` +
+    `The value for "${redactText(truncated)}" looks like a credential and is not allowed in YAML ` +
     "configuration — store it with the secret store and reference it by name instead."
   );
 }
@@ -388,6 +433,28 @@ export function parseRestrictedYaml(
         );
       }
 
+      // M4: an integer literal too large (or too precise) for `Number` to
+      // represent exactly is the same "not faithfully JSON-representable"
+      // class as `.nan`/`.inf` above — `a: 12345678901234567890` silently
+      // resolves to `12345678901234567000` otherwise.
+      if (
+        node.type === "PLAIN" &&
+        typeof node.value === "number" &&
+        typeof node.source === "string" &&
+        integerLosesPrecision(node.source, node.value)
+      ) {
+        diagnostics.push(
+          diagnosticAt(
+            "yaml.non-json-value",
+            "error",
+            "This integer is too large to be represented exactly — quote it as a string instead.",
+            node,
+            lineCounter,
+            sourcePath,
+          ),
+        );
+      }
+
       if (node.type === "PLAIN") {
         // The ambiguity check, unlike the one above, has to look at the
         // literal source text: under the core schema "yes"/"on"/"007" all
@@ -554,7 +621,7 @@ function handlePair(
   if (RESERVED_KEY_NAMES.has(keyText)) {
     diagnostics.push(
       diagnosticAt(
-        "yaml.reserved-key-not-supported",
+        "yaml.unsafe-key-not-supported",
         "error",
         `"${keyText}" is not supported as a mapping key — it collides with a JavaScript object prototype property.`,
         key,
