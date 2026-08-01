@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  classifyCancellation,
-  classifyParentIndependence,
-} from "../src/smoke/claudexor/canaries.js";
+import { classifyParentIndependence } from "../src/smoke/claudexor/canaries.js";
 import {
   createControlClient,
   isTerminalClaudexorState,
@@ -74,13 +71,12 @@ describe.skipIf(!config.enabled)(
           }
         }
 
-        const result = classifyCancellation({
-          acceptedControlCall: true,
-          finalState: final,
-          survivingDescendantPids: 0,
-          settleMs: Date.now() - settleStart,
-        });
-        expect(result.outcome, JSON.stringify(result.evidence)).not.toBe("unsupported");
+        // Only settlement is asserted here. This suite deliberately does NOT
+        // sample the daemon's descendant PIDs, so it must not feed a made-up 0
+        // into the classifier: that would manufacture a process-tree-cleanup
+        // result nothing observed. Cleanup sampling belongs to the long-run
+        // driver, and the ADR records it as indicative rather than verified.
+        expect(final).toBe("cancelled");
       } finally {
         daemon.stop();
       }

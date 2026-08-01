@@ -7,6 +7,13 @@ values. No prompt text, model output, credential, or filesystem path appears her
 
 ## Canary results
 
+The `questionAnswerResume`, `cancellationCleanup` and `daemonRestartRecovery` rows are rendered by
+`toMarkdownTable` from the classifier output. The two `parentIndependence` rows are **hand-transcribed**
+from the long-run driver's JSON, which records a different field set (`stateAtKill` rather than
+`claudexorStateAtKill`, and no `arm` or `killAtFractionOfBudget`); they are therefore not a verbatim
+classifier rendering, and the kill-timing gate is not represented in them. The kill landed 45 s into
+each run.
+
 | canary | outcome | evidence |
 | --- | --- | --- |
 | parentIndependence(detached) — duration run | supported | stateAtKill=running; launcherAliveAfterKill=false; daemonAliveAfterKill=true; postKillMs=1370779; minimumPostKillMs=1200000; postKillEventCount=350; observationEnded=harness-teardown |

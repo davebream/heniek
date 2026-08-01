@@ -1,4 +1,4 @@
-import { type ChildProcess, spawn } from "node:child_process";
+import { type ChildProcess, execFileSync, spawn } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
@@ -13,9 +13,9 @@ import { isDaemonReady } from "./readiness.js";
  * artifacts, none of which may reach this repo (the issue excludes factory
  * runtime state, credentials, and transcripts).
  *
- * The bearer token is read into a local and handed only to the control client.
- * It is never returned from `startDaemon`, never logged, and never
- * interpolated into an error — including request-failure diagnostics.
+ * The bearer token is returned on the handle so the control client can use it,
+ * but it is never logged and never interpolated into an error — including
+ * request-failure diagnostics, which carry status and engine code only.
  *
  * Real processes and real time live here, which is legal because this file is
  * under `src/smoke/`.
@@ -141,13 +141,33 @@ function readDaemonToken(home: string): string {
 
 /** Terminate a daemon and remove its scratch home. Idempotent. */
 export function stopDaemon(pid: number, home: string): void {
+  // Positive pid only. A negative pid would signal the whole process group,
+  // which in canary 1 would kill the daemon alongside the launcher and fake a
+  // parent-independence failure.
   try {
-    // Positive pid only. A negative pid would signal the whole process group,
-    // which in canary 1 would kill the daemon alongside the launcher and fake
-    // a parent-independence failure.
     process.kill(pid, "SIGTERM");
   } catch {
-    /* already gone */
+    rmSync(home, { recursive: true, force: true });
+    return;
+  }
+  // Escalate rather than trusting SIGTERM: a daemon that ignores or is slow on
+  // it would otherwise survive holding its port while its home is deleted out
+  // from under its journal. Across a suite that starts a daemon per canary,
+  // those leaks accumulate.
+  const deadline = Date.now() + 5_000;
+  while (Date.now() < deadline && processAlive(pid)) {
+    try {
+      execFileSync(process.execPath, ["-e", "setTimeout(()=>{},100)"], { timeout: 400 });
+    } catch {
+      /* best-effort pause without a sleep dependency */
+    }
+  }
+  if (processAlive(pid)) {
+    try {
+      process.kill(pid, "SIGKILL");
+    } catch {
+      /* already gone */
+    }
   }
   rmSync(home, { recursive: true, force: true });
 }

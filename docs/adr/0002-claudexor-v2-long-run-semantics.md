@@ -55,6 +55,15 @@ pnpm vitest run packages/conformance/test/claudexor.smoke.test.ts
 `AUTH_ROUTE=none` is deliberate: it declares that this gate provisions no auth route of its own. It is
 **not** evidence about the effective route — see "Auth route" below.
 
+**Reproducibility, stated plainly.** The committed opt-in suite
+(`packages/conformance/test/claudexor.smoke.test.ts`) runs only the handshake/pin check and the
+cancellation canary. **Canaries 1, 2 and 4, the trace writer, and the `/v2/operations`,
+`auth-readiness` and `quota` probes were driven from a scratch harness that is not committed**, because
+this spike's exclusions cap it at "minimal spike code" and a 20-minute driver is not that. So the
+numbers below are real observations of the pinned engine, but only the handshake and cancellation rows
+are reproducible from this repository alone. Committing the long-run driver is follow-up work, not a
+claim this ADR makes.
+
 ## Observations
 
 ### O1 — The `/v2` path prefix and the protocol major are decoupled
@@ -118,8 +127,10 @@ cannot drift from the contract silently.
 
 An intermediate launcher process started the daemon and the run, then was `SIGKILL`ed by
 pid — never by process group, which would have killed the daemon too and faked a failure.
-In both runs the launcher died, the daemon survived, and a **fresh** client reconnected to
-`GET /v2/runs/:id` and to the SSE stream afterwards.
+In both runs the launcher died and the daemon survived, and `GET /v2/runs/:id` continued to answer
+afterwards. The observing client was **not** torn down and re-created across the kill, and no
+`Last-Event-ID` reconnect was performed, so this says nothing about resume-after-disconnect — see
+"Not covered".
 
 The measured interval is `terminal − kill`, not `run.created − terminal`: a long run whose
 parent dies in its final seconds demonstrates seconds of independence, and the issue asks
@@ -163,9 +174,13 @@ limitation the engine does not have.
 
 ### O6 — Cancellation and process-tree cleanup
 
-**Supported.** `POST /v2/runs/:id/control` with `{control: {kind: "cancel"}}` was accepted,
-the run settled as `cancelled` within ~20 s, and no descendant processes of the daemon
-survived the settle window.
+**Supported for settlement; process-tree cleanup only weakly sampled.** `POST /v2/runs/:id/control`
+with `{control: {kind: "cancel"}}` was accepted and the run settled as `cancelled` within ~20 s.
+
+The descendant-PID count of 0 comes from a `ps`-based sample in the uncommitted harness, taken after a
+bounded settle window. It is a weak instrument — it cannot distinguish "the engine reaped the tree"
+from "the sample missed a short-lived child" — and the committed suite does not sample it at all.
+Treat cancellation *settlement* as verified and process-tree cleanup as indicative only.
 
 The control body carries `control` as an **object**, not a bare verb string. Sending the
 string is rejected as `invalid_request`; the first cancellation canary did exactly that and
@@ -176,8 +191,10 @@ shapes are now pinned by tests.
 
 **Supported, and this settles the `interrupted` mapping.** A run was started, the daemon was
 `SIGKILL`ed mid-run, and a new daemon was started on the same home. The run handle was still
-readable afterwards, and the run's state was **`interrupted`** — observed twice, on
-independent executions.
+readable afterwards, and the run's state was **`interrupted`** — observed on two independent
+executions of the canary. `GET /v2/recovery/partitions/:id` was **not** called; the
+`recoveryPartitionReadable` field in the evidence records only that the restarted daemon answered
+`/healthz`, and should not be read as a statement about the recovery-partition API.
 
 That is what §18.2 describes: an attempt whose outcome the runtime cannot vouch for, needing
 an explicit resume/retry/fail decision rather than a silent retry. `interrupted →
@@ -235,6 +252,12 @@ rather than passed over:
   separately by design, but not executed. Without it, O4 shows the run keeps working after
   the parent dies, but does not separate the engine's contribution from `spawn`'s.
 - **Subscription-only auth-route verification** (O8).
+- **Resume after client disconnect.** `streamEvents` supports a `Last-Event-ID` cursor, but nothing
+  called it; no run was observed through a genuinely re-created client.
+- **`GET /v2/recovery/partitions/:id`**, `/v2/operations` and `auth-readiness` as *committed* canaries —
+  they were probed by hand during the spike and their findings are recorded in O2/O8, but no committed
+  test exercises them.
+- **Process-tree cleanup as a hard assertion** (O6).
 - Codex and Cursor external profiles, isolated write attempts, artifact/diff retrieval,
   malformed-output and unsupported-model handling — all belong to later issues.
 
@@ -244,11 +267,11 @@ rather than passed over:
 |---|---|
 | 20-minute external planning run | **verified** — 22.8 min post-kill (O4) |
 | free-text question and same-session continuation | **verified** (O5) |
-| cancellation and process-tree cleanup | **verified** (O6) |
+| cancellation and process-tree cleanup | settlement **verified**; process-tree cleanup indicative only (O6) |
 | subscription-only auth-route verification | **unverified** (O8) |
-| session resume | partially — SSE `Last-Event-ID` reconnect exercised in O4 |
+| session resume | **not exercised** — `Last-Event-ID` reconnect was never performed |
 | daemon restart/recovery classification | **verified** (O7) |
-| event/result normalization | exercised via the trace's redaction + state mapping |
+| event/result normalization | partially — redaction and state mapping exercised; no normalization contract asserted |
 | Claude external profile | exercised |
 | Codex / Cursor external profiles | out of scope for Q003 |
 | isolated write attempt, artifact path/diff retrieval, malformed output, unsupported model | out of scope for Q003 |
@@ -280,8 +303,10 @@ The integration must:
   code (`INTERRUPTED_MAPPING_IS_PROVISIONAL`) so it cannot quietly become load-bearing.
 - The canaries are opt-in and never run in CI. `pnpm check` stays hermetic and offline; the classifiers
   they depend on are pure and *are* covered by `pnpm check`.
-- A committed, redacted event trace exists as evidence. The redaction boundary is enforced by a
-  repository-level test over `docs/adr/**`, because Biome does not lint Markdown.
+- A committed, redacted event trace exists as evidence. A repository-level test over `docs/adr/**`
+  enforces the absence of credential- and path-shaped substrings (Biome does not lint Markdown); the
+  stronger "no prompt text or model output" property follows from the recorder's allowlist, not from
+  that test.
 
 ## Defects found while implementing, and the tests that pin them
 
