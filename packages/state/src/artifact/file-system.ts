@@ -20,9 +20,10 @@
 
 import {
   closeSync,
-  constants as fsConstants,
   fchmodSync,
+  constants as fsConstants,
   fstatSync,
+  fsyncSync,
   linkSync,
   lstatSync,
   mkdirSync,
@@ -33,7 +34,6 @@ import {
   unlinkSync,
   writeSync,
 } from "node:fs";
-import { fsyncSync } from "node:fs";
 
 export interface ArtifactFileSystemStat {
   readonly ino: number;
@@ -83,11 +83,7 @@ function toArtifactFileSystemStat(stats: Stats): ArtifactFileSystemStat {
 export function createNodeArtifactFileSystem(): ArtifactFileSystem {
   return {
     openExclusive(path: string): number {
-      return openSync(
-        path,
-        fsConstants.O_RDWR | fsConstants.O_CREAT | fsConstants.O_EXCL,
-        0o600,
-      );
+      return openSync(path, fsConstants.O_RDWR | fsConstants.O_CREAT | fsConstants.O_EXCL, 0o600);
     },
     openReadOnly(path: string): number {
       return openSync(path, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW);

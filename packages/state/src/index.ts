@@ -1,3 +1,8 @@
+export {
+  type ArtifactStore,
+  type ArtifactStoreOptions,
+  createArtifactStore,
+} from "./artifact/store.js";
 export { type CommitReport, commitStateChange, type StateCommand } from "./command/commit.js";
 export { type SchemaFingerprint, schemaFingerprint } from "./database/fingerprint.js";
 export {
