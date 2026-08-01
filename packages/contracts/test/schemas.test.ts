@@ -178,7 +178,7 @@ const cases: { name: string; schema: object; valid: Record<string, unknown> }[] 
       name: "report.md",
       byteLength: 1024,
       mediaType: "text/markdown",
-      contentSchemaId: "heniek://contract/report/v1",
+      contentSchemaId: "heniek://contract/Report/v1",
       producer: "heniek-cli@0.0.0",
       sourceLineage: ["artifact-0"],
     },
@@ -237,7 +237,7 @@ describe("ArtifactRefV1 — extended field constraints", () => {
     name: "report.md",
     byteLength: 1024,
     mediaType: "text/markdown",
-    contentSchemaId: "heniek://contract/report/v1",
+    contentSchemaId: "heniek://contract/Report/v1",
     producer: "heniek-cli@0.0.0",
     sourceLineage: ["artifact-0"],
   };
@@ -285,5 +285,35 @@ describe("ArtifactRefV1 — extended field constraints", () => {
 
   it("rejects a sourceLineage containing a duplicate id", () => {
     expect(validate({ ...valid, sourceLineage: ["artifact-0", "artifact-0"] })).toBe(false);
+  });
+
+  it("rejects a sourceLineage containing a malformed element (empty string id)", () => {
+    expect(validate({ ...valid, sourceLineage: ["artifact-0", ""] })).toBe(false);
+  });
+
+  it("rejects a sourceLineage containing a non-string element", () => {
+    expect(validate({ ...valid, sourceLineage: ["artifact-0", 123] })).toBe(false);
+  });
+
+  it("accepts sourceLineage at the maxItems boundary (64 unique ids)", () => {
+    const ids = Array.from({ length: 64 }, (_, i) => `artifact-${i}`);
+    expect(validate({ ...valid, sourceLineage: ids })).toBe(true);
+  });
+
+  it("rejects sourceLineage one over the maxItems boundary (65 unique ids)", () => {
+    const ids = Array.from({ length: 65 }, (_, i) => `artifact-${i}`);
+    expect(validate({ ...valid, sourceLineage: ids })).toBe(false);
+  });
+
+  it('rejects a non-version-bearing contentSchemaId ("report")', () => {
+    expect(validate({ ...valid, contentSchemaId: "report" })).toBe(false);
+  });
+
+  it("rejects a contentSchemaId missing the version segment", () => {
+    expect(validate({ ...valid, contentSchemaId: "heniek://contract/Report" })).toBe(false);
+  });
+
+  it("accepts a canonical version-bearing contentSchemaId", () => {
+    expect(validate({ ...valid, contentSchemaId: "heniek://contract/Report/v1" })).toBe(true);
   });
 });

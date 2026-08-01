@@ -53,7 +53,8 @@
     },
     "contentSchemaId": {
       "minLength": 1,
-      "description": "A schema identifier that embeds a version, e.g. `heniek://contract/<Name>/v<N>` — this is how the ref preserves the content's schema version.",
+      "pattern": "^heniek://contract/[A-Za-z][A-Za-z0-9]*/v[1-9][0-9]*$",
+      "description": "A schema identifier that embeds a version, e.g. `heniek://contract/<Name>/v<N>` — this is how the ref preserves the content's schema version. Pattern-constrained so a non-version-bearing id is rejected by construction.",
       "type": "string"
     },
     "producer": {

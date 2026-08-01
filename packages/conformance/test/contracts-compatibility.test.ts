@@ -26,18 +26,28 @@ const manifestPath = resolve(packageRoot, "../contracts/generated/manifest.json"
  * the shape of a payload someone already depends on; that is exactly the
  * breaking change this gate exists to catch.
  *
- * Q007 updated the `ArtifactRef/v1` sha256 (from `d0c79064…` to
- * `28e5297c…`) to cover six added fields (`name`, `byteLength`, `mediaType`,
- * `contentSchemaId`, `producer`, `sourceLineage`). Proof this instance
- * satisfies the rule above: `ArtifactRefV1` had zero non-test consumers at
- * the time, verified repo-wide (a recursive grep for `artifactId` under
- * every sibling package's `src` directory, excluding `packages/contracts`
- * itself, found none, and the two files under
- * `packages/conformance/generated` — this package's own generated fixtures —
- * contain no `artifactId` field either), so no existing payload's shape
- * changed. The other thirteen entries stay byte-identical and the schema
- * count stays 14 — this single pin update is itself the deliberate
- * versioning act the gate exists to force.
+ * Q007 updated the `ArtifactRef/v1` sha256 twice (most recently to
+ * `60de8785…`) to add six new REQUIRED properties (`name`, `byteLength`,
+ * `mediaType`, `contentSchemaId`, `producer`, `sourceLineage`) and to
+ * pattern-constrain `contentSchemaId`. Adding required properties to a
+ * closed (`additionalProperties: false`) schema, and further constraining
+ * an existing string field, are both breaking changes under normal semver:
+ * any real payload built against the old shape would now fail validation.
+ * This in-place edit is deliberately chosen over minting `ArtifactRef/v2`
+ * only because there is nothing to migrate: `ArtifactRefV1` is a
+ * pre-release, zero-consumer schema. Evidence: (1) `packages/contracts` is
+ * `"private": true` (`packages/contracts/package.json`) — it is never
+ * published, so there is no external consumer by construction; (2) a
+ * repo-wide grep for the `ArtifactRefV1` symbol
+ * (`grep -rn "ArtifactRefV1" --include="*.ts" packages | grep -v
+ * packages/contracts`) finds zero references outside `packages/contracts`
+ * itself (the only hit is this file's own docblock) — no in-repo production
+ * code constructs or reads an `ArtifactRefV1` payload yet, and no `artifact`
+ * table exists to hold one. The other thirteen entries stay byte-identical
+ * and the schema count stays 14 — this pin update is itself the deliberate,
+ * evidence-backed act of accepting a breaking change against an
+ * unpublished, unconsumed schema, not a "versioning act" in the semver
+ * sense.
  */
 const EXPECTED_SCHEMAS: readonly {
   readonly schemaId: string;
@@ -54,7 +64,7 @@ const EXPECTED_SCHEMAS: readonly {
   {
     schemaId: "heniek://contract/ArtifactRef/v1",
     schemaVersion: 1,
-    sha256: "28e5297ca3640dd02ced14b47f86036308c1d6b48914f2166837c5bb1cf82295",
+    sha256: "60de8785feb0de6a90fc0de55fcead8dc060ddf5fa46aaa4980ba2d2ad0a2410",
     path: "generated/ArtifactRef.v1.schema.json",
   },
   {
