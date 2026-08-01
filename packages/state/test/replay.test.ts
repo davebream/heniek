@@ -78,7 +78,7 @@ describe("converged", () => {
     expect(report.projectionDigest.stored).toBe(report.projectionDigest.replayed);
     expect(report.eventsReplayed).toBe(6);
     expect(report.throughSequence).toBe(latestSequence(db));
-    expect(report.schemaFingerprint.userVersion).toBe(3);
+    expect(report.schemaFingerprint.userVersion).toBe(4);
   });
 
   it("an empty journal converges on empty state", () => {

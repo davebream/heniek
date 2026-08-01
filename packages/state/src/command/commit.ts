@@ -152,6 +152,69 @@ const TABLE_SQL: Readonly<Record<ProjectionTable, TableSql>> = {
       " WHERE workspace_id = ? AND revision = ?",
     updateColumns: ["codebase_id", "revision", "last_event_sequence", "updated_at"],
   },
+  artifact: {
+    insert:
+      "INSERT INTO artifact" +
+      " (artifact_id, run_id, stage_id, name, content_hash, byte_length, media_type," +
+      " content_schema_id, producer, source_lineage, relative_path, created_at, revision," +
+      " last_event_sequence)" +
+      " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    insertColumns: [
+      "artifact_id",
+      "run_id",
+      "stage_id",
+      "name",
+      "content_hash",
+      "byte_length",
+      "media_type",
+      "content_schema_id",
+      "producer",
+      "source_lineage",
+      "relative_path",
+      "created_at",
+      "revision",
+      "last_event_sequence",
+    ],
+    // `artifact` carries no `*_causal_update` trigger (migration 4, design
+    // D11a) — a row is written once and never updated again, so
+    // `diffProjectionState` never takes this branch for this table in
+    // practice (`ARTIFACT_VIEW`'s `revisionOf` is always 1, and a key
+    // already present in `before` is always identical in `after`). Kept
+    // syntactically real, not a placeholder string, so a future regression
+    // that *did* reach this branch would fail loudly against the
+    // `artifact_immutable_update` trigger's `RAISE(ABORT)` rather than a SQL
+    // syntax error.
+    update:
+      "UPDATE artifact SET revision = ?, last_event_sequence = ? WHERE artifact_id = ? AND revision = ?",
+    updateColumns: ["revision", "last_event_sequence"],
+  },
+  stage_artifact_alias: {
+    insert:
+      "INSERT INTO stage_artifact_alias" +
+      " (run_id, stage_id, name, artifact_id, revision, last_event_sequence, updated_at)" +
+      " VALUES (?, ?, ?, ?, ?, ?, ?)",
+    insertColumns: [
+      "run_id",
+      "stage_id",
+      "name",
+      "artifact_id",
+      "revision",
+      "last_event_sequence",
+      "updated_at",
+    ],
+    // The composite primary key means `write.key` (from
+    // `stageArtifactAliasKey`, U+0000-joined) is not itself a column value —
+    // every other table's UPDATE binds `write.key` against that table's
+    // single key column, which does not exist here. `char(0)` reproduces the
+    // identical join on the SQL side, so the single `write.key` parameter the
+    // generic write loop (below) supplies still binds correctly against all
+    // three key columns at once, with no change to that loop needed.
+    update:
+      "UPDATE stage_artifact_alias SET artifact_id = ?, revision = ?, last_event_sequence = ?," +
+      " updated_at = ? WHERE (run_id || char(0) || stage_id || char(0) || name) = ?" +
+      " AND revision = ?",
+    updateColumns: ["artifact_id", "revision", "last_event_sequence", "updated_at"],
+  },
 };
 
 function boundValues(

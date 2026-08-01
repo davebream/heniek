@@ -233,7 +233,7 @@ describe("crash matrix — SIGKILL at three points (T2, C2, AC1)", () => {
       // land on the committed terminal fingerprint.
       runMigrations(db);
       const fingerprint = schemaFingerprint(db);
-      const terminal = SCHEMA_FINGERPRINTS["3"];
+      const terminal = SCHEMA_FINGERPRINTS["4"];
       expect(terminal).toBeDefined();
       expect(fingerprint.structural).toBe(terminal?.structural);
       expect(fingerprint.declared).toBe(terminal?.declared);

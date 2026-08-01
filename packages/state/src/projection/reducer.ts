@@ -24,11 +24,33 @@ import { ReducerError } from "../errors.js";
 import type { StateEvent } from "../journal/event.js";
 import type { JsonValue } from "../json.js";
 import type { ProjectionScope, ProjectionState } from "./state.js";
+import { stageArtifactAliasKey } from "./state.js";
 
 export type Reducer = (state: ProjectionState, event: StateEvent) => ProjectionState;
 
 /** The six-member vocabulary (P3) — the minimum that exercises the run projection, the identity rows, and a relationship. */
 const RUN_SCOPED_TYPES = new Set(["run.created", "run.status_changed", "run.workspace_assigned"]);
+
+/**
+ * Q007's two new event types (design D4, D11; plan Task 2.2). Both are
+ * stage-scoped — `run_id` is required, exactly like the `run.*` types —
+ * but neither starts with the `run.` prefix `RUN_SCOPED_TYPES` matches, so
+ * they get their own set rather than being folded into it.
+ */
+const STAGE_SCOPED_TYPES = new Set(["artifact.published", "stage.completed"]);
+
+/** One artifact ref, as carried inside an `artifact.published` or `stage.completed` payload. */
+interface ArtifactRefPayload {
+  readonly artifactId: string;
+  readonly name: string;
+  readonly contentHash: string;
+  readonly byteLength: number;
+  readonly mediaType: string;
+  readonly contentSchemaId: string;
+  readonly producer: string;
+  readonly sourceLineage: readonly string[];
+  readonly relativePath: string;
+}
 
 /**
  * An explicit predicate rather than an inline `Array.isArray` check: lib.dom's
@@ -107,6 +129,82 @@ function isRunStatus(candidate: string): candidate is RunStatus {
   return (RunStatus.values as readonly string[]).includes(candidate);
 }
 
+function requireNonNegativeInteger(
+  event: StateEvent,
+  payload: Readonly<Record<string, JsonValue>>,
+  field: string,
+): number {
+  const value = payload[field];
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0) {
+    throw new ReducerError(
+      event.eventId,
+      event.type,
+      `payload.${field} must be a non-negative integer`,
+    );
+  }
+  return value;
+}
+
+function requireStringArray(
+  event: StateEvent,
+  payload: Readonly<Record<string, JsonValue>>,
+  field: string,
+): readonly string[] {
+  const value = payload[field];
+  if (!Array.isArray(value) || value.some((entry) => typeof entry !== "string")) {
+    throw new ReducerError(
+      event.eventId,
+      event.type,
+      `payload.${field} must be an array of strings`,
+    );
+  }
+  return value;
+}
+
+/**
+ * Narrows one entry of `payload.artifacts` (`stage.completed`) or the
+ * top-level payload (`artifact.published`) into an `ArtifactRefPayload`.
+ * Deliberately re-validates every field with the same `require*` helpers the
+ * top-level payload cases use, rather than trusting `isJsonObject` alone —
+ * an array element is JSON but not necessarily this shape.
+ */
+function toArtifactRefPayload(
+  event: StateEvent,
+  value: JsonValue,
+  index: number,
+): ArtifactRefPayload {
+  if (!isJsonObject(value)) {
+    throw new ReducerError(
+      event.eventId,
+      event.type,
+      `payload.artifacts[${index}] must be a JSON object`,
+    );
+  }
+  return {
+    artifactId: requireString(event, value, "artifactId"),
+    name: requireString(event, value, "name"),
+    contentHash: requireString(event, value, "contentHash"),
+    byteLength: requireNonNegativeInteger(event, value, "byteLength"),
+    mediaType: requireString(event, value, "mediaType"),
+    contentSchemaId: requireString(event, value, "contentSchemaId"),
+    producer: requireString(event, value, "producer"),
+    sourceLineage: requireStringArray(event, value, "sourceLineage"),
+    relativePath: requireString(event, value, "relativePath"),
+  };
+}
+
+function requireArtifactRefs(
+  event: StateEvent,
+  payload: Readonly<Record<string, JsonValue>>,
+  field: string,
+): readonly ArtifactRefPayload[] {
+  const value = payload[field];
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new ReducerError(event.eventId, event.type, `payload.${field} must be a non-empty array`);
+  }
+  return value.map((entry, index) => toArtifactRefPayload(event, entry, index));
+}
+
 /**
  * Pure. The keys `applyEvent` may read or write for this event — lets the
  * command load exactly the rows it needs instead of the whole projection.
@@ -125,6 +223,8 @@ export function eventScope(event: StateEvent): ProjectionScope {
         codebases: [requireString(event, payload, "codebaseId")],
         repositories: [],
         workspaces: workspaceId === null ? [] : [workspaceId],
+        artifacts: [],
+        stageArtifactAliases: [],
       };
     }
     case "run.status_changed":
@@ -133,6 +233,8 @@ export function eventScope(event: StateEvent): ProjectionScope {
         codebases: [],
         repositories: [],
         workspaces: [],
+        artifacts: [],
+        stageArtifactAliases: [],
       };
     case "run.workspace_assigned":
       return {
@@ -140,6 +242,8 @@ export function eventScope(event: StateEvent): ProjectionScope {
         codebases: [],
         repositories: [],
         workspaces: [requireString(event, payload, "workspaceId")],
+        artifacts: [],
+        stageArtifactAliases: [],
       };
     case "codebase.registered":
       return {
@@ -147,6 +251,8 @@ export function eventScope(event: StateEvent): ProjectionScope {
         codebases: [requireString(event, payload, "codebaseId")],
         repositories: [],
         workspaces: [],
+        artifacts: [],
+        stageArtifactAliases: [],
       };
     case "repository.registered":
       return {
@@ -154,6 +260,8 @@ export function eventScope(event: StateEvent): ProjectionScope {
         codebases: [requireString(event, payload, "codebaseId")],
         repositories: [requireString(event, payload, "repositoryId")],
         workspaces: [],
+        artifacts: [],
+        stageArtifactAliases: [],
       };
     case "workspace.registered":
       return {
@@ -161,7 +269,34 @@ export function eventScope(event: StateEvent): ProjectionScope {
         codebases: [requireString(event, payload, "codebaseId")],
         repositories: [],
         workspaces: [requireString(event, payload, "workspaceId")],
+        artifacts: [],
+        stageArtifactAliases: [],
       };
+    case "artifact.published": {
+      requireRunId(event, payload);
+      requireString(event, payload, "stageId");
+      return {
+        runs: [],
+        codebases: [],
+        repositories: [],
+        workspaces: [],
+        artifacts: [requireString(event, payload, "artifactId")],
+        stageArtifactAliases: [],
+      };
+    }
+    case "stage.completed": {
+      const runId = requireRunId(event, payload);
+      const stageId = requireString(event, payload, "stageId");
+      const refs = requireArtifactRefs(event, payload, "artifacts");
+      return {
+        runs: [],
+        codebases: [],
+        repositories: [],
+        workspaces: [],
+        artifacts: refs.map((ref) => ref.artifactId),
+        stageArtifactAliases: refs.map((ref) => ({ runId, stageId, name: ref.name })),
+      };
+    }
     default:
       throw new ReducerError(event.eventId, event.type, "unknown event type");
   }
@@ -176,6 +311,13 @@ export const applyEvent: Reducer = (state, event) => {
   // re-check.
   if (RUN_SCOPED_TYPES.has(event.type) && event.runId === null) {
     throw new ReducerError(event.eventId, event.type, "a run.* event must carry a run_id");
+  }
+  if (STAGE_SCOPED_TYPES.has(event.type) && event.runId === null) {
+    throw new ReducerError(
+      event.eventId,
+      event.type,
+      "an artifact/stage event must carry a run_id",
+    );
   }
 
   switch (event.type) {
@@ -331,6 +473,114 @@ export const applyEvent: Reducer = (state, event) => {
           },
         },
       };
+    }
+    case "artifact.published": {
+      const runId = requireRunId(event, payload);
+      const stageId = requireString(event, payload, "stageId");
+      const artifactId = requireString(event, payload, "artifactId");
+      if (state.artifacts[artifactId] !== undefined) {
+        throw new ReducerError(event.eventId, event.type, `artifact already exists: ${artifactId}`);
+      }
+      const name = requireString(event, payload, "name");
+      const contentHash = requireString(event, payload, "contentHash");
+      const byteLength = requireNonNegativeInteger(event, payload, "byteLength");
+      const mediaType = requireString(event, payload, "mediaType");
+      const contentSchemaId = requireString(event, payload, "contentSchemaId");
+      const producer = requireString(event, payload, "producer");
+      const sourceLineage = requireStringArray(event, payload, "sourceLineage");
+      const relativePath = requireString(event, payload, "relativePath");
+      return {
+        ...state,
+        artifacts: {
+          ...state.artifacts,
+          [artifactId]: {
+            artifactId,
+            runId,
+            stageId,
+            name,
+            contentHash,
+            byteLength,
+            mediaType,
+            contentSchemaId,
+            producer,
+            sourceLineage,
+            relativePath,
+            createdAt: event.recordedAt,
+            revision: 1,
+            lastEventSequence: event.sequence,
+          },
+        },
+      };
+    }
+    case "stage.completed": {
+      // Design D4 / N (model (a) from the plan-review discussion): one event,
+      // whose reducer writes into two tables — a new `artifact` row per
+      // published ref, plus the `stage_artifact_alias` row that re-points
+      // that name at the newly published artifact. This is what forces
+      // Phase 4's `primaryTable` fix (Task 4.1): `TABLE_ORDER` sorts
+      // `artifact` before `stage_artifact_alias`, so `reported[0]` alone
+      // would report the wrong row's revision.
+      const runId = requireRunId(event, payload);
+      const stageId = requireString(event, payload, "stageId");
+      const refs = requireArtifactRefs(event, payload, "artifacts");
+
+      const seenNames = new Set<string>();
+      for (const ref of refs) {
+        if (seenNames.has(ref.name)) {
+          throw new ReducerError(
+            event.eventId,
+            event.type,
+            `payload.artifacts has more than one entry named "${ref.name}"`,
+          );
+        }
+        seenNames.add(ref.name);
+        if (state.artifacts[ref.artifactId] !== undefined) {
+          throw new ReducerError(
+            event.eventId,
+            event.type,
+            `artifact already exists: ${ref.artifactId}`,
+          );
+        }
+      }
+
+      let artifacts = state.artifacts;
+      let stageArtifactAliases = state.stageArtifactAliases;
+      for (const ref of refs) {
+        artifacts = {
+          ...artifacts,
+          [ref.artifactId]: {
+            artifactId: ref.artifactId,
+            runId,
+            stageId,
+            name: ref.name,
+            contentHash: ref.contentHash,
+            byteLength: ref.byteLength,
+            mediaType: ref.mediaType,
+            contentSchemaId: ref.contentSchemaId,
+            producer: ref.producer,
+            sourceLineage: ref.sourceLineage,
+            relativePath: ref.relativePath,
+            createdAt: event.recordedAt,
+            revision: 1,
+            lastEventSequence: event.sequence,
+          },
+        };
+        const aliasKey = stageArtifactAliasKey(runId, stageId, ref.name);
+        const previousAlias = stageArtifactAliases[aliasKey];
+        stageArtifactAliases = {
+          ...stageArtifactAliases,
+          [aliasKey]: {
+            runId,
+            stageId,
+            name: ref.name,
+            artifactId: ref.artifactId,
+            revision: (previousAlias?.revision ?? 0) + 1,
+            lastEventSequence: event.sequence,
+            updatedAt: event.recordedAt,
+          },
+        };
+      }
+      return { ...state, artifacts, stageArtifactAliases };
     }
     default:
       throw new ReducerError(event.eventId, event.type, "unknown event type");

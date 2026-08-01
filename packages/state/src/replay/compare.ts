@@ -28,11 +28,13 @@ import { type SchemaFingerprint, schemaFingerprint } from "../database/fingerpri
 import type { StateDatabase } from "../database/open.js";
 import type { JsonValue } from "../json.js";
 import type {
+  ArtifactState,
   CodebaseState,
   ProjectionState,
   ProjectionTable,
   RepositoryState,
   RunState,
+  StageArtifactAliasState,
   WorkspaceState,
 } from "../projection/state.js";
 import { loadStoredProjectionState, projectionDigest } from "../projection/state.js";
@@ -126,6 +128,41 @@ const WORKSPACE_VIEW: CompareView<WorkspaceState> = {
   }),
 };
 
+const ARTIFACT_VIEW: CompareView<ArtifactState> = {
+  table: "artifact",
+  select: (state) => state.artifacts,
+  toJson: (row) => ({
+    artifactId: row.artifactId,
+    runId: row.runId,
+    stageId: row.stageId,
+    name: row.name,
+    contentHash: row.contentHash,
+    byteLength: row.byteLength,
+    mediaType: row.mediaType,
+    contentSchemaId: row.contentSchemaId,
+    producer: row.producer,
+    sourceLineage: [...row.sourceLineage],
+    relativePath: row.relativePath,
+    createdAt: row.createdAt,
+    revision: row.revision,
+    lastEventSequence: row.lastEventSequence,
+  }),
+};
+
+const STAGE_ARTIFACT_ALIAS_VIEW: CompareView<StageArtifactAliasState> = {
+  table: "stage_artifact_alias",
+  select: (state) => state.stageArtifactAliases,
+  toJson: (row) => ({
+    runId: row.runId,
+    stageId: row.stageId,
+    name: row.name,
+    artifactId: row.artifactId,
+    revision: row.revision,
+    lastEventSequence: row.lastEventSequence,
+    updatedAt: row.updatedAt,
+  }),
+};
+
 function compareTable<T>(
   view: CompareView<T>,
   stored: ProjectionState,
@@ -187,9 +224,11 @@ export function compareProjectionToReplay(
   const stored = loadStoredProjectionState(db);
 
   const divergences = [
+    ...compareTable(ARTIFACT_VIEW, stored, replay.state),
     ...compareTable(CODEBASE_VIEW, stored, replay.state),
     ...compareTable(REPOSITORY_VIEW, stored, replay.state),
     ...compareTable(RUN_VIEW, stored, replay.state),
+    ...compareTable(STAGE_ARTIFACT_ALIAS_VIEW, stored, replay.state),
     ...compareTable(WORKSPACE_VIEW, stored, replay.state),
   ].sort((left, right) => {
     if (left.table !== right.table) {
