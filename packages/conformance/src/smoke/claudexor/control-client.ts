@@ -221,7 +221,12 @@ export function createControlClient(options: ControlClientOptions): ControlClien
     },
 
     async cancel(runId: string) {
-      await call("POST", `/v2/runs/${runId}/control`, "cancel", { control: "cancel" });
+      // `control` is an OBJECT, not a bare verb string. Sending `"cancel"` is
+      // rejected as invalid_request, and a canary that treats that rejection as
+      // an engine limitation reports a false "cancellation unsupported".
+      await call("POST", `/v2/runs/${runId}/control`, "cancel", {
+        control: { kind: "cancel", reason: "heniek q003 canary" },
+      });
     },
 
     async answer(runId: string, interactionId: string, answer: string) {
