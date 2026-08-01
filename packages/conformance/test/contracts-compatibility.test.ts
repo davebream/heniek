@@ -12,6 +12,12 @@ const manifestPath = resolve(packageRoot, "../contracts/generated/manifest.json"
  * package was added. This is the AC4 gate: if `packages/contracts/src/**`
  * ever changes in a way that regenerates a different hash — or adds/removes
  * a schema — this test fails immediately, rather than silently drifting.
+ *
+ * Q005 raised the pin from 12 to 14 schemas, adding `ApplicationHome/v1` and
+ * `ResolvedConfiguration/v1`. Updating this list is the *deliberate versioning
+ * act* the gate exists to force; what makes the change compatible rather than
+ * breaking is that the other twelve entries below are byte-identical to their
+ * previous values, so no existing consumer's payload changed shape.
  */
 const EXPECTED_SCHEMAS: readonly {
   readonly schemaId: string;
@@ -19,6 +25,12 @@ const EXPECTED_SCHEMAS: readonly {
   readonly sha256: string;
   readonly path: string;
 }[] = [
+  {
+    schemaId: "heniek://contract/ApplicationHome/v1",
+    schemaVersion: 1,
+    sha256: "a0ba4f81c226ec8201cbe2a2110fcd5793df84689db95a53fb7db1553fea4fe8",
+    path: "generated/ApplicationHome.v1.schema.json",
+  },
   {
     schemaId: "heniek://contract/ArtifactRef/v1",
     schemaVersion: 1,
@@ -80,6 +92,12 @@ const EXPECTED_SCHEMAS: readonly {
     path: "generated/PullRequest.v1.schema.json",
   },
   {
+    schemaId: "heniek://contract/ResolvedConfiguration/v1",
+    schemaVersion: 1,
+    sha256: "ab0ae9b99bb0e98c56e93665a92f049d86c3f43949f02764b0501b45e563fbd1",
+    path: "generated/ResolvedConfiguration.v1.schema.json",
+  },
+  {
     schemaId: "heniek://contract/Run/v1",
     schemaVersion: 1,
     sha256: "be0a661b93dee4b9f8a0c9b4e642864ebf99e94cbc4d06b3790b0a01bf2dc601",
@@ -94,7 +112,7 @@ const EXPECTED_SCHEMAS: readonly {
 ];
 
 describe("packages/contracts generated manifest is unchanged (AC4)", () => {
-  it("manifest.json lists exactly the 12 known schemas with their recorded sha256", async () => {
+  it("manifest.json lists exactly the 14 known schemas with their recorded sha256", async () => {
     const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
     expect(manifest).toEqual({
       schemaVersion: "heniek.contracts-manifest.v1",

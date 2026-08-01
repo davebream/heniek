@@ -2,6 +2,12 @@
   "schemaVersion": "heniek.contracts-manifest.v1",
   "schemas": [
     {
+      "schemaId": "heniek://contract/ApplicationHome/v1",
+      "schemaVersion": 1,
+      "sha256": "a0ba4f81c226ec8201cbe2a2110fcd5793df84689db95a53fb7db1553fea4fe8",
+      "path": "generated/ApplicationHome.v1.schema.json"
+    },
+    {
       "schemaId": "heniek://contract/ArtifactRef/v1",
       "schemaVersion": 1,
       "sha256": "d0c7906442ee7ffc50a7459ada8c2ed02801850b80bf0f00c264263e3a98d7d2",
@@ -60,6 +66,12 @@
       "schemaVersion": 1,
       "sha256": "07c6c0fead0ade0271932b7f60262d84644c3097fed4462ca374f9a22496c0ef",
       "path": "generated/PullRequest.v1.schema.json"
+    },
+    {
+      "schemaId": "heniek://contract/ResolvedConfiguration/v1",
+      "schemaVersion": 1,
+      "sha256": "ab0ae9b99bb0e98c56e93665a92f049d86c3f43949f02764b0501b45e563fbd1",
+      "path": "generated/ResolvedConfiguration.v1.schema.json"
     },
     {
       "schemaId": "heniek://contract/Run/v1",

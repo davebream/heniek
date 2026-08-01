@@ -1,4 +1,5 @@
 export * from "./artifact/index.js";
+export * from "./configuration/index.js";
 export * from "./execution-backend/index.js";
 export * from "./forge-backend/index.js";
 export * from "./interaction/index.js";

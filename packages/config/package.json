@@ -1,0 +1,22 @@
+{
+  "name": "@heniek/config",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@heniek/secrets": "workspace:*",
+    "ajv": "catalog:",
+    "ajv-formats": "catalog:",
+    "yaml": "catalog:"
+  },
+  "devDependencies": {
+    "tsx": "catalog:",
+    "vitest": "catalog:"
+  }
+}

@@ -1,0 +1,213 @@
+{
+  "$id": "heniek://contract/ResolvedConfiguration/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "layers",
+    "values",
+    "provenance",
+    "diagnostics"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "layers": {
+      "type": "array",
+      "items": {
+        "anyOf": [
+          {
+            "const": "built-in-defaults",
+            "type": "string"
+          },
+          {
+            "const": "global-defaults",
+            "type": "string"
+          },
+          {
+            "const": "codebase",
+            "type": "string"
+          },
+          {
+            "const": "repository",
+            "type": "string"
+          },
+          {
+            "const": "pipeline-template",
+            "type": "string"
+          },
+          {
+            "const": "profile-or-stage",
+            "type": "string"
+          },
+          {
+            "const": "invocation-override",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    "values": {
+      "type": "object",
+      "patternProperties": {
+        "^(.*)$": {}
+      }
+    },
+    "provenance": {
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "pointer",
+          "layer",
+          "value",
+          "overridden"
+        ],
+        "properties": {
+          "pointer": {
+            "type": "string"
+          },
+          "layer": {
+            "anyOf": [
+              {
+                "const": "built-in-defaults",
+                "type": "string"
+              },
+              {
+                "const": "global-defaults",
+                "type": "string"
+              },
+              {
+                "const": "codebase",
+                "type": "string"
+              },
+              {
+                "const": "repository",
+                "type": "string"
+              },
+              {
+                "const": "pipeline-template",
+                "type": "string"
+              },
+              {
+                "const": "profile-or-stage",
+                "type": "string"
+              },
+              {
+                "const": "invocation-override",
+                "type": "string"
+              }
+            ]
+          },
+          "sourcePath": {
+            "type": "string"
+          },
+          "value": {},
+          "overridden": {
+            "type": "array",
+            "items": {
+              "additionalProperties": false,
+              "type": "object",
+              "required": [
+                "layer",
+                "value"
+              ],
+              "properties": {
+                "layer": {
+                  "anyOf": [
+                    {
+                      "const": "built-in-defaults",
+                      "type": "string"
+                    },
+                    {
+                      "const": "global-defaults",
+                      "type": "string"
+                    },
+                    {
+                      "const": "codebase",
+                      "type": "string"
+                    },
+                    {
+                      "const": "repository",
+                      "type": "string"
+                    },
+                    {
+                      "const": "pipeline-template",
+                      "type": "string"
+                    },
+                    {
+                      "const": "profile-or-stage",
+                      "type": "string"
+                    },
+                    {
+                      "const": "invocation-override",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "sourcePath": {
+                  "type": "string"
+                },
+                "value": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "diagnostics": {
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "code",
+          "severity",
+          "message"
+        ],
+        "properties": {
+          "code": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "severity": {
+            "anyOf": [
+              {
+                "const": "error",
+                "type": "string"
+              },
+              {
+                "const": "warning",
+                "type": "string"
+              },
+              {
+                "const": "info",
+                "type": "string"
+              }
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "sourcePath": {
+            "type": "string"
+          },
+          "line": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "column": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "pointer": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}
