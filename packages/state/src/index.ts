@@ -1,0 +1,65 @@
+export { type CommitReport, commitStateChange, type StateCommand } from "./command/commit.js";
+export { type SchemaFingerprint, schemaFingerprint } from "./database/fingerprint.js";
+export {
+  type OpenStateDatabaseOptions,
+  openStateDatabase,
+  type StateDatabase,
+} from "./database/open.js";
+export type { Clock, IdGenerator } from "./determinism.js";
+export {
+  CausalityViolationError,
+  InsecureStateDatabaseError,
+  MigrationError,
+  PayloadTooLargeError,
+  ReducerError,
+  SchemaVersionError,
+  StateDatabaseCorruptionError,
+  StateStoreError,
+} from "./errors.js";
+export type {
+  AppendEventInput,
+  CausationEventId,
+  CorrelationId,
+  EventId,
+  EventSequence,
+  StateEvent,
+} from "./journal/event.js";
+export { latestSequence, readEvents, readEventsForRun } from "./journal/read.js";
+export type { JsonValue } from "./json.js";
+export { MIGRATIONS, type Migration } from "./migrations/list.js";
+export {
+  currentSchemaVersion,
+  type MigrationManifest,
+  type MigrationManifestEntry,
+  type MigrationRunReport,
+  migrationManifest,
+  runMigrations,
+} from "./migrations/migrate.js";
+export {
+  type CodebaseRow,
+  type RepositoryRow,
+  readIdentity,
+  type WorkspaceRow,
+} from "./projection/identity.js";
+export { applyEvent, eventScope, type Reducer } from "./projection/reducer.js";
+export {
+  type RunProjectionRow,
+  readAllRunProjections,
+  readRunProjection,
+} from "./projection/run.js";
+export {
+  type CodebaseState,
+  EMPTY_PROJECTION_STATE,
+  type ProjectionState,
+  type ProjectionTable,
+  projectionDigest,
+  type RepositoryState,
+  type RunState,
+  type WorkspaceState,
+} from "./projection/state.js";
+export {
+  compareProjectionToReplay,
+  type Divergence,
+  type ReplayDivergenceReport,
+} from "./replay/compare.js";
+export { type ReplayOptions, type ReplayResult, replayJournal } from "./replay/replay.js";

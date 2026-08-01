@@ -1,0 +1,19 @@
+{
+  "name": "@heniek/state",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@heniek/contracts": "workspace:*"
+  },
+  "devDependencies": {
+    "tsx": "catalog:",
+    "vitest": "catalog:"
+  }
+}
