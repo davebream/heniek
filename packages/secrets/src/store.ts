@@ -43,6 +43,20 @@ export class SecretStoreEntryNameError extends Error {
  * a non-directory, or owned by a different user). The message names the
  * filesystem path and the reason — never a credential value, since none is
  * available at this layer to leak.
+ *
+ * The path-echoing rule (D5, reconciled with `@heniek/config`'s
+ * `home/errors.ts`, which documents the identical rule): the no-echo
+ * discipline applies to *unvalidated environment input at resolution time*
+ * (`HENIEK_HOME`, `XDG_*`) — those values are attacker-influenced and may
+ * themselves be sensitive (an operator's directory layout, a path revealing
+ * local infrastructure), so they must never be echoed. `directory` here, by
+ * contrast, is an *already-resolved* absolute path the caller explicitly
+ * configured this store with (or that `@heniek/config`'s home resolution
+ * already validated) — at that point it is ordinary operational data, and
+ * echoing it is exactly what makes "which path is misconfigured" actionable.
+ * An error that only says "a secret store path is not private" without
+ * naming which one is worse than the (low) risk of a resolved path
+ * appearing in a log.
  */
 export class InsecureSecretStoreError extends Error {
   constructor(
