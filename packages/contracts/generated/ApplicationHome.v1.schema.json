@@ -1,0 +1,225 @@
+{
+  "$id": "heniek://contract/ApplicationHome/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "platform",
+    "roots",
+    "paths",
+    "diagnostics"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "platform": {
+      "anyOf": [
+        {
+          "const": "darwin",
+          "type": "string"
+        },
+        {
+          "const": "linux",
+          "type": "string"
+        },
+        {
+          "const": "other",
+          "type": "string"
+        }
+      ]
+    },
+    "roots": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "config",
+        "data",
+        "state",
+        "runtime"
+      ],
+      "properties": {
+        "config": {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "path",
+            "origin"
+          ],
+          "properties": {
+            "path": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "origin": {
+              "anyOf": [
+                {
+                  "const": "heniek-home-variable",
+                  "type": "string"
+                },
+                {
+                  "const": "xdg-base-directory",
+                  "type": "string"
+                },
+                {
+                  "const": "user-home-fallback",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        "data": {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "path",
+            "origin"
+          ],
+          "properties": {
+            "path": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "origin": {
+              "anyOf": [
+                {
+                  "const": "heniek-home-variable",
+                  "type": "string"
+                },
+                {
+                  "const": "xdg-base-directory",
+                  "type": "string"
+                },
+                {
+                  "const": "user-home-fallback",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        "state": {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "path",
+            "origin"
+          ],
+          "properties": {
+            "path": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "origin": {
+              "anyOf": [
+                {
+                  "const": "heniek-home-variable",
+                  "type": "string"
+                },
+                {
+                  "const": "xdg-base-directory",
+                  "type": "string"
+                },
+                {
+                  "const": "user-home-fallback",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        "runtime": {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "path",
+            "origin"
+          ],
+          "properties": {
+            "path": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "origin": {
+              "anyOf": [
+                {
+                  "const": "heniek-home-variable",
+                  "type": "string"
+                },
+                {
+                  "const": "xdg-base-directory",
+                  "type": "string"
+                },
+                {
+                  "const": "user-home-fallback",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    "paths": {
+      "type": "object",
+      "patternProperties": {
+        "^(.*)$": {
+          "type": "string"
+        }
+      }
+    },
+    "diagnostics": {
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "code",
+          "severity",
+          "message"
+        ],
+        "properties": {
+          "code": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "severity": {
+            "anyOf": [
+              {
+                "const": "error",
+                "type": "string"
+              },
+              {
+                "const": "warning",
+                "type": "string"
+              },
+              {
+                "const": "info",
+                "type": "string"
+              }
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "sourcePath": {
+            "type": "string"
+          },
+          "line": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "column": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "pointer": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}
