@@ -134,6 +134,20 @@ export function runMigrationList(
     let statementIndex = -1;
     try {
       handle.exec("BEGIN IMMEDIATE");
+
+      // Re-read `user_version` now that this connection holds the write
+      // lock, not just the pre-transaction read that produced `pending`
+      // above (issue #7, Phase 2 fix S2). Two `openStateDatabase` calls on
+      // one path are two independent connections, not a shared one (this
+      // module's own header comment) — the loser of a race would otherwise
+      // find this migration already applied, re-run its DDL against an
+      // already-migrated schema, and fail with "table ... already exists"
+      // wrapped in a `MigrationError`, where a clean no-op is correct.
+      if (migration.version <= readUserVersion(handle)) {
+        handle.exec("COMMIT");
+        continue;
+      }
+
       for (const [index, statement] of migration.statements.entries()) {
         statementIndex = index;
         handle.exec(statement);
@@ -143,8 +157,16 @@ export function runMigrationList(
       // syntax error`) — `version` is bounds-asserted immediately above, so
       // this is the one string-built statement in the package and it is
       // auditable at a glance; the value never originates from user input.
-      handle.exec("COMMIT");
+      // Run before COMMIT, not after (issue #7, Phase 2 fix S2): `PRAGMA
+      // user_version` is fully transactional (verified — it rolls back with
+      // an explicit ROLLBACK and commits with an explicit COMMIT exactly
+      // like any other write), so running it before COMMIT makes the DDL
+      // and the bump one atomic unit. Running it after COMMIT, as a second,
+      // separate statement, left a window where the DDL could be durably
+      // committed while the bump was not — a state a second connection
+      // could then observe and act on incorrectly.
       handle.exec(`PRAGMA user_version = ${version}`);
+      handle.exec("COMMIT");
     } catch (error) {
       if (handle.isTransaction) {
         handle.exec("ROLLBACK");

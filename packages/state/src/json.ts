@@ -155,7 +155,7 @@ export function parseJsonValue(text: string, what: string): JsonValue {
 }
 
 function assertJsonValue(value: unknown, what: string, depth = 0): JsonValue {
-  if (depth > MAX_DEPTH) {
+  if (depth >= MAX_DEPTH) {
     throw new StateStoreError(`${what}: recursion depth exceeded ${MAX_DEPTH}`);
   }
   if (

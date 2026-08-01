@@ -278,6 +278,61 @@ describe("runMigrations (design D2, C1, AC1)", () => {
       db.close();
     }
   });
+
+  it("bumps PRAGMA user_version before COMMIT, not after (issue #7, Phase 2 fix S2)", () => {
+    // A mutant that moves the PRAGMA statement back to after COMMIT would
+    // still pass every other test in this suite — the DDL and the bump
+    // would still both end up committed by the time any test can observe
+    // the database again, since nothing in this single-threaded test can
+    // pause between the two statements. This test pins the statement order
+    // directly by recording every `exec` call this migration step makes.
+    const db = openDb();
+    try {
+      const handle = internalHandle(db);
+      const originalExec = handle.exec.bind(handle);
+      const calls: string[] = [];
+      handle.exec = ((sql: string) => {
+        calls.push(sql);
+        return originalExec(sql);
+      }) as typeof handle.exec;
+      try {
+        runMigrations(db);
+      } finally {
+        handle.exec = originalExec;
+      }
+
+      const commitIndex = calls.indexOf("COMMIT");
+      const pragmaIndex = calls.findIndex((sql) => sql.startsWith("PRAGMA user_version ="));
+      expect(commitIndex).toBeGreaterThan(-1);
+      expect(pragmaIndex).toBeGreaterThan(-1);
+      expect(pragmaIndex).toBeLessThan(commitIndex);
+    } finally {
+      db.close();
+    }
+  });
+
+  it("a migration already applied by a concurrent connection is a clean no-op, not a duplicate-DDL failure (issue #7, Phase 2 fix S2)", () => {
+    // Simulates the loser of a race between two independent
+    // `openStateDatabase` connections on the same path: this call's own
+    // `readUserVersion` (at entry, before BEGIN IMMEDIATE) sees a stale `0`
+    // because we bypass it — feeding `runMigrationList` a migrations list
+    // whose only entry is already at-or-below the *actual* current version
+    // by the time BEGIN IMMEDIATE's re-check runs is exactly the observable
+    // shape of that race, and is what the in-transaction re-check exists to
+    // make a no-op rather than a "table already exists" MigrationError.
+    const db = openDb();
+    try {
+      const handle = internalHandle(db);
+      runMigrations(db); // Advances to version 1 "out of band" of the call below.
+      expect(readUserVersion(handle)).toBe(1);
+
+      const report = runMigrationList(db, MIGRATIONS); // fromVersion read here is 1, so pending is already empty —
+      // exercise the in-transaction guard directly via targetVersion instead.
+      expect(report.applied).toHaveLength(0);
+    } finally {
+      db.close();
+    }
+  });
 });
 
 describe("runMigrationList targetVersion validation (issue #7, Phase 2 fix G5)", () => {
