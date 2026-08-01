@@ -1,3 +1,4 @@
+export { type SchemaFingerprint, schemaFingerprint } from "./database/fingerprint.js";
 export {
   type OpenStateDatabaseOptions,
   openStateDatabase,
@@ -15,3 +16,12 @@ export {
   StateStoreError,
 } from "./errors.js";
 export type { JsonValue } from "./json.js";
+export { MIGRATIONS, type Migration } from "./migrations/list.js";
+export {
+  currentSchemaVersion,
+  type MigrationManifest,
+  type MigrationManifestEntry,
+  type MigrationRunReport,
+  migrationManifest,
+  runMigrations,
+} from "./migrations/migrate.js";

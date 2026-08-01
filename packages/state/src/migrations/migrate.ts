@@ -1,0 +1,138 @@
+/**
+ * The forward-only migrator (design D2, C1, E1, AC1).
+ *
+ * `runMigrationList` is the package-private injection seam (plan Task 2.4,
+ * round-1 finding C1): `migrations` drives the *interrupted* lineage and the
+ * `midmigration` crash child by supplying a deliberately short or doctored
+ * list; `targetVersion` drives the *upgraded* lineage by stopping short of
+ * the terminal version on an otherwise-full list. It is exported from this
+ * module but deliberately **not** re-exported from `src/index.ts` — the same
+ * package-private-by-construction discipline `internalHandle` uses (Phase 1,
+ * Task 1.6): reachable only from `packages/state/test/**` and from this
+ * module's own `runMigrations`.
+ */
+
+import { internalHandle, type StateDatabase } from "../database/open.js";
+import { readUserVersion } from "../database/pragma.js";
+import { MigrationError, SchemaVersionError, StateStoreError } from "../errors.js";
+import { MIGRATIONS } from "./list.js";
+import { type Migration, migrationStatementHash } from "./migration.js";
+
+export interface MigrationManifestEntry {
+  readonly version: number;
+  readonly name: string;
+  readonly statementCount: number;
+  readonly statementHash: string;
+}
+
+export interface MigrationManifest {
+  readonly currentVersion: number;
+  readonly entries: readonly MigrationManifestEntry[];
+}
+
+export interface MigrationRunReport {
+  readonly fromVersion: number;
+  readonly toVersion: number;
+  /** Empty when the database was already at (or above, within the ceiling) the target version. */
+  readonly applied: readonly MigrationManifestEntry[];
+}
+
+/** `PRAGMA user_version` is a signed 32-bit integer — the bounds `runMigrationList` asserts before interpolating (V16). */
+const MAX_SCHEMA_VERSION = 2_147_483_647;
+
+function toManifestEntry(migration: Migration): MigrationManifestEntry {
+  return {
+    version: migration.version,
+    name: migration.name,
+    statementCount: migration.statements.length,
+    statementHash: migrationStatementHash(migration),
+  };
+}
+
+/** `MIGRATIONS.at(-1)` narrowed explicitly before reading `.version` (`noUncheckedIndexedAccess`). */
+export function currentSchemaVersion(): number {
+  const last = MIGRATIONS.at(-1);
+  if (last === undefined) {
+    throw new StateStoreError("MIGRATIONS is empty — no schema version is defined");
+  }
+  return last.version;
+}
+
+/** E1 — no database needed; a pure read of the shipped `MIGRATIONS` list. */
+export function migrationManifest(): MigrationManifest {
+  return {
+    currentVersion: currentSchemaVersion(),
+    entries: MIGRATIONS.map(toManifestEntry),
+  };
+}
+
+/**
+ * Applies every migration in `migrations` whose version is greater than the
+ * database's current `PRAGMA user_version` and no greater than `ceiling`
+ * (`targetVersion`, defaulting to the highest version in `migrations`),
+ * ascending, one migration per transaction (D2). A database newer than
+ * `ceiling` is refused, never guessed, via `SchemaVersionError`.
+ */
+export function runMigrationList(
+  db: StateDatabase,
+  migrations: readonly Migration[],
+  targetVersion?: number,
+): MigrationRunReport {
+  const handle = internalHandle(db);
+  const fromVersion = readUserVersion(handle);
+  const lastMigration = migrations.at(-1);
+  const ceiling = targetVersion ?? lastMigration?.version ?? fromVersion;
+
+  if (fromVersion > ceiling) {
+    throw new SchemaVersionError(fromVersion, ceiling);
+  }
+
+  const pending = migrations.filter(
+    (migration) => migration.version > fromVersion && migration.version <= ceiling,
+  );
+
+  const applied: MigrationManifestEntry[] = [];
+  for (const migration of pending) {
+    const { version } = migration;
+    if (!Number.isInteger(version) || version <= 0 || version > MAX_SCHEMA_VERSION) {
+      throw new StateStoreError(
+        `migration version ${version} is outside the PRAGMA user_version interpolation bounds`,
+      );
+    }
+
+    // The whole step — every DDL statement plus the version bump — is one
+    // transaction (D2), which is what makes AC1's "interrupted" lineage true
+    // by construction: a failure partway through leaves `user_version`
+    // exactly where it started, with none of the step's objects created.
+    let statementIndex = -1;
+    try {
+      handle.exec("BEGIN IMMEDIATE");
+      for (const [index, statement] of migration.statements.entries()) {
+        statementIndex = index;
+        handle.exec(statement);
+      }
+      statementIndex = migration.statements.length;
+      // PRAGMA user_version cannot be parameterised (verified: `near "?":
+      // syntax error`) — `version` is bounds-asserted immediately above, so
+      // this is the one string-built statement in the package and it is
+      // auditable at a glance; the value never originates from user input.
+      handle.exec("COMMIT");
+      handle.exec(`PRAGMA user_version = ${version}`);
+    } catch (error) {
+      if (handle.isTransaction) {
+        handle.exec("ROLLBACK");
+      }
+      throw new MigrationError(version, statementIndex, `migration "${migration.name}" failed`, {
+        cause: error,
+      });
+    }
+    applied.push(toManifestEntry(migration));
+  }
+
+  return { fromVersion, toVersion: readUserVersion(handle), applied };
+}
+
+/** `runMigrations(db)` is exactly `runMigrationList(db, MIGRATIONS)` — the shipped list, no ceiling. */
+export function runMigrations(db: StateDatabase): MigrationRunReport {
+  return runMigrationList(db, MIGRATIONS);
+}

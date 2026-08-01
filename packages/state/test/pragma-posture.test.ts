@@ -1,16 +1,16 @@
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { internalHandle, openStateDatabase } from "../src/database/open.js";
 import { readForeignKeys, readSynchronous } from "../src/database/pragma.js";
 import { createDeterministicIds, createFakeClock } from "./helpers/determinism.js";
+import { makeTempDbPath } from "./helpers/temp-db.js";
 
 let directory: string;
 
 beforeEach(async () => {
-  directory = await mkdtemp(join(tmpdir(), "heniek-state-"));
+  ({ directory } = await makeTempDbPath());
 });
 
 afterEach(async () => {

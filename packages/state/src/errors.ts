@@ -4,15 +4,23 @@
  * Every class below `extends StateStoreError`, so a caller that only wants
  * "did the state store reject this" can catch the base class, while a
  * caller that needs to distinguish *why* can catch the specific subclass.
- * Following the house rule from `ApplicationHomeResolutionError`
- * (`packages/config`) and `SecretStoreConfigurationError`
- * (`packages/secrets`): a message names the *entry* and the *reason*, never
- * an unvalidated, environment-derived path, and never payload bytes (D7,
- * `no-credential-fields` discipline). `InsecureStateDatabaseError` is the
- * one exception — it may name the path, because the caller supplied it
- * explicitly to `openStateDatabase`, exactly mirroring
+ *
+ * The actual house rule, matching `packages/config` and `packages/secrets`:
+ * a message may echo a value the *caller supplied explicitly* to a public
+ * function of this package (its own input, already known to it), but never
+ * an *ambient or derived* value the package resolved on the caller's
+ * behalf (an environment variable, a directory it computed, payload bytes
+ * — D7's `no-credential-fields` discipline). This is why `open.ts:111`
+ * interpolates `path` — the exact string `openStateDatabase`'s caller
+ * passed in — into a plain `StateStoreError`, matching the identical
+ * precedent at `packages/secrets/src/file-store.ts:64`
+ * (`SecretStoreConfigurationError` echoing the caller-supplied
+ * `options.directory`). `InsecureStateDatabaseError` follows the same rule,
+ * not an exception to it — it names `path`, again because the caller
+ * supplied it explicitly to `openStateDatabase`, exactly mirroring
  * `InsecureSecretStoreError`'s identical carve-out in
- * `packages/secrets/src/store.ts`.
+ * `packages/secrets/src/store.ts`. Do not "fix" `open.ts:111` into
+ * inconsistency with this rule — it is already consistent.
  *
  * No property name declared here may match
  * `/password|secret|token|api[-_]?key|credential|private[-_]?key|access[-_]?key|passphrase/i`.
@@ -110,8 +118,8 @@ export class InsecureStateDatabaseError extends StateStoreError {
  * table's `STRICT` constraint did not catch). Never echoes row contents.
  */
 export class StateDatabaseCorruptionError extends StateStoreError {
-  constructor(message: string) {
-    super(message);
+  constructor(message: string, options?: { readonly cause?: unknown }) {
+    super(message, options);
     this.name = "StateDatabaseCorruptionError";
   }
 }
