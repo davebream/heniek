@@ -145,3 +145,112 @@ export class ReducerError extends StateStoreError {
     this.eventType = eventType;
   }
 }
+
+/**
+ * Design D12n/R6 (Task 3.1) — the six artifact-store error classes. Every
+ * message below names only `relativePath`/`path` (a value the artifact
+ * store itself derived from the content hash or the caller's chosen name —
+ * never a value an attacker or ambient environment controls) or an
+ * already-safe derived integer/reason string; never artifact bytes, per
+ * this file's header house rule.
+ */
+
+/**
+ * The generic publication-step failure (plan Task 3.1, R4/R6). Wraps the
+ * underlying `ArtifactFileSystem` error via `options.cause` — unwrapped,
+ * matching `commit.ts`'s discipline for raw SQLite errors (design D9/D13n).
+ * `step` is one of R4's four named durability boundaries.
+ */
+export class ArtifactValidationError extends StateStoreError {
+  readonly relativePath: string;
+  readonly step: "write" | "fsync" | "link" | "dirfsync";
+
+  constructor(
+    relativePath: string,
+    step: "write" | "fsync" | "link" | "dirfsync",
+    options?: { readonly cause?: unknown },
+  ) {
+    super(`artifact publication failed at step "${step}" for ${relativePath}`, options);
+    this.name = "ArtifactValidationError";
+    this.relativePath = relativePath;
+    this.step = step;
+  }
+}
+
+/**
+ * Raised when a caller-supplied `contentHash` disagrees with the computed
+ * one (design D8), or when the quarantine-and-retry digest re-check
+ * (R4 step 6) itself disagrees. Carries only the two hex digests, never the
+ * bytes that produced either.
+ */
+export class ArtifactDigestMismatchError extends StateStoreError {
+  readonly expectedHash: string;
+  readonly actualHash: string;
+
+  constructor(expectedHash: string, actualHash: string) {
+    super(`artifact content hash mismatch: expected ${expectedHash}, computed ${actualHash}`);
+    this.name = "ArtifactDigestMismatchError";
+    this.expectedHash = expectedHash;
+    this.actualHash = actualHash;
+  }
+}
+
+/**
+ * Raised only if R4 step 6's quarantine-and-retry sequence fails to vacate
+ * the address (e.g. the retried `link` still returns `EEXIST`). The normal
+ * quarantine path (retry succeeds) raises nothing — quarantine, not
+ * poisoning, is silent success from the caller's perspective.
+ */
+export class ArtifactQuarantinedError extends StateStoreError {
+  readonly relativePath: string;
+
+  constructor(relativePath: string) {
+    super(`artifact address is quarantined and could not be vacated: ${relativePath}`);
+    this.name = "ArtifactQuarantinedError";
+    this.relativePath = relativePath;
+  }
+}
+
+/**
+ * The S2 (under-lock) or S3 (pre-lock) stage-completion assertion failure
+ * (design D4, plan Task 4.2/4.3). `reason` is a short, already-safe
+ * description (e.g. "nlink was 0") — never a derived byte count or path
+ * component beyond `relativePath` itself.
+ */
+export class StageAssertionFailedError extends StateStoreError {
+  readonly relativePath: string;
+  readonly reason: string;
+
+  constructor(relativePath: string, reason: string) {
+    super(`stage artifact assertion failed for ${relativePath}: ${reason}`);
+    this.name = "StageAssertionFailedError";
+    this.relativePath = relativePath;
+    this.reason = reason;
+  }
+}
+
+/** A recovery-sweep failure (design D5/D5a, plan Task 5.1) — unable to classify or remove an `incoming/` entry. */
+export class ArtifactRecoveryError extends StateStoreError {
+  readonly path: string;
+  readonly reason: string;
+
+  constructor(path: string, reason: string) {
+    super(`artifact recovery failed for ${path}: ${reason}`);
+    this.name = "ArtifactRecoveryError";
+    this.path = path;
+    this.reason = reason;
+  }
+}
+
+/** I6's per-`completeStage` artifact-count cap refusal (plan Task 4.2). */
+export class ArtifactCountExceededError extends StateStoreError {
+  readonly count: number;
+  readonly limit: number;
+
+  constructor(count: number, limit: number) {
+    super(`artifact count ${count} exceeds the per-completeStage limit of ${limit}`);
+    this.name = "ArtifactCountExceededError";
+    this.count = count;
+    this.limit = limit;
+  }
+}

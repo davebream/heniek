@@ -7,12 +7,18 @@ export {
 } from "./database/open.js";
 export type { Clock, IdGenerator } from "./determinism.js";
 export {
+  ArtifactCountExceededError,
+  ArtifactDigestMismatchError,
+  ArtifactQuarantinedError,
+  ArtifactRecoveryError,
+  ArtifactValidationError,
   CausalityViolationError,
   InsecureStateDatabaseError,
   MigrationError,
   PayloadTooLargeError,
   ReducerError,
   SchemaVersionError,
+  StageAssertionFailedError,
   StateDatabaseCorruptionError,
   StateStoreError,
 } from "./errors.js";
@@ -48,6 +54,7 @@ export {
   readRunProjection,
 } from "./projection/run.js";
 export {
+  type ArtifactState,
   type CodebaseState,
   EMPTY_PROJECTION_STATE,
   type ProjectionState,
@@ -55,6 +62,8 @@ export {
   projectionDigest,
   type RepositoryState,
   type RunState,
+  type StageArtifactAliasState,
+  stageArtifactAliasKey,
   type WorkspaceState,
 } from "./projection/state.js";
 export {
