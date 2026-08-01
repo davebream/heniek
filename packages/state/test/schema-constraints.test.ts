@@ -327,14 +327,41 @@ function seedCodebase(sequence: number, id = "cb-parent"): void {
 const ARTIFACT_CONTENT_HASH = "a".repeat(64);
 
 /**
+ * `artifact.run_id REFERENCES run_projection(run_id)` (issue #8, Phase 2 fix
+ * cycle G1, finding F4): every `seedArtifact` row below cites the same fixed
+ * `'run-fixed'` run id (mirroring `repository`/`workspace`'s `'cb-parent'`
+ * precedent above), so this seeds that one parent row. Idempotent — guarded
+ * by a `SELECT` first — because a single test (the "second INSERT for a new
+ * artifact_id succeeds" case) calls `seedArtifact` twice against the same
+ * fixed run id, and `run_projection_first_revision` would abort a second raw
+ * INSERT for a row that already exists.
+ */
+function seedRun(sequence: number, id = "run-fixed"): void {
+  const handle = internalHandle(db);
+  const existing = handle.prepare("SELECT 1 FROM run_projection WHERE run_id = ?").get(id);
+  if (existing !== undefined) {
+    return;
+  }
+  handle
+    .prepare(
+      "INSERT INTO run_projection (run_id, status, revision, last_event_sequence, codebase_id, updated_at)" +
+        " VALUES (?, 'queued', 1, ?, 'cb-run-parent', ?)",
+    )
+    .run(id, sequence, TIMESTAMP);
+}
+
+/**
  * `stage_artifact_alias`'s FK parent (Task 2.3): a single, fixed `artifact`
  * row every alias-table case below points at. `run_id`/`stage_id` here are
  * deliberately the same fixed literals `PROJECTION_TABLES`'s
  * `stage_artifact_alias` entry hardcodes into its own SQL (the same pattern
  * `repository`/`workspace` use for `cb-parent`), so this row is always the
- * one the alias rows' own FK resolves to.
+ * one the alias rows' own FK resolves to. `seedRun` runs first (F4) — the
+ * `artifact.run_id` FK needs that `run_projection` row to exist before this
+ * INSERT.
  */
 function seedArtifact(sequence: number, id = "artifact-parent"): void {
+  seedRun(sequence);
   internalHandle(db)
     .prepare(
       "INSERT INTO artifact (artifact_id, run_id, stage_id, name, content_hash, byte_length," +
@@ -844,5 +871,91 @@ describe("projection relationship foreign keys (design D8, §16.3)", () => {
       .prepare("SELECT workspace_id FROM run_projection WHERE run_id = 'run-nows'")
       .get();
     expect(row?.workspace_id).toBeNull();
+  });
+
+  /**
+   * `artifact.run_id REFERENCES run_projection(run_id)` (issue #8, Phase 2
+   * fix cycle G1, finding F4) — mirrors the `repository`/`workspace` cases
+   * above. The shipped DDL had neither this `REFERENCES` clause nor a
+   * reducer-side check, so an artifact could be committed for a run that
+   * never existed.
+   */
+  it("INSERT INTO artifact naming a non-existent run_id fails its foreign key", () => {
+    const first = seedOneEvent();
+    let caught: unknown;
+    try {
+      internalHandle(db)
+        .prepare(
+          "INSERT INTO artifact (artifact_id, run_id, stage_id, name, content_hash, byte_length," +
+            " media_type, content_schema_id, producer, source_lineage, relative_path, created_at," +
+            " revision, last_event_sequence)" +
+            ` VALUES ('artifact-orphan', 'run-does-not-exist', 'stage-1', 'plan.md',` +
+            ` '${ARTIFACT_CONTENT_HASH}', 0, 'text/plain', 'heniek://contract/Example/v1',` +
+            ` 'test-producer', '[]', 'blobs/sha256/${ARTIFACT_CONTENT_HASH}', ?, 1, ?)`,
+        )
+        .run(TIMESTAMP, first);
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeDefined();
+    expect((caught as Error).message).toContain("FOREIGN KEY constraint failed");
+    expect(sqliteErrorCode(caught)).toBe(SQLITE_CONSTRAINT_FOREIGNKEY);
+  });
+});
+
+/**
+ * `CHECK (length(content_hash) = 64 AND content_hash NOT GLOB '*[^0-9a-f]*')`
+ * (issue #8, Phase 2 fix cycle G1, finding F1) — the path-traversal hole the
+ * shipped CHECK left open. The shipped constraint was `content_hash =
+ * lower(content_hash)`, which only rejects uppercase letters: `lower(X) = X`
+ * is also true for a 64-character string containing `.` and `/`, so nothing
+ * stopped `relative_path = 'blobs/sha256/' || content_hash` from denoting a
+ * path outside the blob root. This test is the regression proof — it fails
+ * (accepts the traversal payload) against the old `= lower(content_hash)`
+ * CHECK and passes only with the GLOB alphabet restriction in place.
+ */
+describe("artifact content_hash CHECK — path-traversal closure (issue #8, F1)", () => {
+  it("rejects a 64-character, already-lowercase content_hash that encodes a path-traversal sequence", () => {
+    const first = seedOneEvent();
+    // Seeds the 'run-fixed' FK parent first (F4) so the only constraint this
+    // INSERT can trip is the content_hash CHECK under test — otherwise a
+    // regression back to the old, permissive CHECK would surface as a
+    // FOREIGN KEY failure instead of no error at all, masking the hole this
+    // test exists to catch.
+    seedRun(first);
+    // 64 characters, all lowercase, satisfies the old `= lower(content_hash)`
+    // CHECK — but resolves `'blobs/sha256/' || content_hash` to a path
+    // outside the blob root once `../` segments are walked.
+    const traversalHash = `${"../".repeat(18)}etc/passwd`;
+    expect(traversalHash.length).toBe(64);
+    expect(traversalHash).toBe(traversalHash.toLowerCase());
+
+    let caught: unknown;
+    try {
+      internalHandle(db)
+        .prepare(
+          "INSERT INTO artifact (artifact_id, run_id, stage_id, name, content_hash, byte_length," +
+            " media_type, content_schema_id, producer, source_lineage, relative_path, created_at," +
+            " revision, last_event_sequence)" +
+            ` VALUES ('artifact-traversal', 'run-fixed', 'stage-fixed', 'artifact-name',` +
+            ` '${traversalHash}', 0, 'text/plain', 'heniek://contract/Example/v1',` +
+            ` 'test-producer', '[]', 'blobs/sha256/${traversalHash}', ?, 1, ?)`,
+        )
+        .run(TIMESTAMP, first);
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(Error);
+    expect((caught as Error).message).toMatch(/CHECK constraint failed/i);
+    expect(sqliteErrorCode(caught)).toBe(SQLITE_CONSTRAINT_CHECK);
+  });
+
+  it("accepts a 64-character lowercase hex content_hash", () => {
+    const sequence = seedOneEvent();
+    seedArtifact(sequence, "artifact-valid-hash");
+    const row = internalHandle(db)
+      .prepare("SELECT content_hash FROM artifact WHERE artifact_id = 'artifact-valid-hash'")
+      .get();
+    expect(row?.content_hash).toBe(ARTIFACT_CONTENT_HASH);
   });
 });

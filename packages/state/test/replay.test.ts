@@ -11,7 +11,7 @@
 import { copyFileSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
-import { type ArtifactId, ArtifactRefV1 } from "@heniek/contracts";
+import type { ArtifactId, ArtifactRefV1 } from "@heniek/contracts";
 import type { Static } from "@sinclair/typebox";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { commitStateChange } from "../src/command/commit.js";
@@ -72,6 +72,25 @@ function seedAllFourTables(): void {
 
 const HASH_A = "a".repeat(64);
 const HASH_B = "b".repeat(64);
+
+/**
+ * `artifact.run_id REFERENCES run_projection(run_id)` (issue #8, Phase 2 fix
+ * cycle G1, finding F4): every case below that publishes or completes an
+ * artifact without going through the full `seedAllFourTables` fixture still
+ * needs a real `run_projection` row to reference. This is the minimal path
+ * to one — `codebase.registered` then `run.created`, the same two commands
+ * `seedAllFourTables` opens with — for tests that only care about the
+ * artifact/stage-completion behaviour under test, not the full four-table
+ * fixture.
+ */
+function seedMinimalRun(): void {
+  commitStateChange(db, { type: "codebase.registered", payload: { codebaseId: "cb-1" } });
+  commitStateChange(db, {
+    runId: "run-1",
+    type: "run.created",
+    payload: { runId: "run-1", codebaseId: "cb-1" },
+  });
+}
 
 /**
  * One `artifact.published` event, publishing `artifact-1` under
@@ -170,11 +189,13 @@ describe("converged", () => {
 
 describe("reducer — artifact.published and stage.completed (design D11a, §16.2, §16.6)", () => {
   it("artifact.published then a second publish under the same artifactId is rejected as a duplicate — artifact rows are append-only", () => {
+    seedMinimalRun();
     publishArtifact();
     expect(() => publishArtifact()).toThrow(/artifact already exists: artifact-1/);
   });
 
   it("stage.completed with two artifacts sharing a name in one payload is rejected", () => {
+    seedMinimalRun();
     expect(() =>
       commitStateChange(db, {
         runId: "run-1",
@@ -212,6 +233,7 @@ describe("reducer — artifact.published and stage.completed (design D11a, §16.
   });
 
   it("a second stage.completed for the same run/stage/name re-points the alias and advances its revision — the mutable half of §16.2", () => {
+    seedMinimalRun();
     completeStage();
     const handle = internalHandle(db);
     const first = handle
@@ -274,6 +296,7 @@ describe("reducer binds to ArtifactRefV1's field names (G2, G4)", () => {
     // Typed against `Static<typeof ArtifactRefV1>` (not re-derived field
     // names) — if the contract ever renames a field, this object literal
     // fails to compile instead of silently drifting from the reducer.
+    seedMinimalRun();
     const ref: Static<typeof ArtifactRefV1> = {
       schemaVersion: 1,
       artifactId: "artifact-from-contract" as ArtifactId,
@@ -339,11 +362,13 @@ describe("sourceLineage bounds (G3)", () => {
   }
 
   it("accepts sourceLineage at the 64-entry boundary", () => {
+    seedMinimalRun();
     const lineage = Array.from({ length: 64 }, (_, index) => `artifact-src-${index}`);
     expect(() => publishWithLineage(lineage)).not.toThrow();
   });
 
   it("rejects sourceLineage one entry past the 64-entry boundary", () => {
+    seedMinimalRun();
     const lineage = Array.from({ length: 65 }, (_, index) => `artifact-src-${index}`);
     expect(() => publishWithLineage(lineage)).toThrow(
       /payload\.sourceLineage must not exceed 64 entries \(got 65\)/,
@@ -351,6 +376,7 @@ describe("sourceLineage bounds (G3)", () => {
   });
 
   it("rejects a sourceLineage containing a duplicate entry", () => {
+    seedMinimalRun();
     expect(() => publishWithLineage(["artifact-src-0", "artifact-src-0"])).toThrow(
       /payload\.sourceLineage must not contain duplicate entries/,
     );
@@ -369,6 +395,7 @@ describe("sourceLineage bounds (G3)", () => {
  */
 describe("stage_artifact_alias/artifact (run_id, stage_id, name) coupling (G5)", () => {
   it("the alias's (run_id, stage_id, name) always matches its target artifact row's own", () => {
+    seedMinimalRun();
     completeStage();
     const handle = internalHandle(db);
     const alias = handle
@@ -394,6 +421,7 @@ describe("stage_artifact_alias/artifact (run_id, stage_id, name) coupling (G5)",
 
 describe("injected divergence — out-of-band surgery on the two new tables (Q007, design D11a)", () => {
   it("detects an artifact row edited behind the journal's back, after dropping its immutability trigger", () => {
+    seedMinimalRun();
     publishArtifact();
     const handle = internalHandle(db);
     // D5's named, deliberate escape hatch, mirrored for `artifact`'s own
@@ -421,6 +449,7 @@ describe("injected divergence — out-of-band surgery on the two new tables (Q00
     // `artifact-1` (published, not just completed-stage) is the tamper
     // target below — the alias's FK to `artifact` means the tampered value
     // must name a real, already-published row.
+    seedMinimalRun();
     publishArtifact();
     completeStage();
     const handle = internalHandle(db);

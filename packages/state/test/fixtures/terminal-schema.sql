@@ -164,7 +164,7 @@ END;
 CREATE TABLE artifact
 (
     artifact_id           TEXT NOT NULL PRIMARY KEY,
-    run_id                TEXT NOT NULL,
+    run_id                TEXT NOT NULL REFERENCES run_projection(run_id),
     stage_id              TEXT NOT NULL,
     name                  TEXT NOT NULL,
     content_hash          TEXT NOT NULL,
@@ -179,9 +179,8 @@ CREATE TABLE artifact
     last_event_sequence   INTEGER NOT NULL REFERENCES state_event(sequence),
     CHECK (revision = 1),
     CHECK (byte_length >= 0),
-    CHECK (relative_path NOT LIKE 'incoming/%'),
     CHECK (relative_path = 'blobs/sha256/' || content_hash),
-    CHECK (length(content_hash) = 64 AND content_hash = lower(content_hash))
+    CHECK (length(content_hash) = 64 AND content_hash NOT GLOB '*[^0-9a-f]*')
 ) STRICT;
 
 CREATE TRIGGER artifact_immutable_delete

@@ -352,4 +352,68 @@ describe("reducer refusals roll the whole unit back", () => {
     ).toThrow(ReducerError);
     expect(countRows("run_projection")).toBe(0);
   });
+
+  /**
+   * `artifact.run_id REFERENCES run_projection(run_id)` (issue #8, Phase 2
+   * fix cycle G1, finding F4): mirrors `repository.registered`'s
+   * `codebase is not registered` precedent above — the FK is genuinely
+   * enforced at the database layer (`PRAGMA foreign_keys = ON`), but
+   * `eventScope` loads the referenced `run_projection` row and `applyEvent`
+   * raises a typed `ReducerError` before `commitStateChange` ever reaches a
+   * raw INSERT, so a missing run surfaces at the API boundary rather than as
+   * `SQLITE_CONSTRAINT_FOREIGNKEY`.
+   */
+  it("artifact.published for a run that does not exist raises ReducerError and writes nothing", () => {
+    expect(() =>
+      commitStateChange(db, {
+        runId: "run-missing",
+        type: "artifact.published",
+        payload: {
+          runId: "run-missing",
+          stageId: "stage-1",
+          artifactId: "artifact-1",
+          name: "plan.md",
+          contentHash: "a".repeat(64),
+          byteLength: 1,
+          mediaType: "text/markdown",
+          contentSchemaId: "heniek://contract/Plan/v1",
+          producer: "planner",
+          sourceLineage: [],
+          path: `blobs/sha256/${"a".repeat(64)}`,
+        },
+      }),
+    ).toThrow(ReducerError);
+    expect(countRows("state_event")).toBe(0);
+    expect(countRows("artifact")).toBe(0);
+  });
+
+  /** Same F4 rationale as the `artifact.published` case above. */
+  it("stage.completed for a run that does not exist raises ReducerError and writes nothing", () => {
+    expect(() =>
+      commitStateChange(db, {
+        runId: "run-missing",
+        type: "stage.completed",
+        payload: {
+          runId: "run-missing",
+          stageId: "stage-1",
+          artifacts: [
+            {
+              artifactId: "artifact-1",
+              name: "report.md",
+              contentHash: "b".repeat(64),
+              byteLength: 1,
+              mediaType: "text/markdown",
+              contentSchemaId: "heniek://contract/Report/v1",
+              producer: "reviewer",
+              sourceLineage: [],
+              path: `blobs/sha256/${"b".repeat(64)}`,
+            },
+          ],
+        },
+      }),
+    ).toThrow(ReducerError);
+    expect(countRows("state_event")).toBe(0);
+    expect(countRows("artifact")).toBe(0);
+    expect(countRows("stage_artifact_alias")).toBe(0);
+  });
 });
