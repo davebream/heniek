@@ -37,6 +37,7 @@ function sqliteNodeCode(error: unknown): string | undefined {
 
 const SQLITE_CONSTRAINT_TRIGGER = 1811;
 const SQLITE_CONSTRAINT_FOREIGNKEY = 787;
+const SQLITE_CONSTRAINT_CHECK = 275;
 
 let directory: string;
 let path: string;
@@ -748,6 +749,48 @@ describe("artifact immutability (design D11a, migration 4)", () => {
     seedArtifact(second, "artifact-second");
     const count = internalHandle(db).prepare("SELECT COUNT(*) AS c FROM artifact").get();
     expect(count?.c).toBe(2);
+  });
+
+  /**
+   * Phase 2 fix cycle G1: nothing previously enforced `artifact.revision =
+   * 1` — `INSERT ... revision = 7` succeeded, contradicting
+   * `commit.ts`'s docblock claim that the schema's guard triggers enforce
+   * the causal shape "against any writer". `artifact` is not in
+   * `PROJECTION_TABLES` (it carries no `*_causal_update` trigger — an
+   * artifact row is never updated again), so this first-revision guard is a
+   * `CHECK (revision = 1)` on the column, proven here rather than by the
+   * shared matrix above.
+   */
+  it("INSERT with revision other than 1 is blocked (G1 — first-revision guard)", () => {
+    const sequence = seedOneEvent();
+    const handle = internalHandle(db);
+    let caught: unknown;
+    try {
+      handle
+        .prepare(
+          "INSERT INTO artifact (artifact_id, run_id, stage_id, name, content_hash, byte_length," +
+            " media_type, content_schema_id, producer, source_lineage, relative_path, created_at," +
+            " revision, last_event_sequence)" +
+            ` VALUES ('artifact-bad-revision', 'run-fixed', 'stage-fixed', 'artifact-name',` +
+            ` '${ARTIFACT_CONTENT_HASH}', 0, 'text/plain', 'heniek://contract/Example/v1',` +
+            ` 'test-producer', '[]', 'blobs/sha256/${ARTIFACT_CONTENT_HASH}', ?, 7, ?)`,
+        )
+        .run(TIMESTAMP, sequence);
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(Error);
+    expect((caught as Error).message).toMatch(/CHECK constraint failed/i);
+    expect(sqliteErrorCode(caught)).toBe(SQLITE_CONSTRAINT_CHECK);
+  });
+
+  it("INSERT with revision 1 succeeds (G1 — the accepted case)", () => {
+    const sequence = seedOneEvent();
+    seedArtifact(sequence, "artifact-good-revision");
+    const row = internalHandle(db)
+      .prepare("SELECT revision FROM artifact WHERE artifact_id = 'artifact-good-revision'")
+      .get();
+    expect(row?.revision).toBe(1);
   });
 });
 

@@ -39,7 +39,30 @@ const RUN_SCOPED_TYPES = new Set(["run.created", "run.status_changed", "run.work
  */
 const STAGE_SCOPED_TYPES = new Set(["artifact.published", "stage.completed"]);
 
-/** One artifact ref, as carried inside an `artifact.published` or `stage.completed` payload. */
+/**
+ * One artifact ref, as carried inside an `artifact.published` or
+ * `stage.completed` payload.
+ *
+ * **Bound to `ArtifactRefV1`'s field names (`@heniek/contracts`), not
+ * independently re-derived (issue #8, Phase 2 fix cycle G2).** The field is
+ * `path`, matching the contract exactly — an earlier version of this
+ * interface named it `relativePath`, which no `ArtifactRefV1` payload ever
+ * carries, so a real caller serialising a contract ref would fail every
+ * `stage.completed`/`artifact.published` commit with "payload.relativePath
+ * must be a string". `ArtifactState.relativePath` (`projection/state.ts`)
+ * is a separate, internal storage-row field name and is unaffected — this
+ * interface is the wire/payload shape only.
+ *
+ * Deliberately has **no** `createdAt` field, even though `ArtifactRefV1`
+ * carries one (G4): every artifact/alias row's `createdAt`/`updatedAt` is
+ * always `event.recordedAt`, the same rule every other projection row
+ * follows (this file's header comment) — that is what keeps the projection
+ * a strictly monotonic, replay-exact function of the journal. A
+ * caller-supplied `createdAt` on the payload is therefore intentionally
+ * never read, not merely omitted from validation; see `applyEvent`'s
+ * `artifact.published`/`stage.completed` cases, which build every stored
+ * row's `createdAt` from `event.recordedAt` alone.
+ */
 interface ArtifactRefPayload {
   readonly artifactId: string;
   readonly name: string;
@@ -49,7 +72,7 @@ interface ArtifactRefPayload {
   readonly contentSchemaId: string;
   readonly producer: string;
   readonly sourceLineage: readonly string[];
-  readonly relativePath: string;
+  readonly path: string;
 }
 
 /**
@@ -162,6 +185,43 @@ function requireStringArray(
 }
 
 /**
+ * `ArtifactRefV1.sourceLineage` (`@heniek/contracts`) bounds the field to
+ * `maxItems: 64` and `uniqueItems: true`, but nothing on the write path
+ * enforced either bound (issue #8, Phase 2 fix cycle G3) — the column
+ * `CHECK` is `json_valid(source_lineage)` alone, and `requireStringArray`
+ * above only checks "array of strings". A 5,000-entry or duplicate-laden
+ * lineage would persist and round-trip, defeating the 64 KiB
+ * event-payload-cap arithmetic the contract's own docblock records. Never
+ * echoes the lineage entries themselves in the error message (this
+ * package's error house rule, `errors.ts`'s header comment) — only the
+ * measured count, which is a derived, non-sensitive fact.
+ */
+const MAX_SOURCE_LINEAGE_ITEMS = 64;
+
+function requireSourceLineage(
+  event: StateEvent,
+  payload: Readonly<Record<string, JsonValue>>,
+  field: string,
+): readonly string[] {
+  const values = requireStringArray(event, payload, field);
+  if (values.length > MAX_SOURCE_LINEAGE_ITEMS) {
+    throw new ReducerError(
+      event.eventId,
+      event.type,
+      `payload.${field} must not exceed ${MAX_SOURCE_LINEAGE_ITEMS} entries (got ${values.length})`,
+    );
+  }
+  if (new Set(values).size !== values.length) {
+    throw new ReducerError(
+      event.eventId,
+      event.type,
+      `payload.${field} must not contain duplicate entries`,
+    );
+  }
+  return values;
+}
+
+/**
  * Narrows one entry of `payload.artifacts` (`stage.completed`) or the
  * top-level payload (`artifact.published`) into an `ArtifactRefPayload`.
  * Deliberately re-validates every field with the same `require*` helpers the
@@ -188,8 +248,8 @@ function toArtifactRefPayload(
     mediaType: requireString(event, value, "mediaType"),
     contentSchemaId: requireString(event, value, "contentSchemaId"),
     producer: requireString(event, value, "producer"),
-    sourceLineage: requireStringArray(event, value, "sourceLineage"),
-    relativePath: requireString(event, value, "relativePath"),
+    sourceLineage: requireSourceLineage(event, value, "sourceLineage"),
+    path: requireString(event, value, "path"),
   };
 }
 
@@ -487,8 +547,13 @@ export const applyEvent: Reducer = (state, event) => {
       const mediaType = requireString(event, payload, "mediaType");
       const contentSchemaId = requireString(event, payload, "contentSchemaId");
       const producer = requireString(event, payload, "producer");
-      const sourceLineage = requireStringArray(event, payload, "sourceLineage");
-      const relativePath = requireString(event, payload, "relativePath");
+      const sourceLineage = requireSourceLineage(event, payload, "sourceLineage");
+      // Wire field is `path` (`ArtifactRefV1`, G2); `relativePath` below is
+      // the storage-row field name (`ArtifactState`, `projection/state.ts`)
+      // — same value, different layer. `createdAt` is deliberately never
+      // read from `payload` here (G4) — see `ArtifactRefPayload`'s header
+      // comment.
+      const path = requireString(event, payload, "path");
       return {
         ...state,
         artifacts: {
@@ -504,7 +569,7 @@ export const applyEvent: Reducer = (state, event) => {
             contentSchemaId,
             producer,
             sourceLineage,
-            relativePath,
+            relativePath: path,
             createdAt: event.recordedAt,
             revision: 1,
             lastEventSequence: event.sequence,
@@ -559,7 +624,7 @@ export const applyEvent: Reducer = (state, event) => {
             contentSchemaId: ref.contentSchemaId,
             producer: ref.producer,
             sourceLineage: ref.sourceLineage,
-            relativePath: ref.relativePath,
+            relativePath: ref.path,
             createdAt: event.recordedAt,
             revision: 1,
             lastEventSequence: event.sequence,

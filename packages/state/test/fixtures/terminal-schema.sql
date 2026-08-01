@@ -32,6 +32,11 @@
 -- `src/migrations/list.ts` — deliberately different CHECK-clause ordering,
 -- trigger ordering, and whitespace, matching this file's existing posture
 -- for versions 1-3. Do not transcribe the migration text.
+--
+-- `artifact`'s `CHECK (revision = 1)` (issue #8, Phase 2 fix cycle G1) is
+-- the first-revision guard: an artifact row is written once and never
+-- revised, so a plain value `CHECK` stands in for the
+-- `*_first_revision` trigger the other three projection tables carry.
 
 PRAGMA application_id = 1213090609;
 
@@ -172,6 +177,7 @@ CREATE TABLE artifact
     created_at            TEXT NOT NULL,
     revision              INTEGER NOT NULL,
     last_event_sequence   INTEGER NOT NULL REFERENCES state_event(sequence),
+    CHECK (revision = 1),
     CHECK (byte_length >= 0),
     CHECK (relative_path NOT LIKE 'incoming/%'),
     CHECK (relative_path = 'blobs/sha256/' || content_hash),

@@ -11,6 +11,8 @@
 import { copyFileSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
+import { type ArtifactId, ArtifactRefV1 } from "@heniek/contracts";
+import type { Static } from "@sinclair/typebox";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { commitStateChange } from "../src/command/commit.js";
 import { internalHandle, openStateDatabase, type StateDatabase } from "../src/database/open.js";
@@ -91,7 +93,7 @@ function publishArtifact(): void {
       contentSchemaId: "heniek://contract/Plan/v1",
       producer: "planner",
       sourceLineage: [],
-      relativePath: `blobs/sha256/${HASH_A}`,
+      path: `blobs/sha256/${HASH_A}`,
     },
   });
 }
@@ -119,7 +121,7 @@ function completeStage(): void {
           contentSchemaId: "heniek://contract/Report/v1",
           producer: "reviewer",
           sourceLineage: ["artifact-1"],
-          relativePath: `blobs/sha256/${HASH_B}`,
+          path: `blobs/sha256/${HASH_B}`,
         },
       ],
     },
@@ -190,7 +192,7 @@ describe("reducer — artifact.published and stage.completed (design D11a, §16.
               contentSchemaId: "heniek://contract/Report/v1",
               producer: "reviewer",
               sourceLineage: [],
-              relativePath: `blobs/sha256/${HASH_A}`,
+              path: `blobs/sha256/${HASH_A}`,
             },
             {
               artifactId: "artifact-b",
@@ -201,7 +203,7 @@ describe("reducer — artifact.published and stage.completed (design D11a, §16.
               contentSchemaId: "heniek://contract/Report/v1",
               producer: "reviewer",
               sourceLineage: [],
-              relativePath: `blobs/sha256/${HASH_B}`,
+              path: `blobs/sha256/${HASH_B}`,
             },
           ],
         },
@@ -237,7 +239,7 @@ describe("reducer — artifact.published and stage.completed (design D11a, §16.
             contentSchemaId: "heniek://contract/Report/v1",
             producer: "reviewer",
             sourceLineage: [],
-            relativePath: `blobs/sha256/${HASH_A}`,
+            path: `blobs/sha256/${HASH_A}`,
           },
         ],
       },
@@ -257,6 +259,136 @@ describe("reducer — artifact.published and stage.completed (design D11a, §16.
 
     const report = compareProjectionToReplay(db);
     expect(report.status).toBe("converged");
+  });
+});
+
+/**
+ * Phase 2 fix cycle G2/G4 (issue #8): the reducer must bind to
+ * `ArtifactRefV1`'s own field names, proven here by constructing the
+ * `stage.completed` payload FROM a real, type-checked `ArtifactRefV1`
+ * value — not a hand-written literal that could silently drift from the
+ * contract the way the pre-fix `relativePath`/`path` mismatch did.
+ */
+describe("reducer binds to ArtifactRefV1's field names (G2, G4)", () => {
+  it("a payload built from a real ArtifactRefV1 (including its own createdAt) is accepted, and createdAt is overridden by event.recordedAt", () => {
+    // Typed against `Static<typeof ArtifactRefV1>` (not re-derived field
+    // names) — if the contract ever renames a field, this object literal
+    // fails to compile instead of silently drifting from the reducer.
+    const ref: Static<typeof ArtifactRefV1> = {
+      schemaVersion: 1,
+      artifactId: "artifact-from-contract" as ArtifactId,
+      path: `blobs/sha256/${HASH_A}`,
+      contentHash: HASH_A,
+      // Deliberately distant from the fake clock's epoch (G4) — proves the
+      // reducer overrides it rather than merely never validating it.
+      createdAt: "2020-01-01T00:00:00.000Z",
+      name: "from-contract.md",
+      byteLength: 4,
+      mediaType: "text/markdown",
+      contentSchemaId: "heniek://contract/Report/v1",
+      producer: "reviewer",
+      sourceLineage: [],
+    };
+
+    commitStateChange(db, {
+      runId: "run-1",
+      type: "stage.completed",
+      payload: {
+        runId: "run-1",
+        stageId: "stage-1",
+        artifacts: [ref],
+      },
+    });
+
+    const handle = internalHandle(db);
+    const row = handle
+      .prepare("SELECT relative_path, created_at FROM artifact WHERE artifact_id = ?")
+      .get("artifact-from-contract");
+    expect(row?.relative_path).toBe(ref.path);
+    expect(row?.created_at).not.toBe(ref.createdAt);
+
+    const report = compareProjectionToReplay(db);
+    expect(report.status).toBe("converged");
+  });
+});
+
+/**
+ * Phase 2 fix cycle G3 (issue #8): `ArtifactRefV1.sourceLineage` bounds
+ * `maxItems: 64`/`uniqueItems: true`, but the write path previously did not
+ * enforce either bound.
+ */
+describe("sourceLineage bounds (G3)", () => {
+  function publishWithLineage(sourceLineage: readonly string[]): void {
+    commitStateChange(db, {
+      runId: "run-1",
+      type: "artifact.published",
+      payload: {
+        runId: "run-1",
+        stageId: "stage-1",
+        artifactId: "artifact-lineage",
+        name: "lineage.md",
+        contentHash: HASH_A,
+        byteLength: 1,
+        mediaType: "text/markdown",
+        contentSchemaId: "heniek://contract/Plan/v1",
+        producer: "planner",
+        sourceLineage,
+        path: `blobs/sha256/${HASH_A}`,
+      },
+    });
+  }
+
+  it("accepts sourceLineage at the 64-entry boundary", () => {
+    const lineage = Array.from({ length: 64 }, (_, index) => `artifact-src-${index}`);
+    expect(() => publishWithLineage(lineage)).not.toThrow();
+  });
+
+  it("rejects sourceLineage one entry past the 64-entry boundary", () => {
+    const lineage = Array.from({ length: 65 }, (_, index) => `artifact-src-${index}`);
+    expect(() => publishWithLineage(lineage)).toThrow(
+      /payload\.sourceLineage must not exceed 64 entries \(got 65\)/,
+    );
+  });
+
+  it("rejects a sourceLineage containing a duplicate entry", () => {
+    expect(() => publishWithLineage(["artifact-src-0", "artifact-src-0"])).toThrow(
+      /payload\.sourceLineage must not contain duplicate entries/,
+    );
+  });
+});
+
+/**
+ * Phase 2 fix cycle G5 (issue #8): the `stage_artifact_alias -> artifact`
+ * foreign key proves the referenced `artifact_id` exists, but nothing at
+ * the schema level requires that row's `(run_id, stage_id, name)` to match
+ * the alias's own. This pins the coupling the reducer maintains by
+ * construction (`stage.completed` always writes an alias for the same
+ * `(runId, stageId, ref.name)` triple it just wrote the artifact row
+ * under) — a schema-level composite FK was considered and rejected as not
+ * "cheap" for this table (see the fix commit body for why).
+ */
+describe("stage_artifact_alias/artifact (run_id, stage_id, name) coupling (G5)", () => {
+  it("the alias's (run_id, stage_id, name) always matches its target artifact row's own", () => {
+    completeStage();
+    const handle = internalHandle(db);
+    const alias = handle
+      .prepare(
+        "SELECT run_id, stage_id, name, artifact_id FROM stage_artifact_alias" +
+          " WHERE run_id = 'run-1' AND stage_id = 'stage-1' AND name = 'report.md'",
+      )
+      .get();
+    expect(alias).toBeDefined();
+    const aliasArtifactId = alias?.artifact_id;
+    if (typeof aliasArtifactId !== "string") {
+      throw new Error("expected alias.artifact_id to be a string");
+    }
+    const artifact = handle
+      .prepare("SELECT run_id, stage_id, name FROM artifact WHERE artifact_id = ?")
+      .get(aliasArtifactId);
+    expect(artifact).toBeDefined();
+    expect(artifact?.run_id).toBe(alias?.run_id);
+    expect(artifact?.stage_id).toBe(alias?.stage_id);
+    expect(artifact?.name).toBe(alias?.name);
   });
 });
 
