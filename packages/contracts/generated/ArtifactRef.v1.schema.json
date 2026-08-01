@@ -7,7 +7,13 @@
     "artifactId",
     "path",
     "contentHash",
-    "createdAt"
+    "createdAt",
+    "name",
+    "byteLength",
+    "mediaType",
+    "contentSchemaId",
+    "producer",
+    "sourceLineage"
   ],
   "properties": {
     "schemaVersion": {
@@ -31,6 +37,34 @@
     "createdAt": {
       "format": "date-time",
       "type": "string"
+    },
+    "name": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "byteLength": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "mediaType": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "contentSchemaId": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "producer": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "sourceLineage": {
+      "type": "array",
+      "items": {
+        "minLength": 1,
+        "description": "Opaque ArtifactId.",
+        "type": "string"
+      }
     }
   }
 }

@@ -15,4 +15,10 @@ export const ArtifactRefV1 = versioned("ArtifactRef", 1, {
   path: Type.String({ minLength: 1 }),
   contentHash: Type.String({ pattern: "^[a-f0-9]{64}$", description: "sha256, hex-encoded" }),
   createdAt: Type.String({ format: "date-time" }),
+  name: Type.String({ minLength: 1 }),
+  byteLength: Type.Integer({ minimum: 0 }),
+  mediaType: Type.String({ minLength: 1 }),
+  contentSchemaId: Type.String({ minLength: 1 }),
+  producer: Type.String({ minLength: 1 }),
+  sourceLineage: Type.Array(ArtifactId),
 });

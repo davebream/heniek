@@ -18,6 +18,15 @@ const manifestPath = resolve(packageRoot, "../contracts/generated/manifest.json"
  * act* the gate exists to force; what makes the change compatible rather than
  * breaking is that the other twelve entries below are byte-identical to their
  * previous values, so no existing consumer's payload changed shape.
+ *
+ * Q007 updated the `ArtifactRef/v1` sha256 (from `d0c79064…` to `331609e8…`)
+ * to cover six added fields (`name`, `byteLength`, `mediaType`,
+ * `contentSchemaId`, `producer`, `sourceLineage`). The schema was extended in
+ * place rather than versioned to `v2` because it had zero non-test consumers
+ * at the time (`grep -c artifactId packages/conformance/generated/*.json` →
+ * 0), so no existing payload's shape changed. The other thirteen entries stay
+ * byte-identical and the schema count stays 14 — this single pin update is
+ * itself the deliberate versioning act the gate exists to force.
  */
 const EXPECTED_SCHEMAS: readonly {
   readonly schemaId: string;
@@ -34,7 +43,7 @@ const EXPECTED_SCHEMAS: readonly {
   {
     schemaId: "heniek://contract/ArtifactRef/v1",
     schemaVersion: 1,
-    sha256: "d0c7906442ee7ffc50a7459ada8c2ed02801850b80bf0f00c264263e3a98d7d2",
+    sha256: "331609e8e110768c346051640ce31d8a301df46a7a645b3ac96274d4ec9d4b44",
     path: "generated/ArtifactRef.v1.schema.json",
   },
   {

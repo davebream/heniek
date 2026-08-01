@@ -175,6 +175,12 @@ const cases: { name: string; schema: object; valid: Record<string, unknown> }[] 
       path: "artifacts/report.md",
       contentHash: "a".repeat(64),
       createdAt: NOW,
+      name: "report.md",
+      byteLength: 1024,
+      mediaType: "text/markdown",
+      contentSchemaId: "heniek://contract/report/v1",
+      producer: "stage-1",
+      sourceLineage: ["artifact-0"],
     },
   },
 ];
@@ -219,4 +225,23 @@ describe("contract schema round-trip", () => {
       });
     });
   }
+});
+
+describe("ArtifactRefV1 — extended fields", () => {
+  const valid = cases.find((c) => c.name === "ArtifactRefV1")?.valid;
+  if (!valid) {
+    throw new Error("ArtifactRefV1 case not found in `cases`");
+  }
+
+  it("rejects an unknown property (closed schema)", () => {
+    const validate = ajv.compile(ArtifactRefV1);
+    const ok = validate({ ...valid, unexpectedField: "nope" });
+    expect(ok).toBe(false);
+  });
+
+  it("rejects a malformed contentHash", () => {
+    const validate = ajv.compile(ArtifactRefV1);
+    const ok = validate({ ...valid, contentHash: "not-a-hash" });
+    expect(ok).toBe(false);
+  });
 });
