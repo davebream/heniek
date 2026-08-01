@@ -64,6 +64,9 @@ export class MalformedClaudeDiagnosticError extends Error {
   }
 }
 
+/** An environment-variable-name shape: what `apiKeySource` and any other CLI-reported "which variable is visible" field is expected to look like. */
+const ENV_VAR_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/;
+
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
   return value as Record<string, unknown>;
@@ -104,12 +107,27 @@ export function parseClaudeAuthDiagnostic(stdout: string): ClaudeAuthDiagnostic 
     throw new MalformedClaudeDiagnosticError("apiProvider");
   }
 
-  const apiKeySource = record["apiKeySource"];
-  if (
-    apiKeySource !== undefined &&
-    (typeof apiKeySource !== "string" || apiKeySource.length === 0)
-  ) {
-    throw new MalformedClaudeDiagnosticError("apiKeySource");
+  const rawApiKeySource = record["apiKeySource"];
+  let apiKeySource: string | undefined;
+  if (rawApiKeySource !== undefined) {
+    // Review finding 6 (revises FIX-4): a structurally wrong type (not a
+    // string at all) is still a genuine parse failure — the diagnostic's
+    // shape itself cannot be trusted, so this still throws. But a value that
+    // IS a string, just not env-var-name shaped (e.g. an `sk-`-prefixed
+    // credential, an empty string), is a *finding about the diagnostic's
+    // content*, not a parse failure — throwing on it would abort
+    // classification entirely, when the honest and still fail-closed move is
+    // to sanitise the value and keep going. `exposedKeySources` must stay
+    // non-empty here (never dropped) so `assertSubscriptionOnly` still fails
+    // closed on it; it must never contain the raw credential-shaped string,
+    // so an unrecognised shape is replaced with the fixed literal
+    // `<unexpected-value>` rather than passed through.
+    if (typeof rawApiKeySource !== "string") {
+      throw new MalformedClaudeDiagnosticError("apiKeySource");
+    }
+    apiKeySource = ENV_VAR_NAME_PATTERN.test(rawApiKeySource)
+      ? rawApiKeySource
+      : "<unexpected-value>";
   }
 
   // `exactOptionalPropertyTypes` forbids `apiKeySource: undefined` — the key
@@ -119,10 +137,47 @@ export function parseClaudeAuthDiagnostic(stdout: string): ClaudeAuthDiagnostic 
     : { loggedIn, authMethod, apiProvider, apiKeySource };
 }
 
-/** Bound an engine-controlled string before it is interpolated into a detail message. */
+/**
+ * Values `classifyClaudeBillingRoute` is willing to interpolate into a detail
+ * message verbatim: `authMethod` and `apiProvider` strings this issue's own
+ * observations actually recorded (design doc §2).
+ */
+const EXPECTED_DIAGNOSTIC_VALUES = new Set([
+  "oauth_token",
+  "api_key",
+  "third_party",
+  "none",
+  "firstParty",
+  "bedrock",
+  "vertex",
+]);
+
+/**
+ * Bound an engine-controlled string before it is interpolated into a detail
+ * message.
+ *
+ * FIX-3: the previous implementation deleted everything except
+ * `[A-Za-z0-9_.:-]` — a KEEP-list that happens to delete exactly the `/` and
+ * space characters the committed-ADR redaction guard keys on
+ * (`claudexor-trace.test.ts`'s `FORBIDDEN_SUBSTRINGS`/`FORBIDDEN_PATTERNS`),
+ * while preserving every credential-prefix substring untouched (`sk-`,
+ * `ghp_`, `Bearer` minus its trailing space, an absolute path minus its
+ * slashes, ...). That is laundering, not redaction: it can make a forbidden
+ * substring pass the guard's scan by stripping only the delimiter around it.
+ *
+ * This function instead does a POSITIVE shape check: a value is interpolated
+ * verbatim only if it looks like an environment-variable name
+ * (`ENV_VAR_NAME_PATTERN`, shared with `parseClaudeAuthDiagnostic`'s
+ * `apiKeySource` validation) or is one of the small closed set of
+ * `authMethod`/`apiProvider` values this issue's diagnostics actually
+ * produce. Anything else — regardless of what characters it contains —
+ * becomes the fixed literal `<unexpected-value>`.
+ */
 function bounded(value: string): string {
-  const cleaned = value.replace(/[^A-Za-z0-9_.:-]/g, "");
-  return cleaned.length === 0 ? "<unprintable>" : cleaned.slice(0, 64);
+  if (ENV_VAR_NAME_PATTERN.test(value) || EXPECTED_DIAGNOSTIC_VALUES.has(value)) {
+    return value;
+  }
+  return "<unexpected-value>";
 }
 
 /**
@@ -235,17 +290,45 @@ const CODEX_NOT_LOGGED_IN_PATTERN = /not logged in/i;
  * which would classify an API-key login as a subscription (see the
  * regression test pinning this in `subscription-attestation.test.ts`).
  *
- * Total: any text that matches none of the three patterns classifies as
- * `indeterminate`, never as a pass. The raw text is never included in the
- * detail message, since it is uncontrolled CLI output that this suite's own
- * fixtures may have filled with sentinel values.
+ * FIX-15: ambiguity-safe ordering. The previous implementation took the
+ * first matching branch in a fixed order (API-key, then subscription, then
+ * not-logged-in), which is only correct if the three patterns are disjoint —
+ * an assumption this issue never verified, because only the ChatGPT-
+ * subscription phrasing was ever actually observed on the pinned host (F1,
+ * F2); the API-key and not-logged-in patterns are defensive and unverified
+ * (see the ADR's "Not covered" section). If a future CLI output matched more
+ * than one pattern, first-match-wins would silently pick a route rather than
+ * surface the ambiguity. This function instead counts matches and returns
+ * `indeterminate` whenever more than one pattern fires, rather than trusting
+ * pattern order to resolve the conflict.
+ *
+ * Total: any text that matches none of the three patterns, or more than one
+ * of them, classifies as `indeterminate`, never as a pass. The raw text is
+ * never included in the detail message, since it is uncontrolled CLI output
+ * that this suite's own fixtures may have filled with sentinel values.
  */
 export function classifyCodexBillingRoute(stdout: string): BillingRouteAttestation {
   const engine: SubscriptionEngine = "codex";
 
-  // Checked before the subscription pattern: an unambiguous API-key phrasing
-  // must never be shadowed by a broader "logged in" match.
-  if (CODEX_API_KEY_PATTERN.test(stdout)) {
+  const isApiKey = CODEX_API_KEY_PATTERN.test(stdout);
+  const isSubscription = CODEX_SUBSCRIPTION_PATTERN.test(stdout);
+  const isNotLoggedIn = CODEX_NOT_LOGGED_IN_PATTERN.test(stdout);
+  const matchCount = [isApiKey, isSubscription, isNotLoggedIn].filter(Boolean).length;
+
+  if (matchCount > 1) {
+    return {
+      engine,
+      route: "indeterminate",
+      validity: "presence_only",
+      exposedKeySources: [],
+      detail:
+        "login status output matched more than one recognised phrasing; the patterns are " +
+        "assumed disjoint but that assumption is unverified, so the honest verdict when it " +
+        "fails is indeterminate, not a guess at which pattern should win.",
+    };
+  }
+
+  if (isApiKey) {
     return {
       engine,
       route: "api_key",
@@ -255,7 +338,7 @@ export function classifyCodexBillingRoute(stdout: string): BillingRouteAttestati
     };
   }
 
-  if (CODEX_SUBSCRIPTION_PATTERN.test(stdout)) {
+  if (isSubscription) {
     return {
       engine,
       route: "subscription",
@@ -265,7 +348,7 @@ export function classifyCodexBillingRoute(stdout: string): BillingRouteAttestati
     };
   }
 
-  if (CODEX_NOT_LOGGED_IN_PATTERN.test(stdout)) {
+  if (isNotLoggedIn) {
     return {
       engine,
       route: "none",
