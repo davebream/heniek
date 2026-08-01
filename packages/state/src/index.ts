@@ -1,3 +1,4 @@
+export { type CommitReport, commitStateChange, type StateCommand } from "./command/commit.js";
 export { type SchemaFingerprint, schemaFingerprint } from "./database/fingerprint.js";
 export {
   type OpenStateDatabaseOptions,
@@ -40,8 +41,19 @@ export {
   readIdentity,
   type WorkspaceRow,
 } from "./projection/identity.js";
+export { applyEvent, eventScope, type Reducer } from "./projection/reducer.js";
 export {
   type RunProjectionRow,
   readAllRunProjections,
   readRunProjection,
 } from "./projection/run.js";
+export {
+  type CodebaseState,
+  EMPTY_PROJECTION_STATE,
+  type ProjectionState,
+  type ProjectionTable,
+  projectionDigest,
+  type RepositoryState,
+  type RunState,
+  type WorkspaceState,
+} from "./projection/state.js";
