@@ -1,4 +1,9 @@
 export {
+  type ArtifactPublicationReceipt,
+  type PublishArtifactInput,
+  publishArtifact,
+} from "./artifact/publish.js";
+export {
   type ArtifactStore,
   type ArtifactStoreOptions,
   createArtifactStore,
