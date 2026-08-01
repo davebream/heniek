@@ -54,7 +54,23 @@ export interface CommitReport {
   readonly eventId: EventId;
   readonly sequence: EventSequence;
   readonly correlationId: CorrelationId;
-  /** The revision of the primary row this command advanced. */
+  /**
+   * The revision of the primary row this command advanced.
+   *
+   * **Unspecified for an event that writes more than one table** (today,
+   * only `stage.completed` — it writes an `artifact` row per published ref
+   * plus the `stage_artifact_alias` row that re-points that name). This
+   * field is `reported[0]?.revision`, i.e. the revision of whichever write
+   * `TABLE_ORDER` sorts first among the writes this command produced —
+   * `artifact` sorts before `stage_artifact_alias`, so for `stage.completed`
+   * today it always reports the new `artifact` row's revision, which is
+   * always `1`, regardless of which row a caller might actually care about.
+   * Callers that need a specific table's revision should read `writes`
+   * instead, which reports every table this command touched by name.
+   * Phase 4's `primaryTable` work (design open item, plan Task 4.1) makes
+   * this field precise by letting each event type declare which table's
+   * revision it means — not implemented here.
+   */
   readonly revision: number;
   readonly writes: readonly {
     readonly table: ProjectionTable;
@@ -87,6 +103,22 @@ interface TableSql {
   /** Bound-parameter order for `insert`, and for `update`'s SET clause. */
   readonly insertColumns: readonly string[];
   readonly updateColumns: readonly string[];
+  /**
+   * Column names bound, in order, into `update`'s `WHERE` clause ahead of
+   * `revision` — read from `write.row`, not from `write.key` (issue #8,
+   * Phase 2 fix cycle G1, F5). Every other table has a single-column primary
+   * key, where `write.key` and `write.row[keyColumn]` are the same value;
+   * `stage_artifact_alias`'s primary key is the composite `(run_id,
+   * stage_id, name)`, and `write.key` there is only
+   * `stageArtifactAliasKey`'s U+0000-joined map key, not a column any table
+   * actually has. Binding the three columns separately — rather than
+   * comparing a `run_id || char(0) || stage_id || char(0) || name`
+   * expression against that joined string — lets SQLite use the composite
+   * primary-key index for the `WHERE` clause, and removes the one place this
+   * package built part of a SQL comparison by string-joining caller-derived
+   * values instead of binding them as separate parameters.
+   */
+  readonly updateKeyColumns: readonly string[];
 }
 
 const TABLE_SQL: Readonly<Record<ProjectionTable, TableSql>> = {
@@ -115,6 +147,7 @@ const TABLE_SQL: Readonly<Record<ProjectionTable, TableSql>> = {
       "updated_at",
       "workspace_id",
     ],
+    updateKeyColumns: ["run_id"],
   },
   codebase: {
     insert:
@@ -125,6 +158,7 @@ const TABLE_SQL: Readonly<Record<ProjectionTable, TableSql>> = {
       "UPDATE codebase SET revision = ?, last_event_sequence = ?, updated_at = ?" +
       " WHERE codebase_id = ? AND revision = ?",
     updateColumns: ["revision", "last_event_sequence", "updated_at"],
+    updateKeyColumns: ["codebase_id"],
   },
   repository: {
     insert:
@@ -141,6 +175,7 @@ const TABLE_SQL: Readonly<Record<ProjectionTable, TableSql>> = {
       "UPDATE repository SET codebase_id = ?, revision = ?, last_event_sequence = ?, updated_at = ?" +
       " WHERE repository_id = ? AND revision = ?",
     updateColumns: ["codebase_id", "revision", "last_event_sequence", "updated_at"],
+    updateKeyColumns: ["repository_id"],
   },
   workspace: {
     insert:
@@ -151,6 +186,7 @@ const TABLE_SQL: Readonly<Record<ProjectionTable, TableSql>> = {
       "UPDATE workspace SET codebase_id = ?, revision = ?, last_event_sequence = ?, updated_at = ?" +
       " WHERE workspace_id = ? AND revision = ?",
     updateColumns: ["codebase_id", "revision", "last_event_sequence", "updated_at"],
+    updateKeyColumns: ["workspace_id"],
   },
   artifact: {
     insert:
@@ -187,6 +223,7 @@ const TABLE_SQL: Readonly<Record<ProjectionTable, TableSql>> = {
     update:
       "UPDATE artifact SET revision = ?, last_event_sequence = ? WHERE artifact_id = ? AND revision = ?",
     updateColumns: ["revision", "last_event_sequence"],
+    updateKeyColumns: ["artifact_id"],
   },
   stage_artifact_alias: {
     insert:
@@ -204,16 +241,18 @@ const TABLE_SQL: Readonly<Record<ProjectionTable, TableSql>> = {
     ],
     // The composite primary key means `write.key` (from
     // `stageArtifactAliasKey`, U+0000-joined) is not itself a column value —
-    // every other table's UPDATE binds `write.key` against that table's
-    // single key column, which does not exist here. `char(0)` reproduces the
-    // identical join on the SQL side, so the single `write.key` parameter the
-    // generic write loop (below) supplies still binds correctly against all
-    // three key columns at once, with no change to that loop needed.
+    // it is bound nowhere in this statement. `updateKeyColumns` below carries
+    // `run_id`/`stage_id`/`name` instead, read straight out of `write.row`
+    // (issue #8, Phase 2 fix cycle G1, F5): binding the three columns
+    // separately, rather than comparing a `run_id || char(0) || stage_id ||
+    // char(0) || name` expression against the joined `write.key` string,
+    // lets SQLite use the `(run_id, stage_id, name)` primary-key index
+    // directly for this WHERE clause.
     update:
       "UPDATE stage_artifact_alias SET artifact_id = ?, revision = ?, last_event_sequence = ?," +
-      " updated_at = ? WHERE (run_id || char(0) || stage_id || char(0) || name) = ?" +
-      " AND revision = ?",
+      " updated_at = ? WHERE run_id = ? AND stage_id = ? AND name = ? AND revision = ?",
     updateColumns: ["artifact_id", "revision", "last_event_sequence", "updated_at"],
+    updateKeyColumns: ["run_id", "stage_id", "name"],
   },
 };
 
@@ -316,7 +355,11 @@ export function commitStateChange(db: StateDatabase, command: StateCommand): Com
       } else {
         const result = handle
           .prepare(sql.update)
-          .run(...boundValues(write, sql.updateColumns), write.key, write.previousRevision);
+          .run(
+            ...boundValues(write, sql.updateColumns),
+            ...boundValues(write, sql.updateKeyColumns),
+            write.previousRevision,
+          );
         // The optimistic-concurrency check, free from the WHERE clause: zero
         // rows changed means the stored revision was not the one the reducer
         // read, so someone else advanced this row concurrently.

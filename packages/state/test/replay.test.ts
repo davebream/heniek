@@ -188,6 +188,34 @@ describe("converged", () => {
 });
 
 describe("reducer — artifact.published and stage.completed (design D11a, §16.2, §16.6)", () => {
+  /**
+   * Issue #8, Phase 2 fix cycle G1, finding F8: the shipped validation
+   * rejected a zero-length `artifacts` array, which made "this stage
+   * legitimately produced no outputs" unrepresentable. `stage.completed`
+   * must still be a valid, committable event with an empty `artifacts` list
+   * — it writes no `artifact` or `stage_artifact_alias` row, but the
+   * `run_id`/`stage_id` existence check still runs.
+   */
+  it("stage.completed with an empty artifacts array is accepted and writes no artifact or alias row", () => {
+    seedMinimalRun();
+    const report = commitStateChange(db, {
+      runId: "run-1",
+      type: "stage.completed",
+      payload: {
+        runId: "run-1",
+        stageId: "stage-1",
+        artifacts: [],
+      },
+    });
+    expect(report.writes).toEqual([]);
+    const handle = internalHandle(db);
+    expect(handle.prepare("SELECT COUNT(*) AS c FROM artifact").get()?.c).toBe(0);
+    expect(handle.prepare("SELECT COUNT(*) AS c FROM stage_artifact_alias").get()?.c).toBe(0);
+
+    const replayed = compareProjectionToReplay(db);
+    expect(replayed.status).toBe("converged");
+  });
+
   it("artifact.published then a second publish under the same artifactId is rejected as a duplicate — artifact rows are append-only", () => {
     seedMinimalRun();
     publishArtifact();
@@ -416,6 +444,86 @@ describe("stage_artifact_alias/artifact (run_id, stage_id, name) coupling (G5)",
     expect(artifact?.run_id).toBe(alias?.run_id);
     expect(artifact?.stage_id).toBe(alias?.stage_id);
     expect(artifact?.name).toBe(alias?.name);
+  });
+});
+
+/**
+ * `commit.ts`'s `stage_artifact_alias` UPDATE binds `run_id`/`stage_id`/
+ * `name` as three separate parameters against three separate `WHERE`
+ * clauses, rather than comparing a `run_id || char(0) || stage_id || char(0)
+ * || name` expression against `write.key` (issue #8, Phase 2 fix cycle G1,
+ * F5). Every other case in this file only ever has one alias row live at a
+ * time, so a wrong-row match in the old join-based `WHERE` clause could not
+ * have shown up — this seeds three, two sharing `stage_id` and differing
+ * only by `name`, two sharing `name` and differing only by `stage_id`, then
+ * re-points one and asserts the other two are untouched.
+ */
+describe("commit.ts binds stage_artifact_alias's composite key by column (F5)", () => {
+  it("re-pointing one (run_id, stage_id, name) alias leaves rows differing only by name or only by stage_id byte-identical", () => {
+    seedMinimalRun();
+
+    function complete(
+      stageId: string,
+      name: string,
+      artifactId: string,
+      contentHash: string,
+    ): void {
+      commitStateChange(db, {
+        runId: "run-1",
+        type: "stage.completed",
+        payload: {
+          runId: "run-1",
+          stageId,
+          artifacts: [
+            {
+              artifactId,
+              name,
+              contentHash,
+              byteLength: 1,
+              mediaType: "text/markdown",
+              contentSchemaId: "heniek://contract/Report/v1",
+              producer: "reviewer",
+              sourceLineage: [],
+              path: `blobs/sha256/${contentHash}`,
+            },
+          ],
+        },
+      });
+    }
+
+    function readAlias(stageId: string, name: string): unknown {
+      return internalHandle(db)
+        .prepare(
+          "SELECT artifact_id, revision, last_event_sequence, updated_at" +
+            " FROM stage_artifact_alias WHERE run_id = 'run-1' AND stage_id = ? AND name = ?",
+        )
+        .get(stageId, name);
+    }
+
+    // Three alias rows under one run_id: the target, one differing only by
+    // `name`, and one differing only by `stage_id`.
+    complete("stage-1", "foo.md", "artifact-foo", HASH_A);
+    complete("stage-1", "bar.md", "artifact-bar", HASH_B);
+    complete("stage-2", "foo.md", "artifact-foo-2", HASH_A);
+
+    const beforeBar = readAlias("stage-1", "bar.md");
+    const beforeStage2 = readAlias("stage-2", "foo.md");
+
+    // Re-point only the target alias.
+    complete("stage-1", "foo.md", "artifact-foo-repointed", HASH_B);
+
+    const target = readAlias("stage-1", "foo.md") as { artifact_id: string; revision: number };
+    expect(target.artifact_id).toBe("artifact-foo-repointed");
+    expect(target.revision).toBe(2);
+
+    // The other two rows must be byte-identical to before the re-point — a
+    // wrong-row UPDATE match would have advanced one of these instead of (or
+    // as well as) the target.
+    expect(readAlias("stage-1", "bar.md")).toEqual(beforeBar);
+    expect(readAlias("stage-2", "foo.md")).toEqual(beforeStage2);
+
+    const report = compareProjectionToReplay(db);
+    expect(report.status).toBe("converged");
   });
 });
 
