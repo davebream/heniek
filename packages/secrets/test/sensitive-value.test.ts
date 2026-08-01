@@ -1,10 +1,15 @@
 import { inspect } from "node:util";
 import { describe, expect, it } from "vitest";
+import { REDACTION_PLACEHOLDER } from "../src/redaction.js";
 import { SensitiveValue } from "../src/sensitive-value.js";
 
 describe("SensitiveValue", () => {
   it("rejects an empty value", () => {
     expect(() => SensitiveValue.from("")).toThrow(/non-empty/);
+  });
+
+  it("renders the exact shared REDACTION_PLACEHOLDER string", () => {
+    expect(String(SensitiveValue.from("x"))).toBe(REDACTION_PLACEHOLDER);
   });
 
   it("exposes the original value only through expose()", () => {
@@ -36,6 +41,41 @@ describe("SensitiveValue", () => {
     expect(value.toString()).not.toContain(raw);
     expect(JSON.stringify(value)).not.toContain(raw);
     expect(inspect(value)).not.toContain(raw);
+  });
+
+  // These escape vectors currently earn their safety structurally (the
+  // wrapped value lives behind a private `#value` field, so there is no
+  // enumerable/reflectable property for any of these mechanisms to reach)
+  // rather than through any code path written specifically to defeat them.
+  // Asserted explicitly so a future refactor that, say, moved `#value` to a
+  // regular field would fail loudly here instead of silently leaking.
+  describe("escape vectors", () => {
+    it("does not expose the raw value through util.inspect on a containing object", () => {
+      const raw = "super-secret-token";
+      const value = SensitiveValue.from(raw);
+      expect(inspect({ token: value })).not.toContain(raw);
+      expect(inspect({ token: value })).toContain(REDACTION_PLACEHOLDER);
+    });
+
+    it("does not expose the raw value as an enumerable own key via Object.keys", () => {
+      const value = SensitiveValue.from("super-secret-token");
+      expect(Object.keys(value)).toEqual([]);
+    });
+
+    it("does not expose the raw value through object-spread", () => {
+      const raw = "super-secret-token";
+      const value = SensitiveValue.from(raw);
+      const spread = { ...value };
+      expect(JSON.stringify(spread)).not.toContain(raw);
+      expect(Object.keys(spread)).toEqual([]);
+    });
+
+    it("does not expose the raw value through structuredClone", () => {
+      const raw = "super-secret-token";
+      const value = SensitiveValue.from(raw);
+      const cloned = structuredClone(value);
+      expect(JSON.stringify(cloned)).not.toContain(raw);
+    });
   });
 
   describe("equals", () => {

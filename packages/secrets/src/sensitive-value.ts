@@ -1,6 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
+import { REDACTION_PLACEHOLDER } from "./placeholder.js";
 
-const PLACEHOLDER = "[redacted]";
 const INSPECT_CUSTOM = Symbol.for("nodejs.util.inspect.custom");
 
 /**
@@ -35,15 +35,15 @@ export class SensitiveValue {
   }
 
   toString(): string {
-    return PLACEHOLDER;
+    return REDACTION_PLACEHOLDER;
   }
 
   toJSON(): string {
-    return PLACEHOLDER;
+    return REDACTION_PLACEHOLDER;
   }
 
   [INSPECT_CUSTOM](): string {
-    return PLACEHOLDER;
+    return REDACTION_PLACEHOLDER;
   }
 
   /**

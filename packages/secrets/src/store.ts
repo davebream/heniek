@@ -39,9 +39,10 @@ export class SecretStoreEntryNameError extends Error {
 
 /**
  * Thrown when a secret store's backing storage cannot be made private
- * (directory or entry file readable/writable by group or other). The
- * message names the filesystem path and the reason — never a credential
- * value, since none is available at this layer to leak.
+ * (directory or entry file readable/writable by group or other, a symlink,
+ * a non-directory, or owned by a different user). The message names the
+ * filesystem path and the reason — never a credential value, since none is
+ * available at this layer to leak.
  */
 export class InsecureSecretStoreError extends Error {
   constructor(
@@ -50,6 +51,37 @@ export class InsecureSecretStoreError extends Error {
   ) {
     super(`Secret store path is not private: ${path} (${reason})`);
     this.name = "InsecureSecretStoreError";
+  }
+}
+
+/**
+ * Thrown when an entry file exists and passes its permission check, but its
+ * contents are not a usable secret (currently: empty). Deliberately
+ * distinct from `SensitiveValue.from`'s generic "requires a non-empty
+ * value" error, which reads as a programming error at a construction call
+ * site — this one names the offending path and states plainly that the
+ * *store* is corrupt, not the caller.
+ */
+export class CorruptSecretStoreEntryError extends Error {
+  constructor(readonly path: string) {
+    super(`Secret store entry is corrupt (empty): ${path}`);
+    this.name = "CorruptSecretStoreEntryError";
+  }
+}
+
+/**
+ * Thrown when a `SecretStore` adapter is configured with an unusable
+ * location — currently, a non-absolute `directory` option. A relative path
+ * is silently rooted at `process.cwd()`, which, run from a repository
+ * checkout, would put credential files inside the repository (violating
+ * "keep secrets out of YAML, logs, snapshots, and repository-local state").
+ * The message names the offending path — never a credential value, since
+ * none is available at this layer to leak.
+ */
+export class SecretStoreConfigurationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "SecretStoreConfigurationError";
   }
 }
 

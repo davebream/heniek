@@ -1,11 +1,13 @@
 import {
   CREDENTIAL_VALUE_PATTERNS,
+  isDisallowedConfigurationEntry,
   looksLikeCredentialKey,
   looksLikeCredentialValue,
 } from "./patterns.js";
+import { REDACTION_PLACEHOLDER } from "./placeholder.js";
 import { SensitiveValue } from "./sensitive-value.js";
 
-export const REDACTION_PLACEHOLDER = "[redacted]";
+export { REDACTION_PLACEHOLDER } from "./placeholder.js";
 
 /** JSON-shaped output of `redactJson` — deliberately local to this package (no dependency on `@heniek/config`). */
 export type JsonValue =
@@ -45,6 +47,9 @@ export function redactJson<T>(value: T): JsonValue {
   return redactValue(value, new Set<object>(), 0);
 }
 
+/** Placeholder for `Buffer`/typed-array values — see the boxed/exotic-value note on `redactValue`. */
+const BINARY_PLACEHOLDER = "[binary]";
+
 function redactValue(value: unknown, ancestors: Set<object>, depth: number): JsonValue {
   if (value instanceof SensitiveValue) {
     return REDACTION_PLACEHOLDER;
@@ -63,6 +68,35 @@ function redactValue(value: unknown, ancestors: Set<object>, depth: number): Jso
     return null;
   }
 
+  // Boxed primitives (`new String(...)`, `new Number(...)`, `new
+  // Boolean(...)`) are unwrapped and redacted through the same scalar path
+  // as their primitive counterparts. Left alone they are neither an array
+  // nor a useful plain object: `Object.entries(new String("ghp_..."))`
+  // yields one enumerable property per character index, which would both
+  // dodge value-shape redaction and emit a misleading per-character shape.
+  if (value instanceof String || value instanceof Number || value instanceof Boolean) {
+    return redactValue(value.valueOf(), ancestors, depth);
+  }
+
+  // `Date` has no own enumerable properties, so falling through to the
+  // plain-object branch below would silently render it as `{}` — indistinguishable
+  // from an empty object and useless as a diagnostic. Render the same
+  // ISO-8601 string `JSON.stringify` would produce.
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+
+  // `Buffer` and every `TypedArray` (`Uint8Array`, `Int32Array`, …) are
+  // `ArrayBuffer` views. Falling through would walk their indexed own
+  // properties and emit a `{"0": 12, "1": 200, ...}` byte dump — a shape
+  // that is both misleading (looks like an ordinary numeric-keyed object)
+  // and actively unsafe (raw credential bytes, e.g. a key loaded into a
+  // `Buffer`, would be rendered verbatim instead of redacted). Render an
+  // explicit opaque placeholder instead of any byte content.
+  if (ArrayBuffer.isView(value)) {
+    return BINARY_PLACEHOLDER;
+  }
+
   if (ancestors.has(value)) {
     return CIRCULAR_PLACEHOLDER;
   }
@@ -76,11 +110,55 @@ function redactValue(value: unknown, ancestors: Set<object>, depth: number): Jso
       return value.map((item) => redactValue(item, ancestors, depth + 1));
     }
 
+    // `Map` and `Set` have no own enumerable properties either (their
+    // contents live behind iterator methods), so — like `Date` — they would
+    // otherwise silently render as `{}`. Render their contents explicitly,
+    // redacting recursively, as JSON-shaped arrays: `Map` as `[key, value]`
+    // pairs (mirroring `Map#entries()`), `Set` as a values array.
+    if (value instanceof Map) {
+      return Array.from(value.entries()).map(([key, entryValue]) => [
+        redactValue(key, ancestors, depth + 1),
+        redactValue(entryValue, ancestors, depth + 1),
+      ]);
+    }
+    if (value instanceof Set) {
+      return Array.from(value.values()).map((item) => redactValue(item, ancestors, depth + 1));
+    }
+
+    // Built with `Object.defineProperty` rather than `out[key] = ...`: a
+    // plain `{}` accumulator assigned via bracket notation is vulnerable to
+    // prototype pollution when the input carries an own `__proto__` key
+    // (e.g. from `JSON.parse('{"__proto__":{"polluted":true}}')`) — bracket
+    // assignment invokes `Object.prototype`'s `__proto__` *setter*, which
+    // reassigns the accumulator's own prototype instead of creating a
+    // `"__proto__"` data property. `defineProperty` always creates an own
+    // data property, regardless of what accessor the key would otherwise
+    // resolve to, so the accumulator's prototype can never be attacker
+    // controlled and the result still serialises as an ordinary plain
+    // object (`Object.prototype`-rooted, not `Object.create(null)`).
     const out: { [key: string]: JsonValue } = {};
     for (const [key, entryValue] of Object.entries(value as Record<string, unknown>)) {
-      out[key] = looksLikeCredentialKey(key)
-        ? REDACTION_PLACEHOLDER
-        : redactValue(entryValue, ancestors, depth + 1);
+      // A string entry routes through the same `isDisallowedConfigurationEntry`
+      // predicate the restricted-YAML guard uses (design §3, `@heniek/secrets`
+      // patterns.ts), so the two can never disagree about whether a given
+      // key/string-value pair is credential-shaped. A non-string entry has
+      // no equivalent in that predicate (which is deliberately scoped to
+      // scalar strings) — it keeps the broader "any type under a
+      // credential-shaped key is sensitive" behaviour documented above.
+      const redacted =
+        typeof entryValue === "string"
+          ? isDisallowedConfigurationEntry(key, entryValue)
+            ? REDACTION_PLACEHOLDER
+            : entryValue
+          : looksLikeCredentialKey(key)
+            ? REDACTION_PLACEHOLDER
+            : redactValue(entryValue, ancestors, depth + 1);
+      Object.defineProperty(out, key, {
+        value: redacted,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
     }
     return out;
   } finally {
@@ -92,6 +170,24 @@ function redactValue(value: unknown, ancestors: Set<object>, depth: number): Jso
   }
 }
 
+/** Builds a global-flagged copy of `pattern` so `.replace()` replaces every match, not just the first. */
+function toGlobalPattern(pattern: RegExp): RegExp {
+  return new RegExp(
+    pattern.source,
+    pattern.flags.includes("g") ? pattern.flags : `${pattern.flags}g`,
+  );
+}
+
+// Compiled once at module load rather than inside `redactText` on every
+// call: `RegExp` construction re-parses the pattern source, and this array
+// is otherwise identical across calls. Reusing the same global-flagged
+// `RegExp` objects across calls is safe here because `String.prototype.replace`
+// resets a global pattern's `lastIndex` to 0 at the start of every call
+// (per spec) and each call runs to completion synchronously before the
+// next can start, so there is no cross-call state to interfere with.
+const GLOBAL_CREDENTIAL_VALUE_PATTERNS: readonly RegExp[] =
+  CREDENTIAL_VALUE_PATTERNS.map(toGlobalPattern);
+
 /**
  * Redacts credential-*shaped* substrings out of free text (log lines,
  * diagnostic messages). Unlike `redactJson`, there is no key to consult —
@@ -99,16 +195,8 @@ function redactValue(value: unknown, ancestors: Set<object>, depth: number): Jso
  */
 export function redactText(text: string): string {
   let result = text;
-  for (const pattern of CREDENTIAL_VALUE_PATTERNS) {
-    result = result.replace(toGlobalPattern(pattern), REDACTION_PLACEHOLDER);
+  for (const pattern of GLOBAL_CREDENTIAL_VALUE_PATTERNS) {
+    result = result.replace(pattern, REDACTION_PLACEHOLDER);
   }
   return result;
-}
-
-/** Builds a global-flagged copy of `pattern` so `.replace()` replaces every match, not just the first. */
-function toGlobalPattern(pattern: RegExp): RegExp {
-  return new RegExp(
-    pattern.source,
-    pattern.flags.includes("g") ? pattern.flags : `${pattern.flags}g`,
-  );
 }
