@@ -15,7 +15,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { commitStateChange } from "../src/command/commit.js";
 import { internalHandle, openStateDatabase, type StateDatabase } from "../src/database/open.js";
 import { latestSequence } from "../src/journal/read.js";
-import { runMigrations } from "../src/migrations/migrate.js";
+import { currentSchemaVersion, runMigrations } from "../src/migrations/migrate.js";
 import { applyEvent } from "../src/projection/reducer.js";
 import type { ProjectionState } from "../src/projection/state.js";
 import { compareProjectionToReplay } from "../src/replay/compare.js";
@@ -68,6 +68,64 @@ function seedAllFourTables(): void {
   });
 }
 
+const HASH_A = "a".repeat(64);
+const HASH_B = "b".repeat(64);
+
+/**
+ * One `artifact.published` event, publishing `artifact-1` under
+ * `run-1`/`stage-1`/`plan.md` — the standalone-publish half of Q007's two new
+ * event types (plan Task 2.2).
+ */
+function publishArtifact(): void {
+  commitStateChange(db, {
+    runId: "run-1",
+    type: "artifact.published",
+    payload: {
+      runId: "run-1",
+      stageId: "stage-1",
+      artifactId: "artifact-1",
+      name: "plan.md",
+      contentHash: HASH_A,
+      byteLength: 42,
+      mediaType: "text/markdown",
+      contentSchemaId: "heniek://contract/Plan/v1",
+      producer: "planner",
+      sourceLineage: [],
+      relativePath: `blobs/sha256/${HASH_A}`,
+    },
+  });
+}
+
+/**
+ * One `stage.completed` event, publishing `artifact-2` under
+ * `run-1`/`stage-1`/`report.md` and pointing that name's active alias at it —
+ * the transactional-completion half of Q007's two new event types (design
+ * §16.6, plan Task 2.2).
+ */
+function completeStage(): void {
+  commitStateChange(db, {
+    runId: "run-1",
+    type: "stage.completed",
+    payload: {
+      runId: "run-1",
+      stageId: "stage-1",
+      artifacts: [
+        {
+          artifactId: "artifact-2",
+          name: "report.md",
+          contentHash: HASH_B,
+          byteLength: 7,
+          mediaType: "text/markdown",
+          contentSchemaId: "heniek://contract/Report/v1",
+          producer: "reviewer",
+          sourceLineage: ["artifact-1"],
+          relativePath: `blobs/sha256/${HASH_B}`,
+        },
+      ],
+    },
+  });
+}
+
 describe("converged", () => {
   it("a journal touching all four tables replays to exactly the stored projection", () => {
     seedAllFourTables();
@@ -78,7 +136,10 @@ describe("converged", () => {
     expect(report.projectionDigest.stored).toBe(report.projectionDigest.replayed);
     expect(report.eventsReplayed).toBe(6);
     expect(report.throughSequence).toBe(latestSequence(db));
-    expect(report.schemaFingerprint.userVersion).toBe(4);
+    // Derived, not a literal (plan Task 2.4/B8a): `schemaFingerprint()` reads
+    // `PRAGMA user_version` live, so a future migration would otherwise make
+    // this assertion silently stale rather than force an edit here.
+    expect(report.schemaFingerprint.userVersion).toBe(currentSchemaVersion());
   });
 
   it("an empty journal converges on empty state", () => {
@@ -86,6 +147,168 @@ describe("converged", () => {
     expect(report.status).toBe("converged");
     expect(report.eventsReplayed).toBe(0);
     expect(report.throughSequence).toBe(0);
+  });
+
+  it("a journal touching all six tables (Q007's artifact and stage_artifact_alias) replays to exactly the stored projection", () => {
+    seedAllFourTables();
+    publishArtifact();
+    completeStage();
+
+    const handle = internalHandle(db);
+    expect(handle.prepare("SELECT COUNT(*) AS c FROM artifact").get()?.c).toBe(2);
+    expect(handle.prepare("SELECT COUNT(*) AS c FROM stage_artifact_alias").get()?.c).toBe(1);
+
+    const report = compareProjectionToReplay(db);
+    expect(report.status).toBe("converged");
+    expect(report.divergences).toEqual([]);
+    expect(report.projectionDigest.stored).toBe(report.projectionDigest.replayed);
+    expect(report.eventsReplayed).toBe(8);
+  });
+});
+
+describe("reducer — artifact.published and stage.completed (design D11a, §16.2, §16.6)", () => {
+  it("artifact.published then a second publish under the same artifactId is rejected as a duplicate — artifact rows are append-only", () => {
+    publishArtifact();
+    expect(() => publishArtifact()).toThrow(/artifact already exists: artifact-1/);
+  });
+
+  it("stage.completed with two artifacts sharing a name in one payload is rejected", () => {
+    expect(() =>
+      commitStateChange(db, {
+        runId: "run-1",
+        type: "stage.completed",
+        payload: {
+          runId: "run-1",
+          stageId: "stage-1",
+          artifacts: [
+            {
+              artifactId: "artifact-a",
+              name: "dup.md",
+              contentHash: HASH_A,
+              byteLength: 1,
+              mediaType: "text/markdown",
+              contentSchemaId: "heniek://contract/Report/v1",
+              producer: "reviewer",
+              sourceLineage: [],
+              relativePath: `blobs/sha256/${HASH_A}`,
+            },
+            {
+              artifactId: "artifact-b",
+              name: "dup.md",
+              contentHash: HASH_B,
+              byteLength: 1,
+              mediaType: "text/markdown",
+              contentSchemaId: "heniek://contract/Report/v1",
+              producer: "reviewer",
+              sourceLineage: [],
+              relativePath: `blobs/sha256/${HASH_B}`,
+            },
+          ],
+        },
+      }),
+    ).toThrow(/more than one entry named "dup\.md"/);
+  });
+
+  it("a second stage.completed for the same run/stage/name re-points the alias and advances its revision — the mutable half of §16.2", () => {
+    completeStage();
+    const handle = internalHandle(db);
+    const first = handle
+      .prepare(
+        "SELECT artifact_id, revision FROM stage_artifact_alias" +
+          " WHERE run_id = 'run-1' AND stage_id = 'stage-1' AND name = 'report.md'",
+      )
+      .get();
+    expect(first?.artifact_id).toBe("artifact-2");
+    expect(first?.revision).toBe(1);
+
+    commitStateChange(db, {
+      runId: "run-1",
+      type: "stage.completed",
+      payload: {
+        runId: "run-1",
+        stageId: "stage-1",
+        artifacts: [
+          {
+            artifactId: "artifact-3",
+            name: "report.md",
+            contentHash: HASH_A,
+            byteLength: 9,
+            mediaType: "text/markdown",
+            contentSchemaId: "heniek://contract/Report/v1",
+            producer: "reviewer",
+            sourceLineage: [],
+            relativePath: `blobs/sha256/${HASH_A}`,
+          },
+        ],
+      },
+    });
+
+    const second = handle
+      .prepare(
+        "SELECT artifact_id, revision FROM stage_artifact_alias" +
+          " WHERE run_id = 'run-1' AND stage_id = 'stage-1' AND name = 'report.md'",
+      )
+      .get();
+    expect(second?.artifact_id).toBe("artifact-3");
+    expect(second?.revision).toBe(2);
+    // The superseded alias target is still a durable, immutable artifact row
+    // — re-pointing the alias never touches the artifact it used to name.
+    expect(handle.prepare("SELECT COUNT(*) AS c FROM artifact").get()?.c).toBe(2);
+
+    const report = compareProjectionToReplay(db);
+    expect(report.status).toBe("converged");
+  });
+});
+
+describe("injected divergence — out-of-band surgery on the two new tables (Q007, design D11a)", () => {
+  it("detects an artifact row edited behind the journal's back, after dropping its immutability trigger", () => {
+    publishArtifact();
+    const handle = internalHandle(db);
+    // D5's named, deliberate escape hatch, mirrored for `artifact`'s own
+    // append-only trigger (migration 4) — the layered answer to tampering is
+    // this divergence checker, not a trigger that cannot be dropped.
+    handle.exec("DROP TRIGGER artifact_immutable_update");
+    handle.exec(
+      "UPDATE artifact SET media_type = 'application/octet-stream' WHERE artifact_id = 'artifact-1'",
+    );
+
+    const report = compareProjectionToReplay(db);
+    expect(report.status).toBe("diverged");
+    expect(report.divergences).toEqual([
+      {
+        table: "artifact",
+        key: "artifact-1",
+        field: "mediaType",
+        stored: "application/octet-stream",
+        replayed: "text/markdown",
+      },
+    ]);
+  });
+
+  it("detects a stage_artifact_alias row edited behind the journal's back, after dropping its causal-update trigger", () => {
+    // `artifact-1` (published, not just completed-stage) is the tamper
+    // target below — the alias's FK to `artifact` means the tampered value
+    // must name a real, already-published row.
+    publishArtifact();
+    completeStage();
+    const handle = internalHandle(db);
+    handle.exec("DROP TRIGGER stage_artifact_alias_causal_update");
+    handle.exec(
+      "UPDATE stage_artifact_alias SET artifact_id = 'artifact-1'" +
+        " WHERE run_id = 'run-1' AND stage_id = 'stage-1' AND name = 'report.md'",
+    );
+
+    const report = compareProjectionToReplay(db);
+    expect(report.status).toBe("diverged");
+    expect(report.divergences).toEqual([
+      {
+        table: "stage_artifact_alias",
+        key: "run-1\u0000stage-1\u0000report.md",
+        field: "artifactId",
+        stored: "artifact-1",
+        replayed: "artifact-2",
+      },
+    ]);
   });
 });
 

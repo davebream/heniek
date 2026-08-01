@@ -26,7 +26,7 @@
 
 import { type SchemaFingerprint, schemaFingerprint } from "../database/fingerprint.js";
 import type { StateDatabase } from "../database/open.js";
-import type { JsonValue } from "../json.js";
+import { type JsonValue, stringifyCanonical } from "../json.js";
 import type {
   ArtifactState,
   CodebaseState,
@@ -193,7 +193,14 @@ function compareTable<T>(
     for (const field of Object.keys(storedJson).sort()) {
       const left = storedJson[field] ?? null;
       const right = replayedJson[field] ?? null;
-      if (left !== right) {
+      // `!==` alone is reference (in)equality — correct for every scalar
+      // field every table carried before Q007, but `artifact.sourceLineage`
+      // is this package's first array-valued projection field: two
+      // freshly-built arrays holding identical elements are never `===`,
+      // which would report a spurious divergence on every converged replay.
+      // The canonical-JSON string comparison is exact for scalars too, so
+      // this subsumes the old check rather than special-casing arrays.
+      if (stringifyCanonical(left) !== stringifyCanonical(right)) {
         divergences.push({ table: view.table, key, field, stored: left, replayed: right });
       }
     }

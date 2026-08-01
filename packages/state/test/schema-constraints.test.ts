@@ -323,6 +323,29 @@ function seedCodebase(sequence: number, id = "cb-parent"): void {
     .run(id, sequence, TIMESTAMP);
 }
 
+const ARTIFACT_CONTENT_HASH = "a".repeat(64);
+
+/**
+ * `stage_artifact_alias`'s FK parent (Task 2.3): a single, fixed `artifact`
+ * row every alias-table case below points at. `run_id`/`stage_id` here are
+ * deliberately the same fixed literals `PROJECTION_TABLES`'s
+ * `stage_artifact_alias` entry hardcodes into its own SQL (the same pattern
+ * `repository`/`workspace` use for `cb-parent`), so this row is always the
+ * one the alias rows' own FK resolves to.
+ */
+function seedArtifact(sequence: number, id = "artifact-parent"): void {
+  internalHandle(db)
+    .prepare(
+      "INSERT INTO artifact (artifact_id, run_id, stage_id, name, content_hash, byte_length," +
+        " media_type, content_schema_id, producer, source_lineage, relative_path, created_at," +
+        " revision, last_event_sequence)" +
+        ` VALUES (?, 'run-fixed', 'stage-fixed', 'artifact-name', '${ARTIFACT_CONTENT_HASH}', 0,` +
+        " 'text/plain', 'heniek://contract/Example/v1', 'test-producer', '[]'," +
+        ` 'blobs/sha256/${ARTIFACT_CONTENT_HASH}', ?, 1, ?)`,
+    )
+    .run(id, TIMESTAMP, sequence);
+}
+
 const PROJECTION_TABLES: readonly ProjectionTable[] = [
   {
     table: "run_projection",
@@ -428,6 +451,57 @@ const PROJECTION_TABLES: readonly ProjectionTable[] = [
     wrongTypeSql:
       "INSERT INTO workspace (workspace_id, codebase_id, revision, last_event_sequence, updated_at)" +
       " VALUES ('ws-typed', 'cb-parent', 1, ?, '2026-01-01T00:00:00.000Z')",
+  },
+  /**
+   * `stage_artifact_alias` (Task 2.3, migration 4) — carries the ordinary
+   * `*_first_revision`/`*_causal_update` guard pair, so it fits this matrix
+   * exactly like the four tables above. `artifact` does **not** appear in
+   * this matrix: N2's literal DDL gives it a BEFORE UPDATE/DELETE
+   * `RAISE(ABORT)` pair instead (append-only, not causally-updated), so
+   * every case below — which exercises the causal-update guard specifically
+   * — would not apply to it. `artifact`'s own trigger pair is proven
+   * separately, in the "artifact immutability" describe block below,
+   * mirroring `state_event immutability` above it in this file.
+   *
+   * `run_id`/`stage_id` are fixed literals ('run-fixed'/'stage-fixed'),
+   * mirroring how `repository`/`workspace` above hardcode `'cb-parent'` —
+   * `key`/`id` vary only the discriminating `name` column, which is unique
+   * across this describe.each's single-row-per-test fixtures.
+   */
+  {
+    table: "stage_artifact_alias",
+    key: "name",
+    id: "alias-1",
+    seedParents: (sequence) => seedArtifact(sequence),
+    insertSql:
+      "INSERT INTO stage_artifact_alias" +
+      " (run_id, stage_id, name, artifact_id, revision, last_event_sequence, updated_at)" +
+      " VALUES ('run-fixed', 'stage-fixed', ?, 'artifact-parent', ?, ?, '2026-01-01T00:00:00.000Z')",
+    insertValues: (revision, sequence, id = "alias-1") => [id, revision, sequence],
+    updateSql:
+      "UPDATE stage_artifact_alias SET revision = ?, last_event_sequence = ?" +
+      " WHERE run_id = 'run-fixed' AND stage_id = 'stage-fixed' AND name = ?",
+    staleUpdateSql:
+      "UPDATE stage_artifact_alias SET revision = ?, last_event_sequence = ?" +
+      " WHERE run_id = 'run-fixed' AND stage_id = 'stage-fixed' AND name = ? AND revision = ?",
+    upsertVariantASql:
+      "INSERT INTO stage_artifact_alias" +
+      " (run_id, stage_id, name, artifact_id, revision, last_event_sequence, updated_at)" +
+      " VALUES ('run-fixed', 'stage-fixed', ?, 'artifact-parent', 2, ?, '2026-01-01T00:00:00.000Z')" +
+      " ON CONFLICT(run_id, stage_id, name) DO UPDATE SET revision = excluded.revision," +
+      " last_event_sequence = excluded.last_event_sequence, updated_at = excluded.updated_at",
+    upsertVariantBSql:
+      "INSERT INTO stage_artifact_alias" +
+      " (run_id, stage_id, name, artifact_id, revision, last_event_sequence, updated_at)" +
+      " VALUES ('run-fixed', 'stage-fixed', ?, 'artifact-parent', 1, ?, '2026-01-01T00:00:00.000Z')" +
+      " ON CONFLICT(run_id, stage_id, name) DO UPDATE SET" +
+      " revision = stage_artifact_alias.revision + 1," +
+      " last_event_sequence = excluded.last_event_sequence, updated_at = excluded.updated_at",
+    wrongTypeSql:
+      "INSERT INTO stage_artifact_alias" +
+      " (run_id, stage_id, name, artifact_id, revision, last_event_sequence, updated_at)" +
+      " VALUES ('run-fixed', 'stage-fixed', 'alias-typed', 'artifact-parent', 1, ?," +
+      " '2026-01-01T00:00:00.000Z')",
   },
 ];
 
@@ -616,6 +690,66 @@ describe.each(PROJECTION_TABLES.map((entry) => [entry.table, entry] as const))(
     });
   },
 );
+
+/**
+ * `artifact` (Task 2.3, migration 4, design D11a) mirrors `state_event
+ * immutability` above rather than the `PROJECTION_TABLES` matrix: N2's
+ * literal DDL gives it a BEFORE UPDATE/DELETE `RAISE(ABORT)` pair, not the
+ * `*_first_revision`/`*_causal_update` guard pair every `PROJECTION_TABLES`
+ * entry carries — mirroring `state_event`'s append-only posture (D11a), not
+ * the other three projection tables' mutable-with-a-causal-guard posture.
+ */
+describe("artifact immutability (design D11a, migration 4)", () => {
+  it("raises on UPDATE, verbatim message and pinned errcodes", () => {
+    const sequence = seedOneEvent();
+    seedArtifact(sequence);
+    const handle = internalHandle(db);
+    let caught: unknown;
+    try {
+      handle.exec("UPDATE artifact SET media_type = 'application/octet-stream'");
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(Error);
+    expect((caught as Error).message).toBe("artifact is append-only");
+    expect(sqliteErrorCode(caught)).toBe(SQLITE_CONSTRAINT_TRIGGER);
+    expect(sqliteNodeCode(caught)).toBe("ERR_SQLITE_ERROR");
+  });
+
+  it("raises on DELETE, verbatim message and pinned errcodes", () => {
+    const sequence = seedOneEvent();
+    seedArtifact(sequence);
+    const handle = internalHandle(db);
+    let caught: unknown;
+    try {
+      handle.exec("DELETE FROM artifact");
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(Error);
+    expect((caught as Error).message).toBe("artifact is append-only");
+    expect(sqliteErrorCode(caught)).toBe(SQLITE_CONSTRAINT_TRIGGER);
+    expect(sqliteNodeCode(caught)).toBe("ERR_SQLITE_ERROR");
+  });
+
+  it("the named, deliberate escape hatch: DROP TRIGGER then UPDATE succeeds (D5, mirrored) — the layered answer is Phase 5's divergence checker, not the trigger", () => {
+    const sequence = seedOneEvent();
+    seedArtifact(sequence);
+    const handle = internalHandle(db);
+    handle.exec("DROP TRIGGER artifact_immutable_update");
+    expect(() =>
+      handle.exec("UPDATE artifact SET media_type = 'application/octet-stream'"),
+    ).not.toThrow();
+  });
+
+  it("a second INSERT for a new artifact_id succeeds — immutability blocks UPDATE/DELETE, never a later append", () => {
+    const { first, second } = seedTwoEvents();
+    seedArtifact(first, "artifact-parent");
+    seedArtifact(second, "artifact-second");
+    const count = internalHandle(db).prepare("SELECT COUNT(*) AS c FROM artifact").get();
+    expect(count?.c).toBe(2);
+  });
+});
 
 describe("projection relationship foreign keys (design D8, §16.3)", () => {
   it("INSERT INTO repository naming an unregistered codebase_id fails its foreign key", () => {
