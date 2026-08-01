@@ -5,9 +5,22 @@
  * (`pragma_table_list`, `pragma_table_xinfo`, `pragma_index_list`,
  * `pragma_index_xinfo`, `pragma_foreign_key_list`) plus the normalised DDL of
  * every trigger and view (which have no PRAGMA introspection of their own).
- * `declared` closes `structural`'s three measured blind spots —
- * `AUTOINCREMENT`, `CHECK`, and column-level `COLLATE` — by hashing the
+ * `declared` closes `structural`'s blind spots by hashing the
  * whitespace-normalised `sql` of every schema object, tables included.
+ * `structural`'s blind spots are not "exactly three" (issue #7, Phase 2 fix
+ * G7 — an earlier draft of this comment undercounted them); every one of
+ * the following is invisible to PRAGMA introspection and closed only by
+ * `declared`:
+ *   - `AUTOINCREMENT` (banned outright by `assertAppendOnly`, but still a
+ *     blind spot in principle)
+ *   - table-level and column-level `CHECK` (load-bearing here —
+ *     `CHECK (json_valid(payload))`)
+ *   - column-level `COLLATE`
+ *   - a partial index's predicate text (`WHERE …`)
+ *   - a generated column's expression (`GENERATED ALWAYS AS (…)`)
+ *   - an expression index's column text (an index column that is an
+ *     expression rather than a bare column name)
+ *   - foreign key deferrability (`DEFERRABLE INITIALLY DEFERRED`, etc.)
  *
  * Rejected forms (measured, not guessed): raw `sqlite_master.sql` equality
  * (an `ALTER`-built table's stored DDL text differs from fresh DDL text for

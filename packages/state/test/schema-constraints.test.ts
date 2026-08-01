@@ -115,43 +115,98 @@ describe("state_event immutability (design D5)", () => {
     handle.exec("DROP TRIGGER state_event_immutable_update");
     expect(() => handle.exec("UPDATE state_event SET type = 'changed'")).not.toThrow();
   });
-});
 
-describe("state_event STRICT and CHECK constraints (design D4)", () => {
-  it("STRICT rejects a value of the wrong storage class for an INTEGER column", () => {
-    // `sequence` is the rowid alias (INTEGER PRIMARY KEY); a STRICT table
-    // still enforces its declared type, so a text value that does not look
-    // like an integer is rejected rather than silently coerced (unlike the
-    // TEXT-column direction, where STRICT freely stringifies a numeric
-    // input — that direction is not an error and would make a vacuous test).
+  it("INSERT OR REPLACE conflicting on event_id fires the append-only trigger, only because recursive_triggers is ON (issue #7, Phase 2 fix S1)", () => {
+    insertBaseEvent({ eventId: "evt-1" });
     const handle = internalHandle(db);
     let caught: unknown;
     try {
       handle
         .prepare(
-          "INSERT INTO state_event " +
-            "(sequence, event_id, run_id, correlation_id, causation_event_id, type, recorded_at, payload) " +
-            "VALUES (?, ?, NULL, ?, NULL, ?, ?, ?)",
+          "INSERT OR REPLACE INTO state_event " +
+            "(event_id, run_id, correlation_id, causation_event_id, type, recorded_at, payload) " +
+            "VALUES (?, NULL, ?, NULL, ?, ?, ?)",
         )
-        .run(
-          "not-a-number",
-          "evt-strict",
-          "cor-strict",
-          "run.created",
-          "2026-01-01T00:00:00.000Z",
-          "{}",
-        );
+        .run("evt-1", "cor-tamper", "run.tampered", "2026-01-01T00:00:00.000Z", "{}");
     } catch (error) {
       caught = error;
     }
     expect(caught).toBeInstanceOf(Error);
-    // The rowid alias (`INTEGER PRIMARY KEY`) validates its type through a
-    // slightly different path than an ordinary STRICT column and reports
-    // "datatype mismatch" rather than the "cannot store <T> value in <T>
-    // column" wording an ordinary column uses — both are the same STRICT
-    // type-rejection family the plan's acceptance row names, so this
-    // assertion accepts either wording.
-    expect((caught as Error).message).toMatch(/cannot store|datatype mismatch/i);
+    expect((caught as Error).message).toBe("state_event is append-only");
+    expect(sqliteErrorCode(caught)).toBe(SQLITE_CONSTRAINT_TRIGGER);
+    expect(sqliteNodeCode(caught)).toBe("ERR_SQLITE_ERROR");
+  });
+
+  it("REPLACE INTO conflicting on the rowid overwrites the row in place, only prevented because recursive_triggers is ON (issue #7, Phase 2 fix S1)", () => {
+    insertBaseEvent({ eventId: "evt-1" });
+    const handle = internalHandle(db);
+    let caught: unknown;
+    try {
+      handle
+        .prepare(
+          "REPLACE INTO state_event " +
+            "(sequence, event_id, run_id, correlation_id, causation_event_id, type, recorded_at, payload) " +
+            "VALUES (1, ?, NULL, ?, NULL, ?, ?, ?)",
+        )
+        .run("evt-tampered", "cor-tamper", "run.tampered", "2026-01-01T00:00:00.000Z", "{}");
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(Error);
+    expect((caught as Error).message).toBe("state_event is append-only");
+    expect(sqliteErrorCode(caught)).toBe(SQLITE_CONSTRAINT_TRIGGER);
+    expect(sqliteNodeCode(caught)).toBe("ERR_SQLITE_ERROR");
+  });
+
+  it("RAISE(ABORT) inside an explicit transaction rolls back only the aborting statement, leaving the transaction open (G7)", () => {
+    insertBaseEvent({ eventId: "evt-1" });
+    const handle = internalHandle(db);
+    handle.exec("BEGIN");
+    let caught: unknown;
+    try {
+      handle.exec("UPDATE state_event SET type = 'changed'");
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(Error);
+    expect((caught as Error).message).toBe("state_event is append-only");
+    // The abort undid only the aborting statement — the transaction opened
+    // above by BEGIN is still open, and work done before the abort (or after
+    // it, within the same transaction) still commits.
+    expect(handle.isTransaction).toBe(true);
+    insertBaseEvent({ eventId: "evt-2" });
+    handle.exec("COMMIT");
+
+    const rows = handle.prepare("SELECT event_id FROM state_event ORDER BY sequence").all();
+    expect(rows.map((row) => row.event_id)).toEqual(["evt-1", "evt-2"]);
+  });
+});
+
+describe("state_event STRICT and CHECK constraints (design D4)", () => {
+  it("STRICT rejects a value a non-STRICT table accepts (matched pair, issue #7 fix G2)", () => {
+    // The previous version of this test inserted a non-numeric string into
+    // `sequence` (`INTEGER PRIMARY KEY`, the rowid alias) — but SQLite
+    // rejects a non-integer rowid on *every* table, STRICT or not (rowid
+    // enforcement, not the STRICT typing path), so removing `STRICT` from
+    // `list.ts` left that test green. This matched pair discriminates for
+    // real: the same insert on the same column type succeeds without
+    // `STRICT` and fails with it.
+    const handle = internalHandle(db);
+    handle.exec("CREATE TABLE strict_probe_non_strict (a INTEGER)");
+    handle.exec("CREATE TABLE strict_probe_strict (a INTEGER) STRICT");
+
+    expect(() =>
+      handle.prepare("INSERT INTO strict_probe_non_strict (a) VALUES (?)").run("x"),
+    ).not.toThrow();
+
+    let caught: unknown;
+    try {
+      handle.prepare("INSERT INTO strict_probe_strict (a) VALUES (?)").run("x");
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(Error);
+    expect((caught as Error).message).toMatch(/cannot store/i);
   });
 
   it("CHECK (json_valid(payload)) rejects a non-JSON payload", () => {

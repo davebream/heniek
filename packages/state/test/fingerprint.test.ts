@@ -20,6 +20,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { type SchemaFingerprint, schemaFingerprint } from "../src/database/fingerprint.js";
 import { internalHandle, openStateDatabase, type StateDatabase } from "../src/database/open.js";
+import { MigrationError } from "../src/errors.js";
 import { MIGRATIONS } from "../src/migrations/list.js";
 import { runMigrationList, runMigrations } from "../src/migrations/migrate.js";
 import type { Migration } from "../src/migrations/migration.js";
@@ -41,6 +42,16 @@ const SCHEMA_FINGERPRINTS: Record<string, FingerprintFixtureEntry> = JSON.parse(
 const TERMINAL_SCHEMA_SQL = readFileSync(
   fileURLToPath(new URL("./fixtures/terminal-schema.sql", import.meta.url)),
   "utf8",
+);
+
+interface SqliteVersionFixture {
+  readonly sqlite: string;
+  readonly node: string;
+  readonly note: string;
+}
+
+const SQLITE_VERSION_FIXTURE: SqliteVersionFixture = JSON.parse(
+  readFileSync(fileURLToPath(new URL("./fixtures/sqlite-version.json", import.meta.url)), "utf8"),
 );
 
 const MIGRATION_1 = MIGRATIONS[0];
@@ -168,7 +179,7 @@ describe("the AC1 four-lineage matrix", () => {
         statements: [...MIGRATION_1.statements.slice(0, -1), "THIS IS NOT VALID SQL"],
       };
 
-      expect(() => runMigrationList(interruptedTemp.db, [doctored])).toThrow();
+      expect(() => runMigrationList(interruptedTemp.db, [doctored])).toThrow(MigrationError);
       interruptedFingerprint = schemaFingerprint(interruptedTemp.db);
       expect(interruptedFingerprint.structural).toBe(pin(0).structural);
       expect(interruptedFingerprint.declared).toBe(pin(0).declared);
@@ -186,38 +197,63 @@ describe("the AC1 four-lineage matrix", () => {
   });
 });
 
-describe("every schema version's fingerprint matches its committed pin (T1)", () => {
-  it("version 0 — the empty, unmigrated schema", async () => {
-    const temp = await openTempDb();
-    try {
-      const fingerprint = schemaFingerprint(temp.db);
-      expect(fingerprint.structural).toBe(pin(0).structural);
-      expect(fingerprint.declared).toBe(pin(0).declared);
-    } finally {
-      await temp.cleanup();
-    }
-  });
+// [0, ...MIGRATIONS.map(m => m.version)] — derived, not hand-listed (G7): a
+// migration appended in a later phase automatically gets a case here rather
+// than silently staying unpinned until someone remembers to add one by hand.
+const PINNED_VERSIONS: readonly number[] = [0, ...MIGRATIONS.map((migration) => migration.version)];
 
-  it("version 1 — after runMigrations", async () => {
+describe("every schema version's fingerprint matches its committed pin (T1)", () => {
+  it.each(PINNED_VERSIONS)("version %i", async (version) => {
     const temp = await openTempDb();
     try {
-      runMigrations(temp.db);
+      if (version > 0) {
+        runMigrationList(temp.db, MIGRATIONS, version);
+      }
       const fingerprint = schemaFingerprint(temp.db);
-      expect(fingerprint.structural).toBe(pin(1).structural);
-      expect(fingerprint.declared).toBe(pin(1).declared);
+      expect(fingerprint.structural).toBe(pin(version).structural);
+      expect(fingerprint.declared).toBe(pin(version).declared);
     } finally {
       await temp.cleanup();
     }
   });
 });
 
+describe("recorded SQLite/Node version alongside the fingerprint pins (G7)", () => {
+  it("test/fixtures/sqlite-version.json is present and well-formed", () => {
+    // Not an equality assertion against `process.versions.sqlite` on
+    // purpose: a Node/SQLite bump legitimately changes `declared` (see this
+    // fixture's own `note`), and a hard version-lock here would turn that
+    // expected, documented event into a spurious suite failure instead of
+    // the diagnostic breadcrumb it is meant to be.
+    expect(SQLITE_VERSION_FIXTURE.sqlite.length).toBeGreaterThan(0);
+    expect(SQLITE_VERSION_FIXTURE.node.length).toBeGreaterThan(0);
+    if (SQLITE_VERSION_FIXTURE.sqlite !== process.versions.sqlite) {
+      console.warn(
+        `test/fixtures/sqlite-version.json records SQLite ${SQLITE_VERSION_FIXTURE.sqlite}, ` +
+          `but this run's node:sqlite reports ${process.versions.sqlite}. If a fingerprint pin ` +
+          "just failed, this is the expected cause — see this fixture's note.",
+      );
+    }
+  });
+});
+
 describe("terminal-schema.sql — the independent, hand-written witness", () => {
-  it("its structural digest matches the terminal migrated version; declared is not required to match", async () => {
+  it("its structural digest matches the terminal migrated version, and so does declared (G1)", async () => {
     const fingerprint = await fingerprintOfHandWritten(TERMINAL_SCHEMA_SQL);
     expect(fingerprint.structural).toBe(pin(MIGRATION_1.version).structural);
-    // `declared` is allowed to differ from the migrated lineage's pin — a
-    // future squashed baseline could legitimately make them equal, so
-    // asserting inequality here is not required either (plan Task 2.6).
+    // `declared` closing the loop is the whole point of a hand-written
+    // witness: after the shared normal form (whitespace-collapse, then sort
+    // by (type, name)) the fixture's *content* must be byte-identical to
+    // the migration DDL's, even though its formatting, line breaks, and
+    // statement order are deliberately different (see the fixture's own
+    // header comment) — a real content divergence (the `CHECK`, a dropped
+    // `STRICT`, a `COLLATE`) would trip this the same way it trips the
+    // migrated-lineage pin above. Task 3.1's `ALTER TABLE ADD COLUMN` is the
+    // documented point where this is expected to start diverging (G1a) —
+    // an `ALTER`-rewritten column's stored DDL text differs from the
+    // hand-written fixture's fresh `CREATE` text, even for the identical
+    // logical schema.
+    expect(fingerprint.declared).toBe(pin(MIGRATION_1.version).declared);
   });
 
   // Task 3.1 adds `ALTER TABLE run_projection ADD COLUMN workspace_id` as
@@ -321,5 +357,19 @@ describe("discrimination cases (D3, D17, R1) — matched pairs differing in exac
     );
     expect(a.structural).toBe(b.structural);
     expect(a.declared).not.toBe(b.declared);
+  });
+
+  it("both digests are independent of table creation order (G7 — true by construction via ORDER BY name, exercised here for real)", async () => {
+    const [a, b] = await fingerprintPair(
+      (handle) => {
+        handle.exec("CREATE TABLE alpha (a INTEGER) STRICT");
+        handle.exec("CREATE TABLE beta (b INTEGER) STRICT");
+      },
+      (handle) => {
+        handle.exec("CREATE TABLE beta (b INTEGER) STRICT");
+        handle.exec("CREATE TABLE alpha (a INTEGER) STRICT");
+      },
+    );
+    expect(a).toStrictEqual(b);
   });
 });

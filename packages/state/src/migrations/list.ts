@@ -1,8 +1,16 @@
 /**
  * The shipped migration list (design D2, D4, D5). **Append only** — Task 3.1
  * (Phase 3) adds migrations 2 and 3 after this array, never before or in
- * place of migration 1. `assertAppendOnly` runs once, at module load, so a
- * violation fails as early as importing this file.
+ * place of migration 1. `assertAppendOnly` runs once, at module load, and
+ * validates the list's *well-formedness* — contiguous strictly-ascending
+ * versions starting at 1, no duplicate name or version, no empty
+ * `statements`, no `AUTOINCREMENT`, no SQL comments. It does **not** detect
+ * an already-shipped migration's DDL being rewritten in place (issue #7,
+ * Phase 2 fix S6) — nothing at module-load time re-parses `CREATE TABLE
+ * state_event`'s text and compares it against what shipped before. That
+ * guarantee is enforced by `test/fixtures/migration-statement-hashes.json`'s
+ * committed pin (`test/migrations.test.ts`'s "matches the committed pin"
+ * case) plus code review, not by this function.
  */
 
 import { assertAppendOnly, type Migration } from "./migration.js";
@@ -11,10 +19,16 @@ export type { Migration } from "./migration.js";
 
 /**
  * `PRAGMA application_id = 1213090609` (0x484E4B31, `"HNK1"`) is the first
- * statement of the first migration so that even a partially-migrated
- * database (interrupted mid migration 1) already carries the marker —
- * `openStateDatabase`'s step 9 accepts `0` (fresh) or this value and refuses
- * anything else (design D13).
+ * statement of the first migration. It lands in the *same* `BEGIN
+ * IMMEDIATE`/`COMMIT` transaction as the rest of migration 1's DDL (design
+ * D2), so an interrupted migration 1 rolls the marker back along with
+ * everything else — a partially-migrated database is not distinguishable
+ * from a fresh, never-migrated one, and is not distinguishable from a
+ * foreign SQLite file either. That is exactly why `openStateDatabase`'s
+ * step 9 must accept `0` (fresh, or interrupted) as well as this value, and
+ * refuse anything else (design D13) — see `fingerprint.test.ts`'s
+ * interrupted-lineage case, which asserts the interrupted database's
+ * `structural` digest equals version 0's, `application_id` included.
  *
  * `sequence INTEGER PRIMARY KEY` is the rowid alias — one global total
  * order, no `AUTOINCREMENT`, no separate counter (D4's rejection). `run_id`
@@ -50,5 +64,18 @@ const MIGRATION_0001_JOURNAL: Migration = {
   ],
 };
 
-export const MIGRATIONS: readonly Migration[] = [MIGRATION_0001_JOURNAL];
+// `readonly Migration[]` is compile-time only — `assertAppendOnly` runs once
+// at module load, and `runMigrationList` never re-validates on every call
+// (it must stay permissive for the test seam that drives it with doctored
+// lists), so a runtime `.push`/mutation of the exported array or of a
+// migration's `statements` would defeat C1's enforcement silently, and
+// `migrationManifest()` — E1's evidence artefact — would inherit the
+// corruption because it reads this list live. `Object.freeze` closes that
+// gap at runtime (issue #7, Phase 2 fix G6): mutating a frozen array or
+// object throws under ESM's always-strict mode instead of silently
+// succeeding.
+Object.freeze(MIGRATION_0001_JOURNAL.statements);
+Object.freeze(MIGRATION_0001_JOURNAL);
+
+export const MIGRATIONS: readonly Migration[] = Object.freeze([MIGRATION_0001_JOURNAL]);
 assertAppendOnly(MIGRATIONS);

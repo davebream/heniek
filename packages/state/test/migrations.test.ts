@@ -83,6 +83,24 @@ function migrationWithStatements(statements: readonly string[]): Migration {
   return { version: migration.version, name: migration.name, statements };
 }
 
+/**
+ * Catches `fn`'s throw and asserts it is a `MigrationError` whose message
+ * matches `pattern` — bare `toThrow(MigrationError)` cannot distinguish the
+ * first-version, gap, and duplicate-version cases below, all three of which
+ * are actually caught by the same contiguity check (issue #7, Phase 2 fix
+ * G4).
+ */
+function expectMigrationError(fn: () => void, pattern: RegExp): void {
+  let caught: unknown;
+  try {
+    fn();
+  } catch (error) {
+    caught = error;
+  }
+  expect(caught).toBeInstanceOf(MigrationError);
+  expect((caught as Error).message).toMatch(pattern);
+}
+
 describe("assertAppendOnly (design D2, D3, C1)", () => {
   it("accepts the shipped MIGRATIONS list", () => {
     expect(() => assertAppendOnly(MIGRATIONS)).not.toThrow();
@@ -90,7 +108,10 @@ describe("assertAppendOnly (design D2, D3, C1)", () => {
 
   it("rejects a list whose first version is not 1", () => {
     const mutated: Migration[] = [{ ...MIGRATION_1, version: 2 }];
-    expect(() => assertAppendOnly(mutated)).toThrow(MigrationError);
+    expectMigrationError(
+      () => assertAppendOnly(mutated),
+      /the first migration must be version 1/,
+    );
   });
 
   it("rejects a gap in versions", () => {
@@ -98,7 +119,7 @@ describe("assertAppendOnly (design D2, D3, C1)", () => {
       MIGRATION_1,
       { version: 3, name: "gap", statements: ["CREATE TABLE gap_table (a INTEGER) STRICT"] },
     ];
-    expect(() => assertAppendOnly(mutated)).toThrow(MigrationError);
+    expectMigrationError(() => assertAppendOnly(mutated), /contiguous and strictly ascending/);
   });
 
   it("rejects a duplicate version", () => {
@@ -110,7 +131,9 @@ describe("assertAppendOnly (design D2, D3, C1)", () => {
         statements: ["CREATE TABLE dup_table (a INTEGER) STRICT"],
       },
     ];
-    expect(() => assertAppendOnly(mutated)).toThrow(MigrationError);
+    // Behaviourally indistinguishable from the gap case above — a duplicate
+    // version is caught by the same contiguity check, not a separate guard.
+    expectMigrationError(() => assertAppendOnly(mutated), /contiguous and strictly ascending/);
   });
 
   it("rejects a duplicate name", () => {
@@ -122,12 +145,12 @@ describe("assertAppendOnly (design D2, D3, C1)", () => {
         statements: ["CREATE TABLE dup_name (a INTEGER) STRICT"],
       },
     ];
-    expect(() => assertAppendOnly(mutated)).toThrow(MigrationError);
+    expectMigrationError(() => assertAppendOnly(mutated), /duplicate migration name/);
   });
 
   it("rejects an empty statements array", () => {
     const mutated: Migration[] = [{ ...MIGRATION_1, statements: [] }];
-    expect(() => assertAppendOnly(mutated)).toThrow(MigrationError);
+    expectMigrationError(() => assertAppendOnly(mutated), /no statements/);
   });
 
   it("rejects a statement containing AUTOINCREMENT", () => {
@@ -136,14 +159,14 @@ describe("assertAppendOnly (design D2, D3, C1)", () => {
         "CREATE TABLE auto_table (a INTEGER PRIMARY KEY AUTOINCREMENT) STRICT",
       ]),
     ];
-    expect(() => assertAppendOnly(mutated)).toThrow(MigrationError);
+    expectMigrationError(() => assertAppendOnly(mutated), /AUTOINCREMENT is banned/);
   });
 
   it("rejects a statement containing a SQL comment (--)", () => {
     const mutated: Migration[] = [
       migrationWithStatements(["CREATE TABLE comment_table (a INTEGER) -- trailing comment"]),
     ];
-    expect(() => assertAppendOnly(mutated)).toThrow(MigrationError);
+    expectMigrationError(() => assertAppendOnly(mutated), /must not contain SQL comments/);
   });
 });
 
@@ -251,6 +274,77 @@ describe("runMigrations (design D2, C1, AC1)", () => {
         )
         .get();
       expect(objectCount?.n).toBe(0);
+    } finally {
+      db.close();
+    }
+  });
+});
+
+describe("runMigrationList targetVersion validation (issue #7, Phase 2 fix G5)", () => {
+  it("rejects NaN rather than silently no-op'ing", () => {
+    const db = openDb();
+    try {
+      expect(() => runMigrationList(db, MIGRATIONS, Number.NaN)).toThrow(
+        /targetVersion must be an integer/,
+      );
+    } finally {
+      db.close();
+    }
+  });
+
+  it("rejects a negative targetVersion rather than misreporting it as the build's known version", () => {
+    const db = openDb();
+    try {
+      expect(() => runMigrationList(db, MIGRATIONS, -5)).toThrow(
+        /targetVersion must be an integer/,
+      );
+    } finally {
+      db.close();
+    }
+  });
+
+  it("rejects a targetVersion above the highest version in the supplied migrations list", () => {
+    const db = openDb();
+    try {
+      expect(() => runMigrationList(db, MIGRATIONS, 99)).toThrow(
+        /targetVersion must be an integer/,
+      );
+    } finally {
+      db.close();
+    }
+  });
+
+  it("sorts pending migrations by version regardless of list order", () => {
+    const db = openDb();
+    try {
+      const version2: Migration = {
+        version: 2,
+        name: "second",
+        statements: ["CREATE TABLE second_table (a INTEGER) STRICT"],
+      };
+      // Deliberately out of order: version 2 supplied before version 1.
+      const report = runMigrationList(db, [version2, MIGRATION_1]);
+      expect(report.applied.map((entry) => entry.version)).toEqual([1, 2]);
+      expect(report.toVersion).toBe(2);
+    } finally {
+      db.close();
+    }
+  });
+
+  it("rejects a migration version outside the PRAGMA user_version interpolation bounds (V16)", () => {
+    const db = openDb();
+    try {
+      const outOfBounds: Migration = {
+        version: 2_147_483_648,
+        name: "out-of-bounds",
+        statements: ["CREATE TABLE out_of_bounds_table (a INTEGER) STRICT"],
+      };
+      // MIGRATION_1 first so the doctored migration is reached via the
+      // normal pending loop rather than tripping the `fromVersion > ceiling`
+      // guard before the interpolation-bounds check ever runs.
+      expect(() => runMigrationList(db, [MIGRATION_1, outOfBounds])).toThrow(
+        /outside the PRAGMA user_version interpolation bounds/,
+      );
     } finally {
       db.close();
     }

@@ -17,7 +17,7 @@ CREATE TABLE state_event
     event_id            TEXT NOT NULL UNIQUE,
     run_id              TEXT,
     correlation_id      TEXT NOT NULL,
-    causation_event_id  TEXT REFERENCES state_event (event_id),
+    causation_event_id  TEXT REFERENCES state_event(event_id),
     type                TEXT NOT NULL,
     recorded_at         TEXT NOT NULL,
     payload             TEXT NOT NULL CHECK (json_valid(payload))

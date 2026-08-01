@@ -1,0 +1,5 @@
+{
+  "sqlite": "3.53.1",
+  "node": "v24.18.1",
+  "note": "process.versions.sqlite / process.versions.node when schema-fingerprints.json and migration-statement-hashes.json were last pinned (issue #7, Phase 2 fix G7). From Phase 3's `ALTER TABLE ADD COLUMN` onward, the declared digest depends on SQLite's ALTER text-rewriting, so a Node/SQLite bump can legitimately change `declared` with no schema change. If a pin fails and this file's `sqlite` no longer matches `process.versions.sqlite`, that is the expected cause — re-pin `declared` only (see the plan's Task 3.1 repair table, G7a), never `structural`, and update this file's `sqlite`/`node` values in the same commit."
+}

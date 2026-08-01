@@ -32,18 +32,32 @@
 import { StateStoreError } from "./errors.js";
 
 /**
- * Recursion depth bound for `canonicalize`/`assertJsonValue` (issue #7, fix
- * N4). Guards against a cyclic in-memory structure passed to
- * `canonicalize(value: JsonValue)` (Phase 4's entry point) recursing
- * forever, and — the more realistic case — against a deeply nested but
- * non-cyclic structure blowing the call stack as an uncaught `RangeError`
- * rather than a `StateStoreError`: `JSON.parse` is iterative in V8, so tens
- * of thousands of nested arrays parse without error and only fail once
- * `assertJsonValue`/`canonicalize` walks them recursively — well before the
- * 64 KiB payload-size cap (D7) would ever reject the same text on size
- * alone. 64 is generous for any payload this package's own event
- * vocabulary produces, while being far below where V8's default stack
+ * Recursion depth bound for `canonicalize`/`assertJsonValue`. Guards against
+ * a cyclic in-memory structure passed to `canonicalize(value: JsonValue)`
+ * (Phase 4's entry point) recursing forever, and — the more realistic case —
+ * against a deeply nested but non-cyclic structure blowing the call stack as
+ * an uncaught `RangeError` rather than a `StateStoreError`: `JSON.parse` is
+ * iterative in V8, so tens of thousands of nested arrays parse without error
+ * and only fail once `assertJsonValue`/`canonicalize` walks them recursively
+ * — well before the 64 KiB payload-size cap (D7) would ever reject the same
+ * text on size alone. 64 is generous for any payload this package's own
+ * event vocabulary produces, while being far below where V8's default stack
  * would actually overflow.
+ *
+ * **Invariant (issue #7, Phase 2 fix S4/supplement item 4):** the read bound
+ * (`assertJsonValue`, used by `parseJsonValue`) must always be `>=` the write
+ * bound (`canonicalize`) and may never be lowered on the read side alone —
+ * an unreadable-but-`json_valid` payload already sitting in the journal is
+ * replay-blocking, not merely invalid. Both functions below share this one
+ * constant precisely so that invariant cannot drift by editing only one of
+ * them.
+ *
+ * A value nested exactly `MAX_DEPTH` levels deep (root at depth 0 through
+ * the deepest scalar at depth `MAX_DEPTH - 1`) is accepted; one level deeper
+ * throws. The two functions below previously disagreed with their own error
+ * message here — `depth > MAX_DEPTH` actually admitted 65 nested levels
+ * while the message read "exceeded 64" — so the boundary is now `depth >=
+ * MAX_DEPTH`, pinned by `test/json.test.ts`'s depth-bound cases.
  */
 const MAX_DEPTH = 64;
 
@@ -62,7 +76,7 @@ export type JsonValue =
  * canonical payloads.
  */
 export function canonicalize(value: JsonValue, depth = 0): JsonValue {
-  if (depth > MAX_DEPTH) {
+  if (depth >= MAX_DEPTH) {
     throw new StateStoreError(`canonicalize: recursion depth exceeded ${MAX_DEPTH}`);
   }
   if (Array.isArray(value)) {

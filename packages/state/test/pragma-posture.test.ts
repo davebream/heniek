@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { internalHandle, openStateDatabase } from "../src/database/open.js";
-import { readForeignKeys, readSynchronous } from "../src/database/pragma.js";
+import { readForeignKeys, readRecursiveTriggers, readSynchronous } from "../src/database/pragma.js";
 import { createDeterministicIds, createFakeClock } from "./helpers/determinism.js";
 import { makeTempDbPath } from "./helpers/temp-db.js";
 
@@ -88,6 +88,28 @@ describe("node:sqlite PRAGMA posture pinned by openStateDatabase (design D12, D1
     const raw = new DatabaseSync(path);
     try {
       expect(readForeignKeys(raw)).toBe(1);
+    } finally {
+      raw.close();
+    }
+  });
+
+  it("sets recursive_triggers to ON; a raw connection defaults to OFF (issue #7, Phase 2 fix S1)", () => {
+    // Two independent files rather than a before/after reopen of one — the
+    // contrast this test needs is "openStateDatabase's own connection" vs "a
+    // connection that never went through it", not persistence across opens
+    // (recursive_triggers does not persist across connections at all).
+    const managedPath = join(directory, "state.sqlite");
+    const db = openStateDatabase(baseOptions(managedPath));
+    try {
+      expect(readRecursiveTriggers(internalHandle(db))).toBe(1);
+    } finally {
+      db.close();
+    }
+
+    const rawPath = join(directory, "raw.sqlite");
+    const raw = new DatabaseSync(rawPath);
+    try {
+      expect(readRecursiveTriggers(raw)).toBe(0);
     } finally {
       raw.close();
     }

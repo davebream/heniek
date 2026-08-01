@@ -157,6 +157,21 @@ export function readForeignKeys(db: DatabaseSync): number {
 }
 
 /**
+ * `recursive_triggers` gates whether SQLite fires a `BEFORE DELETE` trigger
+ * for the row removal half of a `REPLACE` conflict resolution (`INSERT OR
+ * REPLACE` / `REPLACE INTO`) — it defaults to off, in which case a REPLACE
+ * conflict silently deletes and reinserts a row without the delete trigger
+ * ever running (issue #7, Phase 2 fix S1). `openStateDatabase` verifies and
+ * sets it on every open, mirroring `readForeignKeys`/`readJournalMode`.
+ */
+export function readRecursiveTriggers(db: DatabaseSync): number {
+  return toSafeInteger(
+    get(db, "PRAGMA recursive_triggers").recursive_triggers,
+    "PRAGMA recursive_triggers",
+  );
+}
+
+/**
  * Table-valued PRAGMA introspection — bound parameters, never interpolation
  * (V15). `NOT LIKE 'sqlite\_%' ESCAPE '\'` (not the unescaped
  * `'sqlite_%'`) so a real table whose name merely *resembles* the pattern

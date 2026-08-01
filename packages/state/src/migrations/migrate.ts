@@ -80,16 +80,43 @@ export function runMigrationList(
 ): MigrationRunReport {
   const handle = internalHandle(db);
   const fromVersion = readUserVersion(handle);
-  const lastMigration = migrations.at(-1);
-  const ceiling = targetVersion ?? lastMigration?.version ?? fromVersion;
+  // The highest version anywhere in `migrations`, not `migrations.at(-1)` —
+  // `pending` below is sorted before use precisely because callers are not
+  // required to supply this list pre-sorted, and `.at(-1)` would silently
+  // pick whichever entry happens to be last rather than the true ceiling.
+  const terminal = migrations.reduce((max, migration) => Math.max(max, migration.version), 0);
 
-  if (fromVersion > ceiling) {
-    throw new SchemaVersionError(fromVersion, ceiling);
+  // An explicit `targetVersion` is caller input, validated before it drives
+  // anything below (issue #7, Phase 2 fix G5): `NaN` made every subsequent
+  // comparison silently false, producing a no-op report indistinguishable
+  // from "already current"; a negative value produced a `SchemaVersionError`
+  // that named the negative value as "this build's highest known migration
+  // version", which is false; and a value above `terminal` applied
+  // everything in `migrations` with no signal that the requested ceiling was
+  // unreachable.
+  if (
+    targetVersion !== undefined &&
+    (!Number.isInteger(targetVersion) || targetVersion < 0 || targetVersion > terminal)
+  ) {
+    throw new StateStoreError(
+      `targetVersion must be an integer between 0 and ${terminal} (the highest version in the ` +
+        `supplied migrations list), got: ${targetVersion}`,
+    );
   }
 
-  const pending = migrations.filter(
-    (migration) => migration.version > fromVersion && migration.version <= ceiling,
-  );
+  const ceiling = targetVersion ?? terminal;
+
+  if (fromVersion > ceiling) {
+    // Names `currentSchemaVersion()` — the shipped list's terminal version —
+    // not the caller's `ceiling`, which may be a deliberately short test
+    // list and would otherwise mislabel this build's actual highest known
+    // migration version.
+    throw new SchemaVersionError(fromVersion, currentSchemaVersion());
+  }
+
+  const pending = migrations
+    .filter((migration) => migration.version > fromVersion && migration.version <= ceiling)
+    .toSorted((a, b) => a.version - b.version);
 
   const applied: MigrationManifestEntry[] = [];
   for (const migration of pending) {

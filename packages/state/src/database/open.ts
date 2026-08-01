@@ -7,7 +7,13 @@ import {
   StateDatabaseCorruptionError,
   StateStoreError,
 } from "../errors.js";
-import { readApplicationId, readForeignKeys, readJournalMode, readUserVersion } from "./pragma.js";
+import {
+  readApplicationId,
+  readForeignKeys,
+  readJournalMode,
+  readRecursiveTriggers,
+  readUserVersion,
+} from "./pragma.js";
 
 /** `PRAGMA application_id` written by migration 1 — 0x484E4B31, "HNK1" (design D2). */
 const APPLICATION_ID = 1213090609;
@@ -313,7 +319,7 @@ export function openStateDatabaseInternal(
   // 8. Open the connection.
   const db = new DatabaseSync(path, { timeout: 5000 });
 
-  // 9-12 run inside one try/catch: `sqlite3_open_v2` (step 8) does not read
+  // 9-13 run inside one try/catch: `sqlite3_open_v2` (step 8) does not read
   // page 1, so a foreign header, a read-only parent (SQLITE_CANTOPEN on
   // `journal_mode = wal`), or a busy peer (SQLITE_BUSY) can all surface only
   // once a statement actually runs below, as a raw, untyped `node:sqlite`
@@ -355,6 +361,25 @@ export function openStateDatabaseInternal(
 
     // 12. synchronous does not persist across connections — set unconditionally on every open.
     db.exec("PRAGMA synchronous = FULL");
+
+    // 13. recursive_triggers is off by default and does not persist across
+    // connections — without it, SQLite resolves a REPLACE conflict (`INSERT
+    // OR REPLACE` / `REPLACE INTO`) by deleting and reinserting the row
+    // without ever firing the BEFORE DELETE append-only guard, silently
+    // defeating it (issue #7, Phase 2 fix S1). This is in-package
+    // defense-in-depth, not the security boundary — the boundary is the
+    // filesystem posture above plus the no-handle-escape rule (design D5);
+    // it is nonetheless a per-connection obligation every future open must
+    // honour, so it gets the same verify-then-set-then-verify treatment as
+    // foreign_keys and journal_mode above.
+    if (readRecursiveTriggers(db) !== 1) {
+      db.exec("PRAGMA recursive_triggers = ON");
+      if (readRecursiveTriggers(db) !== 1) {
+        throw new StateStoreError(
+          "failed to enable PRAGMA recursive_triggers on the state database",
+        );
+      }
+    }
   } catch (error) {
     try {
       db.close();

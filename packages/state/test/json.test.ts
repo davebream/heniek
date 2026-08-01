@@ -49,6 +49,47 @@ describe("canonicalize — non-finite numbers rejected on the write path (issue 
   it("leaves -0 alone rather than rejecting it", () => {
     expect(() => canonicalize(-0 as JsonValue)).not.toThrow();
   });
+
+  it("normalises -0 to 0 at the value level, not just through JSON.stringify (issue #7, Phase 2 fix S5)", () => {
+    // `stringifyCanonical(-0)` is `"0"` with or without the normalisation
+    // branch, because `JSON.stringify(-0)` already produces `"0"` — that
+    // made the normalisation itself unobservable through the serialiser.
+    // `Object.is` distinguishes -0 from 0 where `===` cannot, which is what
+    // pins the branch's actual effect.
+    expect(Object.is(canonicalize(-0 as JsonValue), 0)).toBe(true);
+    expect(Object.is(canonicalize(-0 as JsonValue), -0)).toBe(false);
+  });
+});
+
+/** Builds a JSON array nested `depth` levels deep around a scalar `0`. */
+function nestedArray(depth: number): JsonValue {
+  let value: JsonValue = 0;
+  for (let index = 0; index < depth; index += 1) {
+    value = [value];
+  }
+  return value;
+}
+
+describe("canonicalize / parseJsonValue — recursion depth bound (issue #7, Phase 2 fix S4)", () => {
+  it("canonicalize accepts exactly MAX_DEPTH (64) levels of nesting", () => {
+    expect(() => canonicalize(nestedArray(63))).not.toThrow();
+  });
+
+  it("canonicalize rejects nesting one level beyond MAX_DEPTH, with the bound in the message", () => {
+    expect(() => canonicalize(nestedArray(64))).toThrow(StateStoreError);
+    expect(() => canonicalize(nestedArray(64))).toThrow(/exceeded 64/);
+  });
+
+  it("parseJsonValue accepts exactly MAX_DEPTH (64) levels of nesting", () => {
+    const text = JSON.stringify(nestedArray(63));
+    expect(() => parseJsonValue(text, "test payload")).not.toThrow();
+  });
+
+  it("parseJsonValue rejects nesting one level beyond MAX_DEPTH, with the bound in the message", () => {
+    const text = JSON.stringify(nestedArray(64));
+    expect(() => parseJsonValue(text, "test payload")).toThrow(StateStoreError);
+    expect(() => parseJsonValue(text, "test payload")).toThrow(/exceeded 64/);
+  });
 });
 
 describe("parseJsonValue — no payload bytes in the error message (issue #7, Phase 1 fix F6)", () => {

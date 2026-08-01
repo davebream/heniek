@@ -91,6 +91,19 @@ export function assertAppendOnly(migrations: readonly Migration[]): void {
  * " ").trim()`) then joined by `"\n"` — the same normal form the schema
  * fingerprint's `declared` digest uses, so a whitespace-only reflow of a
  * shipped migration does not trip this pin while a semantic edit does.
+ *
+ * **This normal form collapses whitespace inside string literals too**
+ * (issue #7, Phase 2 fix G7): `replace(/\s+/g, " ")` has no notion of quoting,
+ * so changing `'state_event is append-only'` to `'state_event  is
+ * append-only'` (an extra space inside the literal) does not trip this pin,
+ * nor `declared`'s identical normal form — both pins are blind to that
+ * specific edit. This blind spot is shared by all three pins in this
+ * package (`migrationStatementHash`, `schemaFingerprint().structural`'s
+ * trigger/view DDL text, and `schemaFingerprint().declared`). The covering
+ * check is `schema-constraints.test.ts`'s verbatim message assertions
+ * (`toBe("state_event is append-only")` at the UPDATE and DELETE cases) —
+ * those run the trigger and assert its *raised* message character-for-
+ * character, which a collapsed-whitespace literal would fail.
  */
 export function migrationStatementHash(migration: Migration): string {
   const normalised = migration.statements
