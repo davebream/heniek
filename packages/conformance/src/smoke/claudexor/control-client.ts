@@ -45,6 +45,13 @@ export interface RunObservation {
   readonly failed: boolean;
 }
 
+/** One answer to one question inside an interaction. */
+export interface InteractionAnswer {
+  readonly questionId: string;
+  readonly selectedLabels?: readonly string[];
+  readonly freeText?: string | null;
+}
+
 export interface SseFrame {
   readonly id: string | null;
   readonly event: string | null;
@@ -85,7 +92,11 @@ export interface ControlClient {
   startRun(input: RunStartInput): Promise<RunHandle>;
   getRun(runId: string): Promise<RunObservation>;
   cancel(runId: string): Promise<void>;
-  answer(runId: string, interactionId: string, answer: string): Promise<void>;
+  answer(
+    runId: string,
+    interactionId: string,
+    answers: readonly InteractionAnswer[],
+  ): Promise<void>;
   streamEvents(
     runId: string,
     options?: { lastEventId?: string; signal?: AbortSignal },
@@ -229,9 +240,18 @@ export function createControlClient(options: ControlClientOptions): ControlClien
       });
     },
 
-    async answer(runId: string, interactionId: string, answer: string) {
+    // The body is a LIST of per-question answers, not a single string, and the
+    // `questionId` comes from the `interaction.requested` event's `questions`
+    // array — the run summary does not carry it. Getting either wrong leaves
+    // the interaction unanswerable, and a canary would then report
+    // "same-session resume unsupported" for a capability that actually works.
+    async answer(runId: string, interactionId: string, answers: readonly InteractionAnswer[]) {
       await call("POST", `/v2/runs/${runId}/interactions/${interactionId}/answer`, "answer", {
-        answer,
+        answers: answers.map((entry) => ({
+          questionId: entry.questionId,
+          selectedLabels: entry.selectedLabels ?? [],
+          freeText: entry.freeText ?? null,
+        })),
       });
     },
 
