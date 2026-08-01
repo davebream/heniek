@@ -235,6 +235,21 @@ describe("createFileSecretStore", () => {
     },
   );
 
+  it("refuses to use a directory path that already exists as a plain file", async () => {
+    const base = await makeTempDirectory();
+    const notADirectory = join(base, "not-a-directory");
+    await writeFile(notADirectory, "not a directory", "utf8");
+
+    // `mkdir({ recursive: true })` itself already throws `EEXIST` for this
+    // exact case, before `prepareDirectory`'s own `!stats.isDirectory()`
+    // check is ever reached — that check exists as defence in depth for
+    // non-directory filesystem entries `mkdir` does not itself reject (a
+    // device file, FIFO, or socket at the target path). Either way, the
+    // store must never silently proceed.
+    const store = createFileSecretStore({ directory: notADirectory });
+    await expect(store.write("name", SensitiveValue.from("value"))).rejects.toThrow();
+  });
+
   // H2 regression (write failure): a failure anywhere between opening the
   // temp file and renaming it over the target must not leave partial
   // credential bytes on disk. `writeFile` is spied on the shared FileHandle
