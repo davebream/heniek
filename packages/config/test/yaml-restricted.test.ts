@@ -185,13 +185,22 @@ describe("parseRestrictedYaml — rejection rules (C1: exact diagnostic sets)", 
   });
 
   // B2: a pathologically deeply nested source must not throw a raw
-  // `RangeError` out of this Result-typed function.
+  // `RangeError` out of this Result-typed function. Parsed once, not
+  // twice: at 200,000 levels of flow-sequence nesting `yaml`'s composer
+  // does real (if bounded) work self-detecting its own resource
+  // exhaustion, and a second full parse of the same pathological input was
+  // enough to trip the default 5s test timeout under load. The "does not
+  // throw" property is still fully proven — a thrown error would have
+  // failed inside the `expect(() => ...)` callback before `result` could
+  // be assigned.
   it("does not throw on deeply nested input — returns a diagnostic instead (B2)", () => {
     const deep = `${"[".repeat(200_000)}1${"]".repeat(200_000)}\n`;
-    expect(() => parseRestrictedYaml(deep)).not.toThrow();
-    const result = parseRestrictedYaml(deep);
-    expect(result.ok).toBe(false);
-  });
+    let result: ReturnType<typeof parseRestrictedYaml> | undefined;
+    expect(() => {
+      result = parseRestrictedYaml(deep);
+    }).not.toThrow();
+    expect(result?.ok).toBe(false);
+  }, 20_000);
 
   // B2: an oversized source must fail fast with a diagnostic rather than
   // being handed to the underlying parser unbounded.
