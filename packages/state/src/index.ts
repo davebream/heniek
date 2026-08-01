@@ -57,3 +57,9 @@ export {
   type RunState,
   type WorkspaceState,
 } from "./projection/state.js";
+export {
+  compareProjectionToReplay,
+  type Divergence,
+  type ReplayDivergenceReport,
+} from "./replay/compare.js";
+export { type ReplayOptions, type ReplayResult, replayJournal } from "./replay/replay.js";
