@@ -188,42 +188,10 @@ Object.freeze(MIGRATION_0003_IDENTITY);
  * BEFORE UPDATE / BEFORE DELETE `RAISE(ABORT)` pair, mirroring
  * `state_event`'s append-only posture (D11a) — `artifact` is append-only
  * like the journal, not mutably-projected like the other three tables.
- * `CHECK (relative_path = 'blobs/sha256/' || content_hash)` is what lets the
- * Phase 5 recovery sweep trust, by schema construction, that a committed row
- * can never point into `incoming/` — `relative_path` is pinned to the
- * `blobs/sha256/` prefix by equality, so no row can ever equal an
- * `incoming/…` path. A separate `CHECK (relative_path NOT LIKE
- * 'incoming/%')` shipped alongside it but was dead on arrival: it is fully
- * subsumed by the equality CHECK above and can never fire, so it was removed
- * (issue #8, Phase 2 fix cycle G1).
- *
- * **`CHECK (length(content_hash) = 64 AND content_hash NOT GLOB
- * '*[^0-9a-f]*')` (issue #8, Phase 2 fix cycle G1):** the original shipped
- * CHECK was `content_hash = lower(content_hash)`, which only rejects
- * uppercase letters — `lower(X) = X` is also true for a 64-character string
- * containing `.` and `/`, so a `content_hash` of
- * `../../../../../../../../../../../../../../../../../etc/passwd_aaaa`
- * (64 chars, already lowercase) passed the CHECK while making
- * `relative_path = 'blobs/sha256/' || content_hash` denote a path outside
- * the blob root. The GLOB pattern closes the alphabet to exactly
- * `[0-9a-f]`, so `relative_path` can no longer escape `blobs/sha256/`
- * regardless of what a caller passes as `contentHash`. `reducer.ts` also
- * validates `contentHash` against the same hex alphabet before this CHECK
- * is ever reached, so a malformed hash raises a typed `ReducerError` at the
- * public API boundary instead of surfacing as a raw
- * `SQLITE_CONSTRAINT_CHECK`.
- *
- * **`REFERENCES run_projection(run_id)` on `artifact.run_id` (issue #8,
- * Phase 2 fix cycle G1):** `repository.codebase_id` and
- * `workspace.codebase_id` each carry both a `REFERENCES` clause and a
- * reducer-side existence check (the `repository.registered` precedent);
- * `artifact.run_id` shipped with neither, so an artifact could be committed
- * for a run that never existed. `PRAGMA foreign_keys = ON` is set in
- * `database/open.ts`, so this FK is genuinely enforced at the database
- * layer; `reducer.ts` adds the matching existence check for
- * `artifact.committed` and `stage.completed` ahead of it, and both events'
- * `eventScope` load the referenced `run_projection` row so the check has
- * data to compare against.
+ * `CHECK (relative_path = 'blobs/sha256/' || content_hash)` and
+ * `CHECK (relative_path NOT LIKE 'incoming/%')` are what let the Phase 5
+ * recovery sweep trust, by schema construction, that a committed row can
+ * never point into `incoming/`.
  *
  * **`CHECK (revision = 1)` (issue #8, Phase 2 fix cycle G1):** the original
  * shipped DDL left `revision` an unconstrained `INTEGER NOT NULL`, so
