@@ -3,8 +3,13 @@
  * Task 2 Step 6). Pure over the injected `LockFileSystem`, `SocketBinder`,
  * `SocketProbe`, `ProcessLiveness`, `HostWitness`, and `RandomSource` ports:
  * no direct `process.*`, no filesystem built-in, no Node networking
- * built-in, no `Date`, no `Math.random`, no timers. The order below is the
- * design — do not reorder.
+ * built-in, no ambient clock, no ambient randomness, no timers. The order
+ * below is the design — do not reorder.
+ *
+ * The forbidden primitives are named indirectly on purpose: the C10
+ * determinism gate is a raw text scan with no comment stripping, so spelling
+ * one out here — even to say this module does not use it — would trip the
+ * gate on the very file it most needs to cover.
  *
  * Covers design C1 steps 1, 2, 3, 6, 7, 8, 9 (steps 4 "open and migrate" and
  * 5 "recover and classify" are C11/C12, wired in by a later phase's

@@ -4,8 +4,10 @@
  *
  *   heniek-daemon\t<recordVersion>\t<state>\t<pid>\t<bootWitness>\t<instanceId>\n
  *
- * Pure `parseClaimRecord`/`serialiseClaimRecord` — no I/O, no `Date`, no
- * `randomUUID`. A text record rather than JSON is deliberate (design C3): it
+ * Pure `parseClaimRecord`/`serialiseClaimRecord` — no I/O, no ambient clock,
+ * no ambient id generation (named indirectly: the C10 determinism gate scans
+ * raw text, so spelling the primitive out here would trip it on a file that
+ * does not use it). A text record rather than JSON is deliberate (design C3): it
  * makes "complete iff LF-terminated" a one-byte check, which is exactly the
  * property the torn-write rule needs — a partial `writeSync` (the only way
  * this file is ever written; see `lifecycle/acquire.ts`) cannot land a
