@@ -515,12 +515,6 @@ async function proceedAfterClaim(
     await deps.recover(guard);
   }
 
-  // PLAN-TASK-6-STEP-11-CONTROL-B: publish moved ahead of bind, temporarily,
-  // to prove the ordering test fails. Revert before committing.
-  publishServingRecord(guard);
-  guard.assertStillHeld();
-  tracer.record("publish", "published the serving record");
-
   let socket: BoundSocket;
   try {
     socket = await deps.socketBinder.listen(options.daemonSocketFile);
@@ -540,6 +534,14 @@ async function proceedAfterClaim(
   guard.assertStillHeld();
 
   deps.lockFileSystem.chmod(options.daemonSocketFile, 0o600);
+
+  // design C1 step 8: publish only now, after the socket is bound and
+  // narrowed to 0600. A `serving` record published any earlier would name a
+  // process that no client can reach, and a starter that read it would
+  // concede to a daemon that never bound.
+  publishServingRecord(guard);
+  guard.assertStillHeld();
+  tracer.record("publish", "published the serving record");
 
   return { kind: "acquired", handle: guard, socket, instanceId };
 }
