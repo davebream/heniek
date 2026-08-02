@@ -20,6 +20,7 @@
 import type {
   BoundSocket,
   ClaimFileHandle,
+  Clock,
   FileStat,
   HostWitness,
   LifecycleTraceSink,
@@ -48,6 +49,7 @@ import {
   PidFileNamesLiveProcess,
 } from "./errors.js";
 import { type ClaimIdentity, createClaimGuard, type LockHandle } from "./guard.js";
+import { createLifecycleTracer, type LifecycleTracer } from "./trace.js";
 
 /** design C1 step 7: exactly one takeover retry, then `ClaimContended`. Modelled as a two-attempt claim budget — see the loop in `acquireClaim`. */
 const MAX_CLAIM_ATTEMPTS = 2;
@@ -61,8 +63,27 @@ export interface AcquireDeps {
   readonly processLiveness: ProcessLiveness;
   readonly hostWitness: HostWitness;
   readonly randomSource: RandomSource;
-  /** Accepted for API completeness with the design's C9 trace layer (Phase 6, `src/lifecycle/{state,trace}.ts`); not yet invoked from this phase's pure claim algorithm. */
+  /** Every sub-phase this function reaches is recorded here as one NDJSON line (design C9, OR-19) via an internally-built `LifecycleTracer`. */
   readonly traceSink: LifecycleTraceSink;
+  /** `LifecycleTracer`'s `at` field — never an ambient `Date` read (C10). */
+  readonly clock: Clock;
+  /**
+   * Optional: invoked once the claim is won and the socket has been probed
+   * and (if stale) reclaimed, but strictly before the bind — design C1
+   * steps 4-5 / C9's `recovering` state. The composition root
+   * (`src/runtime/compose.ts`, Phase 6) wires this to open the owned state
+   * database, migrate, and run the restart-reconciliation pass while still
+   * holding the claim, which is exactly what makes "connectable implies
+   * fully recovered" true: the bind below never runs until this resolves.
+   *
+   * A throw here (design's `RecoveryFailedError`, exit 12) propagates
+   * uncaught out of `acquireClaim` — the hook is responsible for releasing
+   * the claim itself before throwing (see `src/recovery/reconcile.ts`'s
+   * docblock for why `acquireClaim` must not do it a second time). Absent in
+   * tests that only exercise the claim algorithm itself, in which case the
+   * `recovering` phase is entered and left with no work done.
+   */
+  readonly recover?: (guard: LockHandle) => Promise<void>;
 }
 
 export interface AcquireOptions {
@@ -244,6 +265,7 @@ function terminal(outcome: AcquireOutcome): ContendedInspection {
 async function inspectContendedClaim(
   deps: AcquireDeps,
   options: AcquireOptions,
+  tracer: LifecycleTracer,
 ): Promise<ContendedInspection> {
   const path = options.daemonPidFile;
 
@@ -258,12 +280,15 @@ async function inspectContendedClaim(
   }
 
   if (witness.isSymbolicLink()) {
+    tracer.record("refused", "claim file is a symlink");
     return terminal({ kind: "refused", error: new InsecureClaimFile(path, "symlink") });
   }
   if (!witness.isFile()) {
+    tracer.record("refused", "claim file is not a regular file");
     return terminal({ kind: "refused", error: new InsecureClaimFile(path, "not a regular file") });
   }
   if (witness.uid !== deps.processLiveness.uid()) {
+    tracer.record("refused", "claim file is owned by a different uid");
     return terminal({
       kind: "refused",
       error: new InsecureClaimFile(path, `owned by uid ${witness.uid}, not the current process`),
@@ -290,9 +315,12 @@ async function inspectContendedClaim(
 
   if (parsed.kind === "claim-in-progress") {
     const verdict = await deps.socketProbe.probe(options.daemonSocketFile);
+    tracer.record("probe", `socket probe verdict while a claim is in progress: ${verdict}`);
     if (verdict === "serving") {
+      tracer.record("lost", "a live daemon already answers while a claim is in progress");
       return terminal({ kind: "lost", error: new AlreadyRunning(undefined) });
     }
+    tracer.record("lost", "conceding to a claim in progress");
     return terminal({ kind: "lost", error: new ClaimInProgress(path) });
   }
 
@@ -317,21 +345,26 @@ async function inspectContendedClaim(
   if (record.state === "claiming") {
     // The winner is still mid-startup by construction (bind is last) — the
     // ordinary contended case, not exotic. No probe needed to decide it.
+    tracer.record("lost", "another instance is still starting up");
     return terminal({ kind: "lost", error: new ClaimInProgress(path) });
   }
 
   // record.state === "serving", witness matches, pid alive.
   const verdict = await deps.socketProbe.probe(options.daemonSocketFile);
+  tracer.record("probe", `socket probe verdict against a live serving record: ${verdict}`);
   if (verdict === "serving") {
+    tracer.record("lost", "a live daemon already owns this application home");
     return terminal({ kind: "lost", error: new AlreadyRunning(record.pid) });
   }
   if (verdict === "hostile") {
+    tracer.record("refused", "socket occupied by a process that does not speak the protocol");
     return terminal({
       kind: "refused",
       error: new ForeignSocketOccupied(options.daemonSocketFile),
     });
   }
   // "no-listener" or "absent" — nothing signalled, nothing removed.
+  tracer.record("refused", "claim names a live process not answering as a Heniek daemon");
   return terminal({ kind: "refused", error: new PidFileNamesLiveProcess(path) });
 }
 
@@ -393,6 +426,7 @@ function reclaimStaleSocket(
   deps: AcquireDeps,
   options: AcquireOptions,
   guard: LockHandle,
+  tracer: LifecycleTracer,
 ): AcquireOutcome | undefined {
   let stat: FileStat;
   try {
@@ -405,12 +439,14 @@ function reclaimStaleSocket(
   }
   if (!stat.isSocket() || stat.uid !== deps.processLiveness.uid()) {
     guard.release();
+    tracer.record("refused", "socket path is not a socket this process owns");
     return {
       kind: "refused",
       error: new InsecureSocketPath(options.daemonSocketFile, "not a socket this process owns"),
     };
   }
   deps.lockFileSystem.unlink(options.daemonSocketFile);
+  tracer.record("reclaim", "unlinked the stale socket");
   return undefined;
 }
 
@@ -442,24 +478,42 @@ async function proceedAfterClaim(
   options: AcquireOptions,
   guard: LockHandle,
   instanceId: string,
+  tracer: LifecycleTracer,
 ): Promise<AcquireOutcome> {
   const verdict = await deps.socketProbe.probe(options.daemonSocketFile);
+  tracer.record("probe", `socket probe verdict: ${verdict}`);
 
   if (verdict === "serving") {
     guard.release();
+    tracer.record("lost", "socket answered as an already-serving daemon");
     return { kind: "lost", error: new AlreadyRunning(undefined) };
   }
   if (verdict === "hostile") {
     guard.release();
+    tracer.record("refused", "socket occupied by a process that does not speak the protocol");
     return { kind: "refused", error: new ForeignSocketOccupied(options.daemonSocketFile) };
   }
   if (verdict === "no-listener") {
-    const refusal = reclaimStaleSocket(deps, options, guard);
+    const refusal = reclaimStaleSocket(deps, options, guard, tracer);
     if (refusal !== undefined) {
       return refusal;
     }
   }
   // verdict === "absent", or "no-listener" was successfully reclaimed.
+
+  // design C1 steps 4-5 / C9's `recovering` state: entered unconditionally
+  // here, strictly before the bind, regardless of whether the caller
+  // actually wired a `recover` hook — this is what makes `bind`/`publish`
+  // below legal `recovering` sub-phases rather than an illegal transition
+  // straight from `acquiring` (see `state.ts`).
+  tracer.record("recover", "opening the owned state database and running restart reconciliation");
+  if (deps.recover !== undefined) {
+    // A throw here — design's `RecoveryFailedError` (exit 12) or a
+    // `ClaimLostError` from a mid-pass `assertStillHeld()` — propagates
+    // uncaught; the hook itself is responsible for releasing the claim on
+    // the former (see `AcquireDeps.recover`'s docblock).
+    await deps.recover(guard);
+  }
 
   let socket: BoundSocket;
   try {
@@ -467,16 +521,19 @@ async function proceedAfterClaim(
   } catch (error) {
     if (isErrnoCode(error, "EADDRINUSE")) {
       guard.release();
+      tracer.record("lost", "lost the bind race (EADDRINUSE)");
       return { kind: "lost", error: new BindRaced(options.daemonSocketFile) };
     }
     throw error;
   }
+  tracer.record("bind", `bound ${options.daemonSocketFile}`);
 
   deps.lockFileSystem.chmod(options.daemonSocketFile, 0o600);
   publishServingRecord(guard);
   // Publish wrote in place, so the identity is unchanged by construction;
   // this re-check confirms the record survived the publish window.
   guard.assertStillHeld();
+  tracer.record("publish", "published the serving record");
 
   return { kind: "acquired", handle: guard, socket, instanceId };
 }
@@ -485,8 +542,16 @@ export async function acquireClaim(
   deps: AcquireDeps,
   options: AcquireOptions,
 ): Promise<AcquireOutcome> {
+  const instanceId = randomHex(deps.randomSource, INSTANCE_ID_BYTES);
+  const tracer = createLifecycleTracer({
+    instanceId,
+    sink: deps.traceSink,
+    clock: deps.clock,
+  });
+
   const runtimeCheck = verifyDirectorySecurity(deps, options.runtimeDirectory);
   if (!runtimeCheck.ok) {
+    tracer.record("refused", `insecure runtime directory: ${runtimeCheck.reason}`);
     return {
       kind: "refused",
       error: new InsecureRuntimeDirectory(options.runtimeDirectory, runtimeCheck.reason),
@@ -494,15 +559,20 @@ export async function acquireClaim(
   }
   const parentCheck = verifyDirectorySecurity(deps, options.runtimeDirectoryParent);
   if (!parentCheck.ok) {
+    tracer.record("refused", `insecure runtime directory parent: ${parentCheck.reason}`);
     return {
       kind: "refused",
       error: new InsecureRuntimeDirectory(options.runtimeDirectoryParent, parentCheck.reason),
     };
   }
 
-  const instanceId = randomHex(deps.randomSource, INSTANCE_ID_BYTES);
-
   for (let attempt = 0; attempt < MAX_CLAIM_ATTEMPTS; attempt++) {
+    tracer.record(
+      "claim",
+      attempt === 0
+        ? "attempting to win the instance claim"
+        : "retrying the claim after a takeover",
+    );
     const claimResult = tryClaim(deps, options, instanceId);
     if (claimResult.kind === "claimed") {
       const guard = createClaimGuard({
@@ -512,10 +582,10 @@ export async function acquireClaim(
         claimIdentity: claimResult.identity,
         lockFileSystem: deps.lockFileSystem,
       });
-      return proceedAfterClaim(deps, options, guard, instanceId);
+      return proceedAfterClaim(deps, options, guard, instanceId, tracer);
     }
 
-    const inspection = await inspectContendedClaim(deps, options);
+    const inspection = await inspectContendedClaim(deps, options, tracer);
     if (inspection.kind === "terminal") {
       return inspection.outcome;
     }
@@ -529,8 +599,10 @@ export async function acquireClaim(
       // attempt the takeover.
       break;
     }
+    tracer.record("takeover", "attempting a rename-aside takeover of an orphaned claim");
     attemptTakeover(deps, options, inspection.witness);
   }
 
+  tracer.record("refused", "the bounded takeover retry was exhausted — contended");
   return { kind: "refused", error: new ClaimContended(options.daemonPidFile) };
 }

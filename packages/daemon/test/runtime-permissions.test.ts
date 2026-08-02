@@ -31,6 +31,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { type AcquireDeps, type AcquireOptions, acquireClaim } from "../src/lifecycle/acquire.js";
 import type { LifecycleTraceSink } from "../src/ports.js";
+import { createSystemClock } from "../src/runtime/clock.js";
 import { createSystemHostWitness } from "../src/runtime/host-witness.js";
 import { createNodeLockFileSystem } from "../src/runtime/lock-filesystem.js";
 import { createSystemProcessLiveness } from "../src/runtime/process-liveness.js";
@@ -64,6 +65,7 @@ async function makeHarness(): Promise<Harness> {
     hostWitness: createSystemHostWitness(),
     randomSource: createSystemRandomSource(),
     traceSink: inMemoryTraceSink(),
+    clock: createSystemClock(),
   };
 
   const options: AcquireOptions = {

@@ -121,6 +121,7 @@ function makeHarness(options: HarnessOptions = {}): Harness {
         }),
     },
     traceSink: { emit: () => {} },
+    clock: { nowIso: () => "2026-08-02T00:00:00.000Z" },
   };
 
   return { fs, deps, isAlive, probe, listen };
