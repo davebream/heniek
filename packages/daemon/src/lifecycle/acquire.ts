@@ -12,17 +12,24 @@
  * bound and the `serving` record is published).
  */
 
-import type { ClaimFileHandle, FileStat, LifecycleTraceSink } from "../ports.js";
 import type {
   BoundSocket,
+  ClaimFileHandle,
+  FileStat,
   HostWitness,
+  LifecycleTraceSink,
   LockFileSystem,
   ProcessLiveness,
   RandomSource,
   SocketBinder,
   SocketProbe,
 } from "../ports.js";
-import { type ClaimRecord, MAX_CLAIM_RECORD_BYTES, parseClaimRecord, serialiseClaimRecord } from "./claim-record.js";
+import {
+  type ClaimRecord,
+  MAX_CLAIM_RECORD_BYTES,
+  parseClaimRecord,
+  serialiseClaimRecord,
+} from "./claim-record.js";
 import {
   AlreadyRunning,
   BindRaced,

@@ -48,7 +48,7 @@ export interface ClaimIdentity {
 export interface LockHandle {
   readonly instanceId: string;
   isHeld(): boolean;
-  /** Throws `ClaimLostError` (and fires every `onLost` callback) the moment the held identity no longer matches. */
+  /** Throws `ClaimLostError` (and fires every `onLost` callback) the moment the held identity no longer matches — including when the claim path has vanished entirely. */
   assertStillHeld(): void;
   onLost(callback: (error: ClaimLostError) => void): void;
   /** Unlinks the claim path, but only after confirming it still carries this guard's current identity; always closes the claim handle. Idempotent. */
@@ -104,7 +104,15 @@ export function createClaimGuard(options: ClaimGuardOptions): LockHandle {
       if (!held) {
         fail(`the claim at ${options.claimPath} has already been released`);
       }
-      const current = options.lockFileSystem.lstat(options.claimPath);
+      let current: FileStat;
+      try {
+        current = options.lockFileSystem.lstat(options.claimPath);
+      } catch (error) {
+        if (isErrnoCode(error, "ENOENT")) {
+          fail(`the claim record at ${options.claimPath} has been removed`);
+        }
+        throw error;
+      }
       if (!identityMatches(current, claimIdentity)) {
         fail(
           `the claim record at ${options.claimPath} no longer matches the identity this process holds`,
