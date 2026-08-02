@@ -86,6 +86,30 @@ describe("publishArtifact (Task 3.4, R4/D14n)", () => {
     fakeFs.close(second.fd);
   });
 
+  it("P1: receipt.adopted and fd mode are correct on both the normal-publish and the adopt path", () => {
+    const { store, fakeFs } = makeStore();
+    const bytes = new TextEncoder().encode("adopted flag content");
+
+    const first = publishArtifact(store, { bytes });
+    expect(first.adopted).toBe(false);
+    // Normal-publish path: the receipt's fd is the same O_RDWR fd the bytes
+    // were written through — a zero-length write through it must succeed
+    // (proves the access mode without mutating the committed blob's bytes,
+    // since it shares the linked blob's inode).
+    expect(() => fakeFs.write(first.fd, new Uint8Array(0))).not.toThrow();
+    fakeFs.close(first.fd);
+
+    const second = publishArtifact(store, { bytes });
+    expect(second.adopted).toBe(true);
+    // Adopt path: the receipt's fd is an O_RDONLY re-open of the existing
+    // blob — a write through it must fail EBADF, exactly as a real
+    // O_RDONLY fd would.
+    expect(() => fakeFs.write(second.fd, new Uint8Array(0))).toThrowError(
+      expect.objectContaining({ code: "EBADF" }),
+    );
+    fakeFs.close(second.fd);
+  });
+
   it("digest-mismatch quarantine: a corrupted committed blob is quarantined, never overwritten, and the address is not permanently poisoned", () => {
     const { store, fakeFs } = makeStore();
     const bytes = new TextEncoder().encode("original content");
@@ -187,6 +211,17 @@ describe("publishArtifact (Task 3.4, R4/D14n)", () => {
     expect(lastFsyncIndex).toBeGreaterThan(linkIndex);
     expect(unlinkIndex).toBeGreaterThan(lastFsyncIndex);
 
+    // P5 (post-Phase-3 adversarial review, fix cycle 1): the previous
+    // version of this test only compared call *indices* — it never checked
+    // that the final fsync's *target* is the blobs-directory fd, which is
+    // the actual durability guarantee for the link. Deleting the directory
+    // fsync entirely would still satisfy the index-only assertions above
+    // (the temp's own post-link fsync would become the "last" fsync).
+    const blobsDirFd = fakeFs.lastFdOf("openDirectoryReadOnly");
+    const fsyncCalls = fakeFs.calls.filter((call) => call.method === "fsync");
+    const lastFsyncCall = fsyncCalls[fsyncCalls.length - 1];
+    expect(lastFsyncCall?.args[0]).toBe(blobsDirFd);
+
     fakeFs.close(receipt.fd);
   });
 
@@ -231,5 +266,131 @@ describe("publishArtifact (Task 3.4, R4/D14n)", () => {
     );
 
     expect(() => publishArtifact(store, { bytes })).toThrowError(ArtifactQuarantinedError);
+  });
+
+  it("P2: existingFd is closed even when the adopt path's re-hash itself fails", () => {
+    const { store, fakeFs } = makeStore();
+    const bytes = new TextEncoder().encode("adopt re-hash failure content");
+
+    const first = publishArtifact(store, { bytes });
+    fakeFs.close(first.fd);
+
+    // Each publishArtifact call's own temp-file validation
+    // (hashAndValidate("write")) issues exactly two `fstat` calls (before
+    // the readAt loop, and after). The first publish call above consumed
+    // occurrences 1-2. The second call below consumes occurrences 3-4 for
+    // its own temp validation, then hits EEXIST and enters the adopt path's
+    // re-hash (hashAndValidate("link")), whose first `fstat` call is
+    // occurrence 5 — targeting it "before" fires right after
+    // `openReadOnly` has already produced `existingFd`, guaranteeing
+    // `existingFd` is open at the moment of failure.
+    fakeFs.armFaultAtOccurrence(
+      "fstat",
+      5,
+      "before",
+      Object.assign(new Error("EIO"), { code: "EIO" }),
+    );
+
+    expect(() => publishArtifact(store, { bytes })).toThrowError(ArtifactValidationError);
+
+    const opens = fakeFs.calls.filter(
+      (call) =>
+        call.method === "openExclusive" ||
+        call.method === "openReadOnly" ||
+        call.method === "openDirectoryReadOnly",
+    ).length;
+    const closes = fakeFs.calls.filter((call) => call.method === "close").length;
+    // Previously this was opens - 1 (existingFd leaked) — the existing
+    // fd-balance test above only ever ran the happy path, which never
+    // exercises this failure branch.
+    expect(closes).toBe(opens);
+  });
+
+  it("P3: no ArtifactValidationError raised during publication ever names the store root", () => {
+    const ROOT = "/store-with-a-root-that-must-never-leak";
+    const eio = () => Object.assign(new Error("EIO"), { code: "EIO" });
+
+    function expectNoRootLeak(
+      triggerFailure: (fakeFs: ReturnType<typeof makeStore>["fakeFs"]) => void,
+    ) {
+      const { store, fakeFs } = makeStore(ROOT);
+      triggerFailure(fakeFs);
+      try {
+        publishArtifact(store, { bytes: new TextEncoder().encode("root leak check content") });
+        throw new Error("unreachable");
+      } catch (error) {
+        expect(error).toBeInstanceOf(ArtifactValidationError);
+        const validationError = error as ArtifactValidationError;
+        expect(validationError.relativePath).not.toContain(ROOT);
+        expect(validationError.message).not.toContain(ROOT);
+      }
+    }
+
+    // openTempExclusive's own two throw sites (publish.ts:76/81).
+    expectNoRootLeak((fakeFs) => fakeFs.armFaultBefore("openExclusive", eio()));
+    // writeAll (publish.ts:89).
+    expectNoRootLeak((fakeFs) => fakeFs.armFaultAfter("write", eio()));
+    // fsyncFile, reused by the first fsync boundary (publish.ts:98).
+    expectNoRootLeak((fakeFs) => fakeFs.armFaultAfter("fsync", eio()));
+
+    // The adopt path's own re-hash validation (hashAndValidate's "link"
+    // call site, publish.ts:217→141) — the fifth site. Needs an
+    // already-committed blob first, then the second publish's adopt-path
+    // re-hash to fail; occurrence 5 is that re-hash's first `fstat` call
+    // (see the P2 test above for the full occurrence-counting rationale).
+    {
+      const { store, fakeFs } = makeStore(ROOT);
+      const bytes = new TextEncoder().encode("root leak adopt-path content");
+      const first = publishArtifact(store, { bytes });
+      fakeFs.close(first.fd);
+      fakeFs.armFaultAtOccurrence("fstat", 5, "before", eio());
+      try {
+        publishArtifact(store, { bytes });
+        throw new Error("unreachable");
+      } catch (error) {
+        expect(error).toBeInstanceOf(ArtifactValidationError);
+        const validationError = error as ArtifactValidationError;
+        expect(validationError.relativePath).not.toContain(ROOT);
+        expect(validationError.message).not.toContain(ROOT);
+      }
+    }
+  });
+
+  it("P4: fchmod, the blobs-directory opener, and the quarantine mkdir surface as ArtifactValidationError, not a raw errno", () => {
+    const eio = () => Object.assign(new Error("EIO"), { code: "EIO" });
+
+    {
+      const { store, fakeFs } = makeStore();
+      fakeFs.armFaultBefore("fchmod", eio());
+      expect(() => publishArtifact(store, { bytes: new Uint8Array([1]) })).toThrowError(
+        ArtifactValidationError,
+      );
+    }
+
+    {
+      const { store, fakeFs } = makeStore();
+      fakeFs.armFaultBefore("openDirectoryReadOnly", eio());
+      expect(() => publishArtifact(store, { bytes: new Uint8Array([2]) })).toThrowError(
+        ArtifactValidationError,
+      );
+    }
+
+    {
+      // The quarantine mkdir is only reachable via digest-mismatch adopt —
+      // set that scenario up first, exactly as the existing quarantine
+      // tests above do.
+      const { store, fakeFs } = makeStore();
+      const bytes = new TextEncoder().encode("quarantine mkdir fault content");
+      const first = publishArtifact(store, { bytes });
+      fakeFs.close(first.fd);
+      const finalPath = join(store.root, first.relativePath);
+      fakeFs.corruptFile(finalPath, new TextEncoder().encode("wrong digest bytes"));
+
+      // Store construction issues two `mkdir` calls (incoming/, blobs/sha256/);
+      // the quarantine-and-retry path's own `mkdir(quarantine/)` is the third.
+      fakeFs.armFaultAtOccurrence("mkdir", 3, "before", eio());
+
+      expect(() => publishArtifact(store, { bytes })).toThrowError(ArtifactValidationError);
+    }
   });
 });

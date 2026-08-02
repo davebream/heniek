@@ -31,6 +31,19 @@
  * instead. `createArtifactStoreInternal` therefore `lstat`s each container
  * after `mkdir` and refuses (never falls through) unless it is a real,
  * non-symlink directory.
+ *
+ * **`clock` accessor removed (P6, post-Phase-3 adversarial review, fix
+ * cycle 1).** `ArtifactStoreOptions.clock` is still accepted and stored —
+ * every caller already threads a `Clock` through `createArtifactStore` for
+ * the store handle's lifetime, and Phase 5's `recoverArtifacts` will need
+ * it for the gated sweep's age comparison. What is deliberately absent is
+ * an `internalArtifactClock(store)` accessor: after H1 deleted the on-open
+ * recovery sweep, that accessor had zero call sites package-wide, so
+ * nothing proved it returned the right value. Rather than leave an
+ * untested accessor for a later builder to trust, it is not reintroduced
+ * until Phase 5 adds `recoverArtifacts` — its first real consumer — along
+ * with a test asserting it returns the exact `Clock` instance
+ * `createArtifactStore` was given.
  */
 
 import { join } from "node:path";
@@ -73,10 +86,6 @@ function internals(store: ArtifactStore, what: string): Internals {
 /** INTERNAL — exported from this module but NOT from src/index.ts. Package-private by construction. */
 export function internalArtifactFileSystem(store: ArtifactStore): ArtifactFileSystem {
   return internals(store, "internalArtifactFileSystem").fs;
-}
-
-export function internalArtifactClock(store: ArtifactStore): Clock {
-  return internals(store, "internalArtifactClock").clock;
 }
 
 export function internalArtifactIds(store: ArtifactStore): IdGenerator {

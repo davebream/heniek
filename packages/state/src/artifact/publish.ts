@@ -45,9 +45,24 @@ export interface ArtifactPublicationReceipt {
   readonly relativePath: string;
   readonly contentHash: string;
   readonly byteLength: number;
-  /** The fd the validated bytes were written through (S1) — never a re-open. The caller is responsible for closing it. */
+  /**
+   * On the normal-publish path (`adopted === false`): the same `O_RDWR` fd
+   * the validated bytes were written through (S1) — never a re-open. On the
+   * EEXIST/idempotent-adopt path (`adopted === true`): an `O_RDONLY`
+   * re-open of the already-committed blob (P1, post-Phase-3 adversarial
+   * review, fix cycle 1) — S1's re-open ban applies only to the writer's
+   * own bytes, and the adopt path never wrote any; the fd it hands back was
+   * opened purely to re-verify the existing blob's digest, through that
+   * same fd, before adoption. A caller that needs a writable fd must branch
+   * on `adopted` and treat an adopted fd as read-only. Either way the
+   * caller is responsible for closing it.
+   */
   readonly fd: number;
+  /** `true` when `link`'s `EEXIST` resolved via idempotent adopt of an already-committed blob rather than this call's own write (P1). See `fd`'s docs for what that means for the fd's mode. */
+  readonly adopted: boolean;
 }
+
+const INCOMING_DIR_LABEL = "incoming";
 
 function randomTempFileName(): string {
   return `${randomBytes(16).toString("hex")}.tmp`;
@@ -61,41 +76,56 @@ function closeQuietly(fs: ArtifactFileSystem, fd: number): void {
   }
 }
 
-/** R4 step 1 (S1): `openExclusive` a fresh randomly-named temp file, bounded retries on name collision. */
+/**
+ * R4 step 1 (S1): `openExclusive` a fresh randomly-named temp file, bounded
+ * retries on name collision. Returns both the absolute `path` (for further
+ * `fs` calls) and a store-root-relative `relativePath` (P3, post-Phase-3
+ * adversarial review, fix cycle 1) — every `ArtifactValidationError` this
+ * module raises must name a value relative to the store's root, never the
+ * absolute path `errors.ts`'s house rule forbids echoing an ambient/derived
+ * root in.
+ */
 function openTempExclusive(
   fs: ArtifactFileSystem,
   incomingDir: string,
-): { readonly fd: number; readonly path: string } {
+): { readonly fd: number; readonly path: string; readonly relativePath: string } {
   let lastError: unknown;
   for (let attempt = 0; attempt < MAX_TEMP_NAME_ATTEMPTS; attempt += 1) {
-    const path = join(incomingDir, randomTempFileName());
+    const name = randomTempFileName();
+    const path = join(incomingDir, name);
+    const relativePath = join(INCOMING_DIR_LABEL, name);
     try {
-      return { fd: fs.openExclusive(path), path };
+      return { fd: fs.openExclusive(path), path, relativePath };
     } catch (error) {
       if (!isErrnoCode(error, "EEXIST")) {
-        throw new ArtifactValidationError(path, "write", { cause: error });
+        throw new ArtifactValidationError(relativePath, "write", { cause: error });
       }
       lastError = error;
     }
   }
-  throw new ArtifactValidationError(incomingDir, "write", { cause: lastError });
+  throw new ArtifactValidationError(INCOMING_DIR_LABEL, "write", { cause: lastError });
 }
 
-/** R4 step 2. Any error is fatal — the temp file is left for the gated recovery sweep. */
-function writeAll(fs: ArtifactFileSystem, fd: number, path: string, bytes: Uint8Array): void {
+/** R4 step 2. Any error is fatal — the temp file is left for the gated recovery sweep. `relativePath` (P3) is store-root-relative, used only for the error message — the syscall itself operates on `fd`. */
+function writeAll(
+  fs: ArtifactFileSystem,
+  fd: number,
+  relativePath: string,
+  bytes: Uint8Array,
+): void {
   try {
     fs.write(fd, bytes);
   } catch (error) {
-    throw new ArtifactValidationError(path, "write", { cause: error });
+    throw new ArtifactValidationError(relativePath, "write", { cause: error });
   }
 }
 
-/** R4 step 3 (also reused for the post-fchmod re-fsync). Any error is fatal, same disposition as write. */
-function fsyncFile(fs: ArtifactFileSystem, fd: number, path: string): void {
+/** R4 step 3 (also reused for the post-fchmod re-fsync). Any error is fatal, same disposition as write. `relativePath` (P3) is store-root-relative. */
+function fsyncFile(fs: ArtifactFileSystem, fd: number, relativePath: string): void {
   try {
     fs.fsync(fd);
   } catch (error) {
-    throw new ArtifactValidationError(path, "fsync", { cause: error });
+    throw new ArtifactValidationError(relativePath, "fsync", { cause: error });
   }
 }
 
@@ -108,12 +138,14 @@ function fsyncFile(fs: ArtifactFileSystem, fd: number, path: string): void {
  * two, with no fault-injection boundary of its own). `step` lets the two
  * call sites — the initial temp-file validation ("write") and the adopt
  * path's re-hash of the existing blob during EEXIST resolution ("link") —
- * report the boundary they actually happened under.
+ * report the boundary they actually happened under. `relativePath` (P3) is
+ * store-root-relative — the caller passes the temp's or the blob's
+ * relative form, never an absolute path.
  */
 function hashAndValidate(
   fs: ArtifactFileSystem,
   fd: number,
-  path: string,
+  relativePath: string,
   step: "write" | "link",
 ): { readonly digest: string; readonly byteLength: number } {
   try {
@@ -138,7 +170,7 @@ function hashAndValidate(
     if (error instanceof ArtifactValidationError) {
       throw error;
     }
-    throw new ArtifactValidationError(path, step, { cause: error });
+    throw new ArtifactValidationError(relativePath, step, { cause: error });
   }
 }
 
@@ -165,7 +197,14 @@ function quarantineAndRetry(
   existingDigest: string,
 ): LinkOutcome {
   const quarantineDir = join(store.root, QUARANTINE_DIR_NAME);
-  fs.mkdir(quarantineDir);
+  try {
+    fs.mkdir(quarantineDir);
+  } catch (error) {
+    // P4 (post-Phase-3 adversarial review, fix cycle 1): previously
+    // unwrapped — a raw errno would have escaped past this module's typed
+    // error boundary.
+    throw new ArtifactValidationError(relativePath, "link", { cause: error });
+  }
   const quarantinePath = join(quarantineDir, `${existingDigest}-${randomBytes(8).toString("hex")}`);
   try {
     fs.link(finalPath, quarantinePath);
@@ -214,7 +253,18 @@ function linkIntoBlobs(
   } catch (error) {
     throw new ArtifactValidationError(relativePath, "link", { cause: error });
   }
-  const { digest: existingDigest } = hashAndValidate(fs, existingFd, finalPath, "link");
+  // P2 (post-Phase-3 adversarial review, fix cycle 1): hashAndValidate can
+  // throw (fstat/readAt failure, or a size-changed-under-the-hash check).
+  // existingFd must be closed on every one of those paths — previously it
+  // leaked, because the outer publishArtifact catch only knows about
+  // tempFd/receiptFd, never this function-local fd.
+  let existingDigest: string;
+  try {
+    ({ digest: existingDigest } = hashAndValidate(fs, existingFd, relativePath, "link"));
+  } catch (error) {
+    closeQuietly(fs, existingFd);
+    throw error;
+  }
 
   if (existingDigest === digest) {
     // Match: the existing blob is already correct and durable. Adopt it —
@@ -236,7 +286,11 @@ export function publishArtifact(
   const fs = internalArtifactFileSystem(store);
   const ids = internalArtifactIds(store);
 
-  const { fd: tempFd, path: tempPath } = openTempExclusive(fs, store.incomingDir);
+  const {
+    fd: tempFd,
+    path: tempPath,
+    relativePath: tempRelativePath,
+  } = openTempExclusive(fs, store.incomingDir);
   // The fd this call will ultimately hand back in the receipt — starts as
   // tempFd, becomes the adopt-path's existing-blob fd once known. Tracked
   // separately from tempFd so the catch block below can close whichever
@@ -247,18 +301,28 @@ export function publishArtifact(
   let tempFdOwned = true;
 
   try {
-    writeAll(fs, tempFd, tempPath, input.bytes);
-    fsyncFile(fs, tempFd, tempPath);
+    writeAll(fs, tempFd, tempRelativePath, input.bytes);
+    fsyncFile(fs, tempFd, tempRelativePath);
 
-    const { digest, byteLength } = hashAndValidate(fs, tempFd, tempPath, "write");
+    const { digest, byteLength } = hashAndValidate(fs, tempFd, tempRelativePath, "write");
 
     if (input.expectedContentHash !== undefined && input.expectedContentHash !== digest) {
       throw new ArtifactDigestMismatchError(input.expectedContentHash, digest);
     }
 
-    fs.fchmod(tempFd, IMMUTABLE_BLOB_MODE);
-
     const relativePath = `blobs/sha256/${digest}`;
+
+    try {
+      fs.fchmod(tempFd, IMMUTABLE_BLOB_MODE);
+    } catch (error) {
+      // P4 (post-Phase-3 adversarial review, fix cycle 1): previously
+      // unwrapped — a raw errno would have escaped past this module's typed
+      // error boundary. Grouped under "write" (same disposition as
+      // hashAndValidate's own validation of the temp file): it operates on
+      // the still-in-incoming temp, before any link has been attempted.
+      throw new ArtifactValidationError(tempRelativePath, "write", { cause: error });
+    }
+
     const linkOutcome = linkIntoBlobs(fs, store, tempFd, tempPath, digest, relativePath);
     receiptFd = linkOutcome.fd;
 
@@ -272,13 +336,21 @@ export function publishArtifact(
       // content — re-fsync it now that fchmod's mode change and link's new
       // directory entry both need their own durability proof, per this
       // module's docblock.
-      fsyncFile(fs, tempFd, tempPath);
+      fsyncFile(fs, tempFd, tempRelativePath);
     }
 
     // H2 (post-Phase-3 adversarial review): the directory-fsync open uses
     // openDirectoryReadOnly (O_DIRECTORY added) rather than openReadOnly, so
     // a non-directory occupying blobsDir's path can never be opened as one.
-    const blobsDirFd = fs.openDirectoryReadOnly(store.blobsDir);
+    let blobsDirFd: number;
+    try {
+      blobsDirFd = fs.openDirectoryReadOnly(store.blobsDir);
+    } catch (error) {
+      // P4 (post-Phase-3 adversarial review, fix cycle 1): previously
+      // unwrapped — a raw errno would have escaped past this module's typed
+      // error boundary.
+      throw new ArtifactValidationError(relativePath, "dirfsync", { cause: error });
+    }
     try {
       fs.fsync(blobsDirFd);
     } catch (error) {
@@ -302,6 +374,7 @@ export function publishArtifact(
       contentHash: digest,
       byteLength,
       fd: receiptFd,
+      adopted: linkOutcome.adopted,
     };
   } catch (error) {
     if (tempFdOwned) {

@@ -25,6 +25,14 @@
  * to the fake's current time (advance via `setNow`). `link`/`EEXIST`/`nlink`
  * accounting and `fsync`-as-recorded-no-op were already faithful and are
  * unchanged.
+ *
+ * P7 (post-Phase-3 adversarial review, fix cycle 1): two more permissive-
+ * than-reality gaps closed. `link` onto a path already occupied by a
+ * planted symlink now throws `EEXIST` (previously it silently succeeded —
+ * real `link(2)` fails `EEXIST` whenever `newPath` already exists, symlink
+ * or not). `readAt` on a directory fd now throws `EISDIR` (previously it
+ * returned `0`, indistinguishable from EOF on an empty file — real
+ * positional reads on a directory fd fail `EISDIR`).
  */
 
 import { join } from "node:path";
@@ -36,6 +44,8 @@ interface Inode {
   mode: number;
   mtimeMs: number;
   readonly paths: Set<string>;
+  /** P7: marks a pseudo-inode backing a directory fd (`dirInodes`), so `readAt` can refuse it with `EISDIR` like a real positional read on a directory fd. */
+  readonly isDirectory?: boolean;
 }
 
 interface FdEntry {
@@ -78,6 +88,8 @@ export interface FakeArtifactFileSystem extends ArtifactFileSystem {
   corruptFile(path: string, data: Uint8Array): void;
   /** H2/H3 test support: plants a symlink at `path` (no real target resolution — `isSymbolicLink` reads true and open* throw `ELOOP`, mirroring `O_NOFOLLOW`). */
   plantSymlink(path: string): void;
+  /** P5: the fd returned by the most recent successful call to `method` (open* only). Throws if `method` has never successfully opened an fd. */
+  lastFdOf(method: "openExclusive" | "openReadOnly" | "openDirectoryReadOnly"): number;
 }
 
 function errno(code: string, message: string = code): Error & { code: string } {
@@ -105,6 +117,8 @@ export function createFakeArtifactFileSystem(nowMs: number = 0): FakeArtifactFil
   const armedAfter = new Map<FakeFsMethod, Map<number, unknown>>();
   /** next occurrence the auto-advancing `armFaultBefore`/`armFaultAfter` convenience methods will target, per method. */
   const nextAutoArmOccurrence = new Map<FakeFsMethod, number>();
+  /** P5 (post-Phase-3 adversarial review, fix cycle 1): the fd most recently returned by a successful call to each open* method — lets a test identify e.g. "the blobs-directory fd" without threading the fd through `calls`' recorded args. */
+  const lastOpenedFd = new Map<FakeFsMethod, number>();
   let nextFd = 1000;
   let nextInodeId = 1;
 
@@ -203,6 +217,7 @@ export function createFakeArtifactFileSystem(nowMs: number = 0): FakeArtifactFil
       const fd = nextFd;
       nextFd += 1;
       fds.set(fd, { inode, access: "rdwr", writePosition: 0 });
+      lastOpenedFd.set("openExclusive", fd);
       maybeThrowAfter("openExclusive", occurrence);
       return fd;
     },
@@ -224,6 +239,7 @@ export function createFakeArtifactFileSystem(nowMs: number = 0): FakeArtifactFil
             mode: 0o700,
             mtimeMs: currentTime,
             paths: new Set([path]),
+            isDirectory: true,
           };
           nextInodeId += 1;
           dirInodes.set(path, inode);
@@ -235,6 +251,7 @@ export function createFakeArtifactFileSystem(nowMs: number = 0): FakeArtifactFil
       const fd = nextFd;
       nextFd += 1;
       fds.set(fd, { inode, access: "rdonly", writePosition: 0 });
+      lastOpenedFd.set("openReadOnly", fd);
       maybeThrowAfter("openReadOnly", occurrence);
       return fd;
     },
@@ -264,6 +281,7 @@ export function createFakeArtifactFileSystem(nowMs: number = 0): FakeArtifactFil
           mode: 0o700,
           mtimeMs: currentTime,
           paths: new Set([path]),
+          isDirectory: true,
         };
         nextInodeId += 1;
         dirInodes.set(path, inode);
@@ -271,6 +289,7 @@ export function createFakeArtifactFileSystem(nowMs: number = 0): FakeArtifactFil
       const fd = nextFd;
       nextFd += 1;
       fds.set(fd, { inode, access: "rdonly", writePosition: 0 });
+      lastOpenedFd.set("openDirectoryReadOnly", fd);
       maybeThrowAfter("openDirectoryReadOnly", occurrence);
       return fd;
     },
@@ -300,6 +319,12 @@ export function createFakeArtifactFileSystem(nowMs: number = 0): FakeArtifactFil
       const occurrence = nextOccurrence("readAt");
       maybeThrowBefore("readAt", occurrence);
       const entry = fdEntry(fd);
+      // P7: a positional read on a directory fd is a real EISDIR, not an
+      // empty-file 0-byte EOF — the fake used to be unable to distinguish
+      // the two.
+      if (entry.inode.isDirectory === true) {
+        throw errno("EISDIR", `is a directory: fd ${fd}`);
+      }
       const remaining = entry.inode.data.length - position;
       if (remaining <= 0) {
         maybeThrowAfter("readAt", occurrence);
@@ -336,7 +361,10 @@ export function createFakeArtifactFileSystem(nowMs: number = 0): FakeArtifactFil
       if (inode === undefined) {
         throw errno("ENOENT", `no such file: ${existingPath}`);
       }
-      if (pathToInode.has(newPath)) {
+      // P7: real link(2) fails EEXIST whenever newPath already exists —
+      // including as a symlink, which the fake used to let through
+      // silently because it only checked `pathToInode`, never `symlinks`.
+      if (pathToInode.has(newPath) || symlinks.has(newPath)) {
         throw errno("EEXIST", `already exists: ${newPath}`);
       }
       pathToInode.set(newPath, inode);
@@ -498,6 +526,14 @@ export function createFakeArtifactFileSystem(nowMs: number = 0): FakeArtifactFil
 
     plantSymlink(path: string): void {
       symlinks.add(path);
+    },
+
+    lastFdOf(method: "openExclusive" | "openReadOnly" | "openDirectoryReadOnly"): number {
+      const fd = lastOpenedFd.get(method);
+      if (fd === undefined) {
+        throw new Error(`${method} has never successfully opened an fd`);
+      }
+      return fd;
     },
 
     fileExists(path: string): boolean {
