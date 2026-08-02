@@ -39,7 +39,6 @@ import {
   type TempDaemonHome,
   waitForChildClose,
   waitForLine,
-  waitForLineOrClose,
 } from "./helpers/spawn-daemon-child.js";
 
 function inMemoryTraceSink(): LifecycleTraceSink {
