@@ -2,11 +2,11 @@
  * The pure probe-verdict classifier (design C2). Turns the raw outcome of
  * one connect/send/read attempt against a candidate `daemon.sock` into one
  * of the four `SocketProbeVerdict`s. No I/O: `src/runtime/socket-probe.ts`
- * (Phase 5) is the `node:net` adapter that actually connects, sends one
- * `daemon.hello` request, reads one NDJSON line, and calls this function
- * with what it observed. Kept separate from the adapter so the
- * classification rule itself — the part with real decision content — stays
- * unit-testable without a socket.
+ * (Phase 5) is the networking adapter in `src/runtime/` that actually
+ * connects, sends one `daemon.hello` request, reads one NDJSON line, and
+ * calls this function with what it observed. Kept separate from the
+ * adapter so the classification rule itself — the part with real decision
+ * content — stays unit-testable without a socket.
  *
  * `hostile` is never collapsed into `no-listener` (a same-uid actor who
  * pre-binds `daemon.sock` must never cause a starting daemon to unlink
