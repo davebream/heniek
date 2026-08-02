@@ -52,6 +52,14 @@ export async function readPersistedCredential(
 interface LineClient {
   send(line: string): Promise<string>;
   close(): void;
+  /**
+   * Resolves once this connection is fully torn down. Tests that need the
+   * server to have reclaimed the slot wait on this rather than on elapsed
+   * time — the server decrements its live-connection count from its own
+   * socket-close handler, and both peers share this process's event loop, so
+   * the close event is the causal signal a fixed sleep could only guess at.
+   */
+  closed(): Promise<void>;
 }
 
 function connectLineClient(path: string): Promise<LineClient> {
@@ -71,6 +79,13 @@ function connectLineClient(path: string): Promise<LineClient> {
       }
     });
     socket.on("error", rejectClient);
+
+    let resolveClosed: () => void = () => {};
+    const closedPromise = new Promise<void>((resolve) => {
+      resolveClosed = resolve;
+    });
+    socket.on("close", () => resolveClosed());
+
     socket.on("connect", () => {
       resolveClient({
         send(line: string): Promise<string> {
@@ -81,6 +96,9 @@ function connectLineClient(path: string): Promise<LineClient> {
         },
         close(): void {
           socket.destroy();
+        },
+        closed(): Promise<void> {
+          return closedPromise;
         },
       });
     });

@@ -425,9 +425,15 @@ describe("socket-server.ts — connection caps, assembled and in-process (plan T
   });
 
   it("destroys a connection past the concurrent cap immediately, with zero bytes exchanged, and frees a slot on close", async () => {
+    let signalReleased: () => void = () => {};
+    const nextRelease = () =>
+      new Promise<void>((resolve) => {
+        signalReleased = resolve;
+      });
     const daemon = await startAssembledDaemon(home, {
       maxConcurrentConnections: 3,
       maxUnauthenticatedConnections: 100,
+      onConnectionReleased: () => signalReleased(),
     });
     const clients: LineClient[] = [];
     try {
@@ -451,8 +457,14 @@ describe("socket-server.ts — connection caps, assembled and in-process (plan T
 
       // Closing one of the original three frees a slot for a new connection.
       const first = clients.shift();
+      // Arm the wait before closing, so the release cannot be missed.
+      const released = nextRelease();
       first?.close();
-      await new Promise((resolve) => setTimeout(resolve, 20));
+      // The server's own release signal, not elapsed time. The client's
+      // `close` fires as soon as it destroys its end, but the slot is only
+      // returned when the FIN reaches the server a poll cycle later — so a
+      // fixed sleep here is a guess a loaded machine can outrun.
+      await released;
 
       const fifth = await connectLineClient(daemon.path);
       try {

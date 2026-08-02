@@ -42,6 +42,18 @@ export const MAX_UNAUTHENTICATED_CONNECTIONS = 16;
 export interface SocketServerOptions {
   readonly maxConcurrentConnections?: number;
   readonly maxUnauthenticatedConnections?: number;
+  /**
+   * Fired after a connection has been fully accounted for and its slot
+   * returned to the concurrency budget.
+   *
+   * This exists because slot release is not observable from the client side:
+   * the client's own `close` fires as soon as it destroys its end, but the
+   * server only decrements when the FIN reaches *its* end, a full poll cycle
+   * later. A test that wants to prove a freed slot is reusable therefore has
+   * no causal signal to wait on, and would otherwise have to guess with a
+   * sleep — which a loaded machine can outrun.
+   */
+  readonly onConnectionReleased?: () => void;
 }
 
 /** The shape `src/runtime/compose.ts` narrows `BoundSocket.onConnection`'s `unknown` argument to. */
@@ -152,6 +164,7 @@ export function createNodeSocketBinder(options: SocketServerOptions = {}): Socke
               if (!wasAuthenticated) {
                 unauthenticatedCount -= 1;
               }
+              options?.onConnectionReleased?.();
             },
           });
 
