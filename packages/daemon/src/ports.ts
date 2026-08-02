@@ -56,9 +56,22 @@ export interface FileStat {
   isSymbolicLink(): boolean;
 }
 
-/** An open claim-file handle retained for the process lifetime (design C1 step 2). */
+/**
+ * An open claim-file handle retained for the process lifetime (design C1
+ * step 2). The handle is never reopened and never replaced: the inode it
+ * pins *is* the claim identity for the whole process lifetime.
+ *
+ * `writeAt` exists so publish can rewrite the fixed-width `state` field in
+ * place at a known offset (design C1 step 8 / row R) instead of `rename`ing
+ * a temp file over the claim, which would install a new inode and break
+ * that identity permanently.
+ */
 export interface ClaimFileHandle {
   write(record: string): void;
+  /** One positional write of `text` at `offset`, not extending the file. */
+  writeAt(text: string, offset: number): void;
+  /** Flush this handle's writes to stable storage. */
+  sync(): void;
   stat(): FileStat;
   close(): void;
 }
@@ -80,8 +93,10 @@ export interface LockFileSystem {
 
 /**
  * A bound listening socket. `dev`/`ino` are the **socket identity** design
- * C1 step 9 compares `assertStillHeld()` against after the publish
- * re-anchor. Implemented only by `src/runtime/socket-server.ts`.
+ * C1 step 9 compares `assertStillHeld()` against once the socket is bound —
+ * a listening socket survives `unlink` of its path, so a same-uid actor
+ * could otherwise remove it and let a second daemon bind a new socket
+ * there. Implemented only by `src/runtime/socket-server.ts`.
  */
 export interface BoundSocket {
   readonly dev: bigint;
