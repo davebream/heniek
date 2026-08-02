@@ -32,24 +32,21 @@
  * after `mkdir` and refuses (never falls through) unless it is a real,
  * non-symlink directory.
  *
- * **`clock` accessor deliberately absent — reaffirmed, not merely left
- * over (Phase 4/5 fix cycle, dispatch-level decision).** `ArtifactStoreOptions
- * .clock` is still accepted and stored — every caller already threads a
- * `Clock` through `createArtifactStore` for the store handle's lifetime.
- * A same-day revision of this module reintroduced an `internalArtifactClock`
- * accessor so `recoverArtifacts` could gate `incoming/` removal by comparing
- * that `Clock` against `lstat().mtimeMs`, citing a plan amendment as
- * authority. That reintroduces exactly the pattern H1 above rejects, one
- * module over: comparing an injected `Clock` against real kernel `mtimeMs`
- * is unsound regardless of whether the caller opted in explicitly or the
- * sweep ran automatically — the caller cannot make two different time
- * domains comparable by choosing to invoke the comparison themselves. The
- * dispatch-level decision for this fix cycle overrides the plan text here:
- * `recoverArtifacts` has exactly one mode (unconditional), gated instead by
- * a documented single-writer-lock precondition (see `recover.ts`'s
- * docblock). No accessor is needed because nothing in this package compares
- * `Clock` against `mtimeMs` — not on the automatic path (H1) and not on the
- * explicit path either.
+ * **`clock` accessor deliberately absent — final, non-negotiable for this
+ * fix cycle (Phase 4/5 fix cycle, dispatch-level decision).**
+ * `ArtifactStoreOptions.clock` is still accepted and stored — every caller
+ * already threads a `Clock` through `createArtifactStore` for the store
+ * handle's lifetime. No `internalArtifactClock(store)` accessor exists, and
+ * none should be added: `recoverArtifacts` (`artifact/recover.ts`) has
+ * exactly one mode (unconditional `incoming/` removal), gated instead by a
+ * documented single-writer-lock precondition, never by comparing this
+ * store's `Clock` against real kernel `mtimeMs` — that comparison is the
+ * exact pattern this fix cycle rejects, for the same three reasons this
+ * docblock's H1 paragraph above already gives for the automatic on-open
+ * sweep. Whether the caller opts into the comparison explicitly or the
+ * sweep runs automatically does not change that `Clock` and `mtimeMs` are
+ * different time domains. Reintroducing this accessor reopens exactly the
+ * hole H1 closed; do not reintroduce it.
  */
 
 import { join } from "node:path";
@@ -96,11 +93,6 @@ export function internalArtifactFileSystem(store: ArtifactStore): ArtifactFileSy
 
 export function internalArtifactIds(store: ArtifactStore): IdGenerator {
   return internals(store, "internalArtifactIds").ids;
-}
-
-/** INTERNAL — exported from this module but NOT from src/index.ts. Package-private by construction, mirroring `internalArtifactFileSystem`/`internalArtifactIds`. Phase 5's `recoverArtifacts` consumer (`artifact/recover.ts`) — required by this task's explicit dispatch instructions and the plan's dated Phase-5 amendment (see `recover.ts`'s docblock); a same-day conflicting revision withheld this accessor, which this edit reinstates. */
-export function internalArtifactClock(store: ArtifactStore): Clock {
-  return internals(store, "internalArtifactClock").clock;
 }
 
 /**
