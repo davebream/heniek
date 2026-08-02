@@ -42,7 +42,7 @@ export type FakeLockFileSystemStep =
 export type FakeLockFileSystemOutcome = "ok" | "EEXIST" | "ENOENT" | "EFBIG";
 
 export interface FakeLockFileSystemOperation {
-  readonly op: FakeLockFileSystemStep | "write" | "close";
+  readonly op: FakeLockFileSystemStep | "write" | "writeAt" | "sync" | "close";
   readonly path: string;
   readonly outcome: FakeLockFileSystemOutcome;
 }
@@ -75,6 +75,17 @@ export interface FakeFileStat {
 
 export interface FakeClaimFileHandle {
   write(record: string): void;
+  /**
+   * One positional write at a byte offset, mirroring `pwrite(2)`. Refuses to
+   * extend the file: a write whose end would pass the current last byte
+   * raises `EFBIG` rather than growing the record. Publish rewrites the
+   * fixed-width `state` field in place, so any write that would lengthen the
+   * claim line is a caller bug — surfacing it here keeps that bug from
+   * reaching the closed grammar as a silently over-long record.
+   */
+  writeAt(text: string, offset: number): void;
+  /** Records the call only; the fake has no page cache to flush. */
+  sync(): void;
   stat(): FakeFileStat;
   close(): void;
 }
@@ -325,6 +336,27 @@ export class FakeLockFileSystem {
         }
         entry.content = record;
         this.record("write", path, "ok");
+      },
+      writeAt: (text: string, offset: number): void => {
+        if (closed) {
+          throw new Error(`writeAt on a closed claim handle: ${path}`);
+        }
+        const encoder = new TextEncoder();
+        const current = encoder.encode(entry.content);
+        const patch = encoder.encode(text);
+        if (offset < 0 || offset + patch.length > current.length) {
+          this.record("writeAt", path, "EFBIG");
+          throw makeFsError("EFBIG", path, "writeAt");
+        }
+        current.set(patch, offset);
+        entry.content = new TextDecoder().decode(current);
+        this.record("writeAt", path, "ok");
+      },
+      sync: (): void => {
+        if (closed) {
+          throw new Error(`sync on a closed claim handle: ${path}`);
+        }
+        this.record("sync", path, "ok");
       },
       stat: (): FakeFileStat => statFromEntry(entry),
       close: (): void => {
