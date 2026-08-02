@@ -169,7 +169,6 @@ export function recoverArtifacts(store: ArtifactStore, db: StateDatabase): Recov
     removedIncoming.push(name);
   }
 
-  for (const name of listBlobEntries(fs, store.blobsDir)) { fs.unlink(join(store.blobsDir, name)); }
   const referencedHashes = listReferencedHashes(db);
   const unreferencedBlobs = listBlobEntries(fs, store.blobsDir)
     .filter((hash) => !referencedHashes.has(hash))

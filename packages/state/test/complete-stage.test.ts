@@ -497,12 +497,33 @@ describe("completeStage — Q1 (Phase 4 fix cycle 1): content mutated through th
       producer: "reviewer",
       sourceLineage: [],
     };
+    // The point of Q1's exemption: the adopt-path fd was opened O_RDONLY
+    // purely to re-verify the existing blob during publishArtifact's own
+    // EEXIST handling — it was never writable, so assertArtifactStillValid
+    // must not re-hash it a second time here. Observed via readAt call
+    // count on that exact fd: completeStage's S2 assertion must add zero
+    // more occurrences for this artifact.
+    const readAtCallsBeforeCompleteStage = fakeFs.calls.filter(
+      (call) => call.method === "readAt" && call.args[0] === adoptedReceipt.fd,
+    ).length;
+
     const report = completeStage(db, store, {
       runId: "run-1",
       stageId: "stage-1",
       artifacts: [adoptedInput],
     });
-    expect(report.writes.some((write) => write.table === "artifact")).toBe(false);
+
+    const readAtCallsAfterCompleteStage = fakeFs.calls.filter(
+      (call) => call.method === "readAt" && call.args[0] === adoptedReceipt.fd,
+    ).length;
+    expect(readAtCallsAfterCompleteStage).toBe(readAtCallsBeforeCompleteStage);
+
+    // AC-2 (already pinned by its own dedicated describe block below): a
+    // second publishArtifact call for identical bytes mints a fresh
+    // artifactId even on the adopt path, so completeStage still writes a
+    // NEW, distinct artifact row here — adoption dedups the BLOB, never the
+    // artifact row.
+    expect(report.writes.some((write) => write.table === "artifact")).toBe(true);
   });
 });
 
