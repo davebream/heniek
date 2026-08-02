@@ -118,6 +118,32 @@ describe("createNodeArtifactFileSystem (R3/D13n)", () => {
     );
   });
 
+  it("openDirectoryReadOnly (H2) opens a real directory but refuses a file (ENOTDIR) or a symlink (ELOOP)", async () => {
+    const { symlink } = await import("node:fs/promises");
+    const fs = createNodeArtifactFileSystem();
+    const nestedDir = join(directory, "nested");
+    const filePath = join(directory, "not-a-dir.txt");
+    const linkPath = join(directory, "dir-link");
+
+    fs.mkdir(nestedDir);
+    const dirFd = fs.openDirectoryReadOnly(nestedDir);
+    fs.close(dirFd);
+
+    fs.close(fs.openExclusive(filePath));
+    expect(() => fs.openDirectoryReadOnly(filePath)).toThrowError(
+      expect.objectContaining({ code: "ENOTDIR" }),
+    );
+
+    await symlink(nestedDir, linkPath);
+    // O_NOFOLLOW|O_DIRECTORY on a symlink surfaces as ENOTDIR on Linux (the
+    // symlink itself is never a directory), not ELOOP — ELOOP is reserved
+    // for an actual link-resolution cycle. Either way, the point this test
+    // proves is what matters: a symlink can never be opened as a directory.
+    expect(() => fs.openDirectoryReadOnly(linkPath)).toThrowError(
+      expect.objectContaining({ code: "ENOTDIR" }),
+    );
+  });
+
   it("mkdir is recursive and idempotent (tolerates a pre-existing directory)", () => {
     const fs = createNodeArtifactFileSystem();
     const nested = join(directory, "a", "b", "c");

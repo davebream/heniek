@@ -42,6 +42,7 @@ export interface ArtifactFileSystemStat {
   readonly size: number;
   readonly mtimeMs: number;
   readonly isSymbolicLink: boolean;
+  readonly isDirectory: boolean;
 }
 
 export interface ArtifactFileSystem {
@@ -49,6 +50,8 @@ export interface ArtifactFileSystem {
   openExclusive(path: string): number;
   /** O_RDONLY|O_NOFOLLOW. ENOENT if absent, ELOOP if `path` is a symlink. */
   openReadOnly(path: string): number;
+  /** O_RDONLY|O_NOFOLLOW|O_DIRECTORY — for directory-fsync opens only (H2). ENOTDIR if `path` is not a directory, including a symlink (real symlinks never satisfy O_DIRECTORY). */
+  openDirectoryReadOnly(path: string): number;
   /** Sequential write at the fd's current position. */
   write(fd: number, chunk: Uint8Array): void;
   /** Positional read, no shared cursor. Requires `fd` opened O_RDWR (S1) — EBADF on an O_WRONLY fd. Returns bytes read; 0 at EOF. */
@@ -76,6 +79,7 @@ function toArtifactFileSystemStat(stats: Stats): ArtifactFileSystemStat {
     size: stats.size,
     mtimeMs: stats.mtimeMs,
     isSymbolicLink: stats.isSymbolicLink(),
+    isDirectory: stats.isDirectory(),
   };
 }
 
@@ -87,6 +91,12 @@ export function createNodeArtifactFileSystem(): ArtifactFileSystem {
     },
     openReadOnly(path: string): number {
       return openSync(path, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW);
+    },
+    openDirectoryReadOnly(path: string): number {
+      return openSync(
+        path,
+        fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW | fsConstants.O_DIRECTORY,
+      );
     },
     write(fd: number, chunk: Uint8Array): void {
       writeSync(fd, chunk);

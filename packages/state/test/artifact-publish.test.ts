@@ -196,7 +196,10 @@ describe("publishArtifact (Task 3.4, R4/D14n)", () => {
     fakeFs.close(receipt.fd);
 
     const opens = fakeFs.calls.filter(
-      (call) => call.method === "openExclusive" || call.method === "openReadOnly",
+      (call) =>
+        call.method === "openExclusive" ||
+        call.method === "openReadOnly" ||
+        call.method === "openDirectoryReadOnly",
     ).length;
     const closes = fakeFs.calls.filter((call) => call.method === "close").length;
     expect(closes).toBe(opens);

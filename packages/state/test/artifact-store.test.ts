@@ -76,37 +76,15 @@ describe("createArtifactStore (Task 3.3)", () => {
     expect(entries).toEqual(["orphan.tmp"]);
   });
 
-  it("with autoRecover, sweeps only incoming/ entries older than minAgeMs (gated, I7)", () => {
-    // Uses the fake fs (not the real one): the gate compares the injected
-    // Clock against lstat().mtimeMs, and only a fake fs lets a test control
-    // both independently of real wall-clock time (invariant 4 — the store
-    // itself must never read Date.now, so a real-fs test could not
-    // distinguish "old" from "fresh" without waiting in real time).
-    const root = join(directory, "store-gated");
-    const clock = createFakeClock();
-    const fakeFs = createFakeArtifactFileSystem(0);
-    const store = createArtifactStoreInternal({ root, clock, ids: ids() }, fakeFs);
-
-    fakeFs.openExclusive(join(store.incomingDir, "old.tmp"));
-    fakeFs.setMtime(join(store.incomingDir, "old.tmp"), Date.parse(clock.nowIso()));
-    clock.advance(10_000);
-    fakeFs.openExclusive(join(store.incomingDir, "fresh.tmp"));
-    fakeFs.setMtime(join(store.incomingDir, "fresh.tmp"), Date.parse(clock.nowIso()));
-
-    createArtifactStoreInternal(
-      { root, clock, ids: ids(), autoRecover: { minAgeMs: 5_000 } },
-      fakeFs,
-    );
-
-    expect(fakeFs.fileExists(join(store.incomingDir, "old.tmp"))).toBe(false);
-    expect(fakeFs.fileExists(join(store.incomingDir, "fresh.tmp"))).toBe(true);
-  });
-
-  it("an unconditional sweep is not reachable from createArtifactStore at all (I7)", () => {
-    // The store's only sweep entry point is the gated `autoRecover` option;
-    // there is no way to ask createArtifactStore for an unconditional sweep
-    // — that mode is reserved for Task 5.1's explicit operator entry point.
-    const root = join(directory, "store-no-unconditional");
+  it("never sweeps incoming/, no matter how old an entry's mtime is (H1 — autoRecover removed entirely)", () => {
+    // `createArtifactStore` used to accept a gated `autoRecover: { minAgeMs }`
+    // option; it was removed (H1, post-Phase-3 adversarial review) because
+    // its age gate compared the injected Clock against real lstat().mtimeMs
+    // — two different time domains — making it either silently inert or, on
+    // clock skew, able to unlink a live writer's in-flight temp. There is no
+    // longer any option or code path that removes anything from incoming/ —
+    // recovery is Phase 5's explicit `recoverArtifacts` only.
+    const root = join(directory, "store-never-sweeps");
     const clock = createFakeClock();
     const fakeFs = createFakeArtifactFileSystem(0);
     const store = createArtifactStoreInternal({ root, clock, ids: ids() }, fakeFs);
@@ -117,5 +95,50 @@ describe("createArtifactStore (Task 3.3)", () => {
     createArtifactStoreInternal({ root, clock, ids: ids() }, fakeFs);
 
     expect(fakeFs.fileExists(join(store.incomingDir, "ancient.tmp"))).toBe(true);
+
+    // Also asserts the option no longer exists on the type at all: passing
+    // an object with an `autoRecover` key would be excess-property-checked
+    // away by TypeScript at the call sites above if it were still declared,
+    // but the stronger, always-enforced guarantee is behavioural — verified
+    // above.
+  });
+
+  it("refuses to open a store whose incoming/ container is a symlink, not a real directory (H2)", () => {
+    // mkdir tolerates a pre-existing symlink at its target path (it resolves
+    // and finds "something" there) — createArtifactStoreInternal must not
+    // silently trust that and must lstat the container itself afterward.
+    const root = join(directory, "store-symlinked-incoming");
+    const fakeFs = createFakeArtifactFileSystem(0);
+    fakeFs.plantSymlink(join(root, "incoming"));
+
+    expect(() =>
+      createArtifactStoreInternal({ root, clock: createFakeClock(), ids: ids() }, fakeFs),
+    ).toThrowError(/not a real directory/);
+  });
+
+  it("refuses to open a store whose blobs/sha256 container is a symlink, not a real directory (H2)", () => {
+    const root = join(directory, "store-symlinked-blobs");
+    const fakeFs = createFakeArtifactFileSystem(0);
+    fakeFs.plantSymlink(join(root, "blobs", "sha256"));
+
+    expect(() =>
+      createArtifactStoreInternal({ root, clock: createFakeClock(), ids: ids() }, fakeFs),
+    ).toThrowError(/not a real directory/);
+  });
+
+  it("a real committed blob under blobs/sha256/ survives createArtifactStore being called again (H4)", async () => {
+    // The decisive gap the adversarial review flagged: nothing wrote a real
+    // blob and reopened the store to prove it survives. Uses the real
+    // filesystem (not the fake) end to end, matching what a genuine
+    // publish-then-reopen sequence looks like.
+    const root = join(directory, "store-real-blob");
+    createArtifactStore({ root, clock: createFakeClock(), ids: ids() });
+
+    const blobPath = join(root, "blobs", "sha256", "deadbeef".repeat(8));
+    await writeFile(blobPath, "committed content-addressed bytes");
+
+    createArtifactStore({ root, clock: createFakeClock(), ids: ids() });
+
+    await expect(stat(blobPath)).resolves.toBeDefined();
   });
 });

@@ -5,16 +5,32 @@
  * `openStateDatabaseInternal`'s package-private-by-construction discipline
  * (`database/open.ts`).
  *
- * **Recovery-sweep policy (I7).** `createArtifactStore` never runs an
- * unconditional, no-age-floor sweep of `incoming/` — that would unlink
- * another **concurrent process's** in-flight publish (cross-process
- * single-writer enforcement is chartered to Q008, out of scope here). The
- * optional `autoRecover: { minAgeMs }` runs a **gated** sweep — only
- * `incoming/` entries whose `lstat().mtimeMs` is at least `minAgeMs` old,
- * measured against the injected `Clock` (never a direct wall-clock read, invariant 4) —
- * before the store is returned. Omit `autoRecover` and no sweep runs at
- * all; the caller is expected to invoke Task 5.1's `recoverArtifacts`
- * explicitly from an operator entry point for the unconditional mode.
+ * **Recovery-sweep policy (H1 fix, post-Phase-3 adversarial review).**
+ * `createArtifactStore` never removes anything from `incoming/`, gated or
+ * otherwise. An earlier revision shipped a gated `autoRecover: { minAgeMs }`
+ * sweep here; it was removed because it was unsound in three independent
+ * ways: (a) it compared the injected `Clock`'s `nowMs` against
+ * `lstat().mtimeMs`, which is real kernel wall-clock time — under any real
+ * (fake) `Clock` the two are in different time domains, so the gate was
+ * either silently inert or, under clock skew, could unlink a live writer's
+ * in-flight temp; (b) a malformed clock value made `NaN - mtimeMs < minAgeMs`
+ * evaluate `false`, unlinking everything in `incoming/` rather than nothing
+ * (fail-open); (c) `mtime` cannot distinguish "abandoned temp" from "slow
+ * live writer" at any floor that is simultaneously safe and useful.
+ * Recovery is now an **explicit** operation, chartered to Phase 5's
+ * `recoverArtifacts`, invoked deliberately by an operator entry point that
+ * documents the single-writer-lock precondition — never wired to the
+ * automatic on-open path.
+ *
+ * **Container symlink/type discipline (H2).** `mkdir` tolerates a
+ * pre-existing symlink at its target path (it resolves and treats the
+ * symlink's target as "already there"). Without a follow-up check, a
+ * `root` whose `incoming/` or `blobs/sha256/` segment is a symlink to an
+ * unrelated directory would be silently accepted, and any caller that later
+ * lists or writes into it would be operating on that unrelated directory
+ * instead. `createArtifactStoreInternal` therefore `lstat`s each container
+ * after `mkdir` and refuses (never falls through) unless it is a real,
+ * non-symlink directory.
  */
 
 import { join } from "node:path";
@@ -29,8 +45,6 @@ export interface ArtifactStoreOptions {
   readonly root: string;
   readonly clock: Clock;
   readonly ids: IdGenerator;
-  /** Gated automatic `incoming/` sweep run before the store is returned (R5/I7/D5a). Omit to run no sweep at all. */
-  readonly autoRecover?: { readonly minAgeMs: number };
 }
 
 /** Opaque. Holds no filesystem port or determinism port as a visible member — reached only via the internal accessors below, mirroring `StateDatabase` (design D10). */
@@ -69,65 +83,17 @@ export function internalArtifactIds(store: ArtifactStore): IdGenerator {
   return internals(store, "internalArtifactIds").ids;
 }
 
-function isEnoent(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    (error as { code?: unknown }).code === "ENOENT"
-  );
-}
-
 /**
- * The gated sweep (R5/I7/D5a). Removes only `incoming/` entries at least
- * `minAgeMs` old, measured as `nowMs - lstat().mtimeMs`, where `nowMs`
- * comes from the store's injected `Clock` — never a direct wall-clock read. A failure to
- * `lstat` or `unlink` a given entry is swallowed as best-effort **except**
- * `ENOENT` races with a legitimately-vanished entry, which is not an
- * error at all; Task 5.1's `recoverArtifacts` is where a caller who wants
- * failures surfaced (as `ArtifactRecoveryError`) should look — this
- * construction-time sweep is deliberately silent so a transient sweep
- * failure never prevents `createArtifactStore` from returning a usable
- * store.
+ * H2: refuses a container path that is not a real, non-symlink directory.
+ * Called after `mkdir`, which itself tolerates (and so cannot be trusted to
+ * reject) a pre-existing symlink at the target path.
  */
-function sweepIncomingGated(
-  fs: ArtifactFileSystem,
-  incomingDir: string,
-  clock: Clock,
-  minAgeMs: number,
-): void {
-  const nowMs = Date.parse(clock.nowIso());
-  let entries: readonly string[];
-  try {
-    entries = fs.readdir(incomingDir);
-  } catch (error) {
-    if (isEnoent(error)) {
-      return;
-    }
-    throw error;
-  }
-
-  for (const entry of entries) {
-    const entryPath = join(incomingDir, entry);
-    let mtimeMs: number;
-    try {
-      mtimeMs = fs.lstat(entryPath).mtimeMs;
-    } catch (error) {
-      if (isEnoent(error)) {
-        continue;
-      }
-      throw error;
-    }
-    if (nowMs - mtimeMs < minAgeMs) {
-      continue;
-    }
-    try {
-      fs.unlink(entryPath);
-    } catch (error) {
-      if (!isEnoent(error)) {
-        throw error;
-      }
-    }
+function assertRealDirectory(fs: ArtifactFileSystem, path: string): void {
+  const stat = fs.lstat(path);
+  if (stat.isSymbolicLink || !stat.isDirectory) {
+    throw new StateStoreError(
+      `artifact store container is not a real directory (refusing to operate on a symlink or non-directory): ${path}`,
+    );
   }
 }
 
@@ -142,17 +108,15 @@ export function createArtifactStoreInternal(
 
   fs.mkdir(incomingDir);
   fs.mkdir(blobsDir);
-
-  if (options.autoRecover !== undefined) {
-    sweepIncomingGated(fs, incomingDir, options.clock, options.autoRecover.minAgeMs);
-  }
+  assertRealDirectory(fs, incomingDir);
+  assertRealDirectory(fs, blobsDir);
 
   const store: ArtifactStore = { root, incomingDir, blobsDir };
   HANDLES.set(store, { fs, clock: options.clock, ids: options.ids });
   return store;
 }
 
-/** Creates (idempotently) the `incoming/` and `blobs/sha256/` layout under `options.root` and returns a handle. */
+/** Creates (idempotently) the `incoming/` and `blobs/sha256/` layout under `options.root` and returns a handle. Never removes anything — see this module's docblock (H1). */
 export function createArtifactStore(options: ArtifactStoreOptions): ArtifactStore {
   return createArtifactStoreInternal(options, createNodeArtifactFileSystem());
 }

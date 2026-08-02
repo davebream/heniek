@@ -275,7 +275,10 @@ export function publishArtifact(
       fsyncFile(fs, tempFd, tempPath);
     }
 
-    const blobsDirFd = fs.openReadOnly(store.blobsDir);
+    // H2 (post-Phase-3 adversarial review): the directory-fsync open uses
+    // openDirectoryReadOnly (O_DIRECTORY added) rather than openReadOnly, so
+    // a non-directory occupying blobsDir's path can never be opened as one.
+    const blobsDirFd = fs.openDirectoryReadOnly(store.blobsDir);
     try {
       fs.fsync(blobsDirFd);
     } catch (error) {
