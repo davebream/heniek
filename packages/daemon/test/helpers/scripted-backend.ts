@@ -76,9 +76,7 @@ export class ForbiddenBackendWriteError extends Error {
   }
 }
 
-export function createScriptedBackend(
-  script: Record<string, ScriptedRunProgram>,
-): ScriptedBackend {
+export function createScriptedBackend(script: Record<string, ScriptedRunProgram>): ScriptedBackend {
   const calls: BackendCall[] = [];
   // Consumed positions per run, so a second `status()` on the same run gets
   // the *next* scripted answer rather than repeating the first.
