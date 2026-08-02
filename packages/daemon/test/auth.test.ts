@@ -10,7 +10,7 @@
  * itself.
  */
 
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { mintConnectionAuthState } from "../src/auth/challenge.js";
 import { mintCredential } from "../src/auth/credential.js";
 import {
@@ -205,14 +205,19 @@ describe("verifyRequest — canonicalisation and MAC", () => {
     expect(result.kind).toBe("unauthorized");
   });
 
-  it("performs the same MAC computation whether or not the keyId is known (missing vs wrong vs correct keyId)", () => {
+  it("performs the same MAC computation whether or not the keyId is known (missing vs wrong keyId)", () => {
     const connection1 = mintConnectionAuthState(counterRandomSource());
     const connection2 = mintConnectionAuthState(counterRandomSource());
     const mac1 = fakeMacProvider();
     const mac2 = fakeMacProvider();
+    // A separate provider instance plays "the attacker signing a request" —
+    // it must never share call counts with the two server-side providers
+    // under test below, or the act of constructing the fixture would itself
+    // pollute the assertion.
+    const signingMac = fakeMacProvider();
 
     const canonical = '{"jsonrpc":"2.0","id":1,"method":"daemon.status","params":{}}';
-    const macHex1 = sign(mac1, connection1.challenge, 1, canonical);
+    const macHex1 = sign(signingMac, connection1.challenge, 1, canonical);
     const missingAuthLine = '{"jsonrpc":"2.0","id":1,"method":"daemon.status","params":{}}';
     const wrongKeyLine = `{"jsonrpc":"2.0","id":1,"method":"daemon.status","params":{"auth":{"schemaVersion":1,"keyId":"ffffffffffffffff","sequence":1,"mac":"${macHex1}"}}}`;
 

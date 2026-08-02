@@ -57,7 +57,10 @@ export async function persistCredential(
   secretStore: SecretStore,
   credential: DaemonCredential,
 ): Promise<void> {
-  await secretStore.write(CREDENTIAL_ENTRY_NAME, SensitiveValue.from(serialiseCredential(credential)));
+  await secretStore.write(
+    CREDENTIAL_ENTRY_NAME,
+    SensitiveValue.from(serialiseCredential(credential)),
+  );
 }
 
 /** Removed on clean shutdown (design C5/C9) — never on a crash path, since a `SIGKILL` cannot run it. */

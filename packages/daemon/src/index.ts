@@ -1,3 +1,22 @@
+export {
+  canonicaliseRequest,
+  extractAuthValueText,
+  hasDuplicateKey,
+} from "./auth/canonical.js";
+export type { ConnectionAuthState } from "./auth/challenge.js";
+export { CHALLENGE_BYTES, mintConnectionAuthState } from "./auth/challenge.js";
+export type { DaemonCredential } from "./auth/credential.js";
+export {
+  CREDENTIAL_ENTRY_NAME,
+  CREDENTIAL_KEY_ID_BYTES,
+  CREDENTIAL_SECRET_BYTES,
+  mintCredential,
+  persistCredential,
+  removeCredential,
+} from "./auth/credential.js";
+export { UNAUTHORIZED_MESSAGE } from "./auth/errors.js";
+export type { AuthenticatedCredential, VerifyResult } from "./auth/verify.js";
+export { buildAuthMacMessage, bytesToHex, hexToBytes, verifyRequest } from "./auth/verify.js";
 export type { AcquireDeps, AcquireOptions, AcquireOutcome } from "./lifecycle/acquire.js";
 export { acquireClaim } from "./lifecycle/acquire.js";
 export type { ClaimRecord, ClaimState, ParsedClaimRecord } from "./lifecycle/claim-record.js";
@@ -41,26 +60,6 @@ export type {
   SocketProbe,
   SocketProbeVerdict,
 } from "./ports.js";
-
-export {
-  canonicaliseRequest,
-  extractAuthValueText,
-  hasDuplicateKey,
-} from "./auth/canonical.js";
-export type { ConnectionAuthState } from "./auth/challenge.js";
-export { CHALLENGE_BYTES, mintConnectionAuthState } from "./auth/challenge.js";
-export type { DaemonCredential } from "./auth/credential.js";
-export {
-  CREDENTIAL_ENTRY_NAME,
-  CREDENTIAL_KEY_ID_BYTES,
-  CREDENTIAL_SECRET_BYTES,
-  mintCredential,
-  persistCredential,
-  removeCredential,
-} from "./auth/credential.js";
-export { UNAUTHORIZED_MESSAGE } from "./auth/errors.js";
-export type { AuthenticatedCredential, VerifyResult } from "./auth/verify.js";
-export { buildAuthMacMessage, bytesToHex, hexToBytes, verifyRequest } from "./auth/verify.js";
 export type {
   DecodeResult,
   DecoderState,
@@ -73,9 +72,9 @@ export {
   createCodec,
   createDecoderState,
   decodeChunk,
+  ERROR_CODES,
   encodeError,
   encodeResult,
-  ERROR_CODES,
   JSON_RPC_VERSION,
   MAX_LINE_BYTES,
 } from "./rpc/codec.js";

@@ -7,7 +7,12 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { createCodec, type JsonRpcErrorFrame, type JsonRpcRequestFrame, MAX_LINE_BYTES } from "../src/rpc/codec.js";
+import {
+  createCodec,
+  type JsonRpcErrorFrame,
+  type JsonRpcRequestFrame,
+  MAX_LINE_BYTES,
+} from "../src/rpc/codec.js";
 
 function bytes(text: string): Uint8Array {
   return new TextEncoder().encode(text);
@@ -54,11 +59,11 @@ describe("createCodec", () => {
     const half = Math.floor(line.length / 2);
 
     codecA(bytes(line.slice(0, half)));
-    // codecB has received nothing, so it must still be waiting for a
-    // terminator — proof the two closures do not share the module-level
-    // `decodeChunk` engine's state.
-    expect(codecB(bytes(line.slice(half)))).toHaveLength(0);
+    // Each codec accumulates only its own bytes: B's half-line is still
+    // unterminated, and A's completion depends only on A's own terminator.
+    expect(codecB(bytes(line.slice(0, half)))).toHaveLength(0);
     expect(codecA(bytes(line.slice(half)))).toHaveLength(1);
+    expect(codecB(bytes(line.slice(half)))).toHaveLength(1);
   });
 
   it("remains closed forever after an oversize cutoff, across many subsequent calls", () => {

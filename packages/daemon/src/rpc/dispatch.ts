@@ -21,10 +21,10 @@ import { bytesToHex, verifyRequest } from "../auth/verify.js";
 import type { MacProvider } from "../ports.js";
 import {
   ERROR_CODES,
-  type Frame,
-  type JsonRpcRequestFrame,
   encodeError,
   encodeResult,
+  type Frame,
+  type JsonRpcRequestFrame,
 } from "./codec.js";
 import { DRAINING_MESSAGE } from "./errors.js";
 import { DAEMON_HELLO_METHOD, type MethodRegistry } from "./methods.js";

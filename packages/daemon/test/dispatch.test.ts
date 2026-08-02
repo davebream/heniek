@@ -12,11 +12,15 @@ import { describe, expect, it, vi } from "vitest";
 import { mintConnectionAuthState } from "../src/auth/challenge.js";
 import type { AuthenticatedCredential } from "../src/auth/verify.js";
 import { buildAuthMacMessage, bytesToHex } from "../src/auth/verify.js";
+import type { MacProvider, RandomSource } from "../src/ports.js";
 import type { JsonRpcErrorFrame, JsonRpcId, JsonRpcRequestFrame } from "../src/rpc/codec.js";
 import type { DispatchDeps } from "../src/rpc/dispatch.js";
 import { dispatchFrame } from "../src/rpc/dispatch.js";
-import { DAEMON_HELLO_METHOD, DAEMON_STATUS_METHOD, createMethodRegistry } from "../src/rpc/methods.js";
-import type { MacProvider, RandomSource } from "../src/ports.js";
+import {
+  createMethodRegistry,
+  DAEMON_HELLO_METHOD,
+  DAEMON_STATUS_METHOD,
+} from "../src/rpc/methods.js";
 
 function counterRandomSource(): RandomSource {
   let counter = 0;
@@ -63,7 +67,12 @@ function credential(): AuthenticatedCredential {
   return { keyId: KEY_ID, secret: SECRET };
 }
 
-function requestFrame(id: JsonRpcId, method: string, raw: string, params: unknown = {}): JsonRpcRequestFrame {
+function requestFrame(
+  id: JsonRpcId,
+  method: string,
+  raw: string,
+  params: unknown = {},
+): JsonRpcRequestFrame {
   return { kind: "request", id, method, params, raw };
 }
 
@@ -99,7 +108,11 @@ function signedFrame(
   return requestFrame(id, method, raw);
 }
 
-function parseLine(line: string): { id: JsonRpcId; result?: unknown; error?: { code: number; message: string } } {
+function parseLine(line: string): {
+  id: JsonRpcId;
+  result?: unknown;
+  error?: { code: number; message: string };
+} {
   return JSON.parse(line.trimEnd());
 }
 
@@ -107,7 +120,11 @@ describe("dispatchFrame — daemon.hello", () => {
   it("succeeds pre-auth and returns a well-formed DaemonHelloResult/v1 shape", async () => {
     const deps = baseDeps();
     const connection = mintConnectionAuthState(counterRandomSource());
-    const line = await dispatchFrame(deps, connection, requestFrame(1, DAEMON_HELLO_METHOD, "irrelevant"));
+    const line = await dispatchFrame(
+      deps,
+      connection,
+      requestFrame(1, DAEMON_HELLO_METHOD, "irrelevant"),
+    );
 
     expect(line.endsWith("\n")).toBe(true);
     const parsed = parseLine(line);
@@ -132,7 +149,11 @@ describe("dispatchFrame — daemon.hello", () => {
     expect(parseLine(okLine).error).toBeUndefined();
     expect(connection.lastSequence).toBe(5);
 
-    const secondHelloLine = await dispatchFrame(deps, connection, requestFrame(3, DAEMON_HELLO_METHOD, "y"));
+    const secondHelloLine = await dispatchFrame(
+      deps,
+      connection,
+      requestFrame(3, DAEMON_HELLO_METHOD, "y"),
+    );
     expect(parseLine(secondHelloLine).error?.code).toBe(-32600);
     // Untouched: helloCalled stays true, lastSequence stays 5.
     expect(connection.lastSequence).toBe(5);
@@ -152,7 +173,11 @@ describe("dispatchFrame — no method-existence oracle", () => {
     const realLine = await dispatchFrame(
       deps,
       connection1,
-      requestFrame(1, DAEMON_STATUS_METHOD, '{"jsonrpc":"2.0","id":1,"method":"daemon.status","params":{}}'),
+      requestFrame(
+        1,
+        DAEMON_STATUS_METHOD,
+        '{"jsonrpc":"2.0","id":1,"method":"daemon.status","params":{}}',
+      ),
     );
     const fabricatedLine = await dispatchFrame(
       deps,
@@ -173,7 +198,9 @@ describe("dispatchFrame — no method-existence oracle", () => {
 describe("dispatchFrame — authenticated dispatch", () => {
   it("routes an authenticated request to its registered handler", async () => {
     const deps = baseDeps({
-      registry: createMethodRegistry([[DAEMON_STATUS_METHOD, () => ({ lifecycleState: "serving" })]]),
+      registry: createMethodRegistry([
+        [DAEMON_STATUS_METHOD, () => ({ lifecycleState: "serving" })],
+      ]),
     });
     const connection = mintConnectionAuthState(counterRandomSource());
     const frame = signedFrame(deps, connection, 1, DAEMON_STATUS_METHOD, 1);
@@ -229,7 +256,13 @@ describe("dispatchFrame — draining", () => {
   it("rejects daemon.status with -32000 draining while draining", async () => {
     const deps = baseDeps({ isDraining: () => true });
     const connection = mintConnectionAuthState(counterRandomSource());
-    const frame = signedFrame({ ...deps, isDraining: () => false }, connection, 1, DAEMON_STATUS_METHOD, 1);
+    const frame = signedFrame(
+      { ...deps, isDraining: () => false },
+      connection,
+      1,
+      DAEMON_STATUS_METHOD,
+      1,
+    );
     const line = await dispatchFrame(deps, connection, frame);
     expect(parseLine(line).error).toEqual({ code: -32000, message: "draining" });
   });
@@ -239,7 +272,13 @@ describe("dispatchFrame — codec-level error frames pass through unchanged", ()
   it("relays an error Frame's code, message, and id verbatim", async () => {
     const deps = baseDeps();
     const connection = mintConnectionAuthState(counterRandomSource());
-    const errorFrame: JsonRpcErrorFrame = { kind: "error", id: 5, code: -32700, message: "parse error", fatal: false };
+    const errorFrame: JsonRpcErrorFrame = {
+      kind: "error",
+      id: 5,
+      code: -32700,
+      message: "parse error",
+      fatal: false,
+    };
 
     const line = await dispatchFrame(deps, connection, errorFrame);
     expect(JSON.parse(line.trimEnd())).toEqual({

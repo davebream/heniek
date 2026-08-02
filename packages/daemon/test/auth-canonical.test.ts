@@ -10,7 +10,11 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { canonicaliseRequest, extractAuthValueText, hasDuplicateKey } from "../src/auth/canonical.js";
+import {
+  canonicaliseRequest,
+  extractAuthValueText,
+  hasDuplicateKey,
+} from "../src/auth/canonical.js";
 
 const AUTH = '"auth":{"keyId":"k1","sequence":3,"mac":"ab"}';
 
@@ -191,14 +195,12 @@ describe("hasDuplicateKey", () => {
   });
 
   it("is true for a duplicate key nested inside a value the top-level scan would otherwise skip over", () => {
-    const line =
-      '{"jsonrpc":"2.0","id":1,"method":"m","params":{"nested":{"x":1,"x":2}}}';
+    const line = '{"jsonrpc":"2.0","id":1,"method":"m","params":{"nested":{"x":1,"x":2}}}';
     expect(hasDuplicateKey(line)).toBe(true);
   });
 
   it("is true for a duplicate key inside an object nested in an array", () => {
-    const line =
-      '{"jsonrpc":"2.0","id":1,"method":"m","params":{"xs":[1,{"y":1,"y":2}]}}';
+    const line = '{"jsonrpc":"2.0","id":1,"method":"m","params":{"xs":[1,{"y":1,"y":2}]}}';
     expect(hasDuplicateKey(line)).toBe(true);
   });
 
