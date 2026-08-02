@@ -26,14 +26,44 @@
  * which no JSON-RPC client expects from a single connection.
  */
 
+import { dirname } from "node:path";
+import type { ApplicationHome } from "@heniek/config";
+import type { ExecutionBackend } from "@heniek/contracts";
+import { createFileSecretStore } from "@heniek/secrets";
 import { mintConnectionAuthState } from "../auth/challenge.js";
+import {
+  type DaemonCredential,
+  mintCredential,
+  persistCredential,
+  removeCredential,
+} from "../auth/credential.js";
 import type { AuthenticatedCredential } from "../auth/verify.js";
-import type { BoundSocket, MacProvider, RandomSource } from "../ports.js";
+import type { AcquireDeps, AcquireOptions } from "../lifecycle/acquire.js";
+import { acquireClaim } from "../lifecycle/acquire.js";
+import type { LockHandle } from "../lifecycle/guard.js";
+import { createLifecycleTracer } from "../lifecycle/trace.js";
+import type { BoundSocket, IdGenerator, MacProvider, RandomSource } from "../ports.js";
+import { type ReconcileResult, reconcile } from "../recovery/reconcile.js";
 import { createCodec, type Frame } from "../rpc/codec.js";
 import type { DispatchDeps } from "../rpc/dispatch.js";
 import { dispatchFrame } from "../rpc/dispatch.js";
-import type { MethodRegistry } from "../rpc/methods.js";
+import {
+  createMethodRegistry,
+  DAEMON_RECOVERY_METHOD,
+  DAEMON_STATUS_METHOD,
+  type MethodRegistry,
+} from "../rpc/methods.js";
+import { createSystemClock } from "./clock.js";
+import { createSystemHostWitness } from "./host-witness.js";
+import { createNodeLockFileSystem } from "./lock-filesystem.js";
+import { createHmacSha256MacProvider } from "./mac.js";
+import { createSystemProcessLiveness } from "./process-liveness.js";
+import { createSystemRandomSource } from "./random-source.js";
+import { installSignalHandlers } from "./signals.js";
+import { createNodeSocketProbe } from "./socket-probe.js";
 import type { RawConnection } from "./socket-server.js";
+import { createNodeSocketBinder } from "./socket-server.js";
+import { createStderrTraceSink } from "./trace-sink.js";
 
 export interface ConnectionHandlerDeps {
   readonly randomSource: RandomSource;
@@ -44,6 +74,16 @@ export interface ConnectionHandlerDeps {
   readonly protocolVersion: number;
   readonly isDraining: () => boolean;
   readonly onHandlerError?: (method: string, error: unknown) => void;
+  /**
+   * The held claim, when this handler is wired by `startDaemon` rather than
+   * driven directly by a test with fabricated frames. Design's non-negotiable
+   * ordering requires `assertStillHeld()` "on every accepted connection" —
+   * this is the only point in the served lifetime something actively
+   * re-checks the claim, since nothing else polls it while idle. Optional so
+   * the Phase 5 assembled-daemon tests, which exercise this handler without
+   * ever going through `acquireClaim`, are unaffected.
+   */
+  readonly guard?: LockHandle;
 }
 
 const textEncoder = new TextEncoder();
@@ -62,6 +102,22 @@ export function createConnectionHandler(
 ): (connection: unknown) => void {
   return (rawConnection: unknown): void => {
     const connection = rawConnection as RawConnection;
+
+    // "on every accepted connection" (design's non-negotiable ordering) —
+    // the one active re-check of the claim during the served lifetime.
+    // `assertStillHeld()` already fires every registered `onLost` callback
+    // before throwing, so a genuine loss is handled there (stop accepting,
+    // exit non-zero); this catch only keeps a freshly-doomed connection from
+    // ever being processed.
+    if (deps.guard !== undefined) {
+      try {
+        deps.guard.assertStillHeld();
+      } catch {
+        connection.destroy();
+        return;
+      }
+    }
+
     const authState = mintConnectionAuthState(deps.randomSource);
     const decode = createCodec();
     let hasMarkedAuthenticated = false;
@@ -105,4 +161,281 @@ export function createConnectionHandler(
 /** Wires `createConnectionHandler`'s output onto a real bound socket. */
 export function attachDaemonRpcServer(socket: BoundSocket, deps: ConnectionHandlerDeps): void {
   socket.onConnection(createConnectionHandler(deps));
+}
+
+// ---------------------------------------------------------------------------
+// startDaemon — the full composition root (design C1/C9/C10, plan Task 6
+// Step 8). The mandated order:
+//
+//   claim -> probe -> reclaim -> open DB -> migrate -> recover -> classify
+//     -> bind -> publish -> attach handler
+//
+// `acquireClaim` (Phase 2, extended this phase) already performs claim,
+// probe, and reclaim, then — strictly before it ever calls `SocketBinder.
+// listen()` — invokes the `recover` hook below, which is where this
+// function opens the owned state database, migrates it, and runs the
+// restart-reconciliation pass (`reconcile()`, C11/C12) while still holding
+// the claim. Only once that hook resolves does `acquireClaim` bind and
+// publish. The credential is minted inside that same hook, so it too is
+// fresh before `listen()` is ever called. The connection handler is
+// attached last, after `acquireClaim` has already returned "acquired" —
+// this is what makes "connectable implies fully recovered" hold: nothing
+// can complete a request against this daemon before every step above it
+// has already run.
+// ---------------------------------------------------------------------------
+
+export interface StartDaemonDeps {
+  readonly home: ApplicationHome;
+  /**
+   * Q008 ships no Claudexor adapter (design's `## Approach`) — the caller
+   * supplies whatever `ExecutionBackend` this daemon should reconcile
+   * against.
+   */
+  readonly backend: ExecutionBackend;
+  /** Defaults to `1`. */
+  readonly protocolVersion?: number;
+}
+
+export type StartDaemonOutcome =
+  | {
+      readonly kind: "serving";
+      readonly instanceId: string;
+      /**
+       * Resolves once a graceful drain (a SIGTERM/SIGINT the caller wires
+       * through `requestDrain`, or a direct `requestDrain()` call) has fully
+       * unwound the socket, the claim, and the credential. The caller should
+       * exit 0 immediately afterward.
+       */
+      readonly stopped: Promise<void>;
+      /** Begins the same graceful drain a first SIGTERM would (design C9). */
+      readonly requestDrain: () => void;
+    }
+  | {
+      readonly kind: "exited";
+      /** `10` conceded, `11` refused, `12` recovery failure — `0` never appears here (a clean exit only ever happens after `"serving"`, via `stopped`). */
+      readonly exitCode: 10 | 11 | 12;
+      readonly error: Error;
+    };
+
+/**
+ * A minimal `IdGenerator` (`@heniek/state`'s port, re-exported by
+ * `../ports.js`) built from the already-injected `RandomSource` rather than
+ * a twelfth `src/runtime/**` file — `@heniek/state` ships no default
+ * implementation of its own determinism ports, and this is the one
+ * composition root that is allowed to close that gap inline.
+ */
+function createRandomIdGenerator(randomSource: RandomSource): IdGenerator {
+  return {
+    next(prefix: string): string {
+      const bytes = randomSource.bytes(8);
+      const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+      return `${prefix}-${hex}`;
+    },
+  };
+}
+
+const EMPTY_RECONCILIATION = {
+  probed: 0,
+  resumable: 0,
+  failed: 0,
+  cancelled: 0,
+  unknown: 0,
+} as const;
+
+const EMPTY_ARTIFACT_RECOVERY = {
+  removedIncoming: [] as readonly string[],
+  skippedIncoming: [] as readonly string[],
+  unreferencedBlobs: [] as readonly string[],
+} as const;
+
+/**
+ * Starts one daemon instance end-to-end. Resolves once the outcome is known
+ * — either `"serving"` (the socket is bound, published, and the connection
+ * handler is attached) or `"exited"` (the process never reached `serving`;
+ * the caller should exit with `exitCode` and touch nothing else, since every
+ * losing/refusing/failing path already left the filesystem exactly as it
+ * found it).
+ */
+export async function startDaemon(deps: StartDaemonDeps): Promise<StartDaemonOutcome> {
+  const { home, backend } = deps;
+  const protocolVersion = deps.protocolVersion ?? 1;
+
+  const clock = createSystemClock();
+  const randomSource = createSystemRandomSource();
+  const macProvider = createHmacSha256MacProvider();
+  const traceSink = createStderrTraceSink();
+  const ids = createRandomIdGenerator(randomSource);
+  const secretStore = createFileSecretStore({ directory: home.paths.secretsDirectory });
+
+  let reconcileResult: ReconcileResult | undefined;
+  let credential: DaemonCredential | undefined;
+
+  const acquireDeps: AcquireDeps = {
+    lockFileSystem: createNodeLockFileSystem(),
+    socketBinder: createNodeSocketBinder(),
+    socketProbe: createNodeSocketProbe(),
+    processLiveness: createSystemProcessLiveness(),
+    hostWitness: createSystemHostWitness(),
+    randomSource,
+    traceSink,
+    clock,
+    // design C1 steps 4-5: opens the owned DB, migrates, and reconciles
+    // while still holding the claim — strictly before `acquireClaim` ever
+    // calls `listen()`. The credential is minted and persisted here too, so
+    // it is fresh before the bind on every path that reaches "acquired".
+    recover: async (guard: LockHandle): Promise<void> => {
+      const minted = mintCredential(randomSource);
+      await persistCredential(secretStore, minted);
+      credential = minted;
+
+      reconcileResult = await reconcile(
+        { lock: guard, backend },
+        {
+          database: { path: home.paths.stateDatabaseFile, clock, ids },
+          artifactStore: { root: home.paths.artifactsDirectory, clock, ids },
+        },
+      );
+    },
+  };
+
+  const acquireOptions: AcquireOptions = {
+    runtimeDirectory: home.paths.runtimeDirectory,
+    runtimeDirectoryParent: dirname(home.paths.runtimeDirectory),
+    daemonPidFile: home.paths.daemonPidFile,
+    daemonSocketFile: home.paths.daemonSocketFile,
+    ownPid: process.pid,
+  };
+
+  let outcome: Awaited<ReturnType<typeof acquireClaim>>;
+  try {
+    outcome = await acquireClaim(acquireDeps, acquireOptions);
+  } catch (error) {
+    // `RecoveryFailedError` (the `recover` hook's own fatal path, which
+    // already released the claim) or a `ClaimLostError` from a mid-pass
+    // `assertStillHeld()` (which must not — a successor already holds the
+    // claim) alike: neither is representable in `AcquireOutcome`'s `0/10/11`
+    // discriminated union, and both mean the daemon never reached `serving`.
+    // Design's exit-code contract groups both under `12`.
+    return {
+      kind: "exited",
+      exitCode: 12,
+      error: error instanceof Error ? error : new Error(String(error)),
+    };
+  }
+
+  if (outcome.kind !== "acquired") {
+    return { kind: "exited", exitCode: outcome.error.exitCode, error: outcome.error };
+  }
+  if (credential === undefined) {
+    // Unreachable in practice — `recover` always runs, and always mints,
+    // before `acquireClaim` can return "acquired" — kept as a typed guard
+    // rather than a non-null assertion.
+    outcome.handle.release();
+    await outcome.socket.close();
+    const error = new Error("acquireClaim reported 'acquired' without a minted credential");
+    return { kind: "exited", exitCode: 12, error };
+  }
+
+  const { handle: guard, socket, instanceId } = outcome;
+  const startedAt = clock.nowIso();
+  const reconciliation = reconcileResult?.reconciliation ?? EMPTY_RECONCILIATION;
+  const artifactRecovery = reconcileResult?.artifactRecovery ?? EMPTY_ARTIFACT_RECOVERY;
+  const classifications = reconcileResult?.classifications ?? [];
+
+  // Resumes the same instance's trace at `serving` — `acquireClaim`'s own
+  // internal tracer already reached exactly that state (see `trace.ts`'s
+  // docblock for why this is a second, independent tracer rather than a
+  // handle threaded across the module boundary).
+  const servingTracer = createLifecycleTracer({
+    instanceId,
+    sink: traceSink,
+    clock,
+    initialState: "serving",
+  });
+
+  let draining = false;
+  let stoppedResolve: () => void = () => undefined;
+  const stopped = new Promise<void>((resolve) => {
+    stoppedResolve = resolve;
+  });
+
+  async function beginDrain(reason: string): Promise<void> {
+    if (draining) {
+      return;
+    }
+    draining = true;
+    servingTracer.record("drain", reason);
+    // `close()` stops accepting new connections and unlinks the socket path
+    // this process created (STD-3) — safe here, unlike on claim loss, since
+    // this process still legitimately owns both.
+    await socket.close();
+    // Inode-verified: only unlinks if the path still carries this guard's
+    // identity.
+    guard.release();
+    await removeCredential(secretStore);
+    servingTracer.record("stop", "graceful shutdown complete");
+    stoppedResolve();
+  }
+
+  function requestDrain(): void {
+    void beginDrain("drain requested");
+  }
+
+  const uninstallSignalHandlers = installSignalHandlers({
+    onDrainRequested: (signal) => {
+      void beginDrain(`received ${signal}`);
+    },
+    onForceExit: () => {
+      // A second SIGTERM/SIGINT while already draining escalates to an
+      // immediate exit (design C9) — no further cleanup attempted.
+      process.exit(1);
+    },
+  });
+
+  // On claim loss while serving: stop accepting new authenticated work
+  // (the same `draining` flag `dispatch.ts` already checks), fail in-flight
+  // requests with `-32000`, exit non-zero, and do NOT unlink the socket or
+  // claim file — they belong to someone else now (design C9).
+  guard.onLost((error) => {
+    draining = true;
+    servingTracer.record("lost", `claim lost while serving: ${error.message}`);
+    uninstallSignalHandlers();
+    process.exitCode = 1;
+    process.exit(1);
+  });
+
+  const registry: MethodRegistry = createMethodRegistry([
+    [
+      DAEMON_STATUS_METHOD,
+      () => ({
+        schemaVersion: 1,
+        instanceId,
+        lifecycleState: servingTracer.currentState(),
+        startedAt,
+        reconciliation,
+        artifactRecovery: {
+          removedIncoming: artifactRecovery.removedIncoming.length,
+          skippedIncoming: artifactRecovery.skippedIncoming.length,
+          unreferencedBlobs: artifactRecovery.unreferencedBlobs.length,
+        },
+      }),
+    ],
+    [DAEMON_RECOVERY_METHOD, () => ({ schemaVersion: 1, classifications })],
+  ]);
+
+  // Attached last (design's non-negotiable ordering) — no client can
+  // complete a request against this daemon before every step above it has
+  // already run.
+  attachDaemonRpcServer(socket, {
+    randomSource,
+    macProvider,
+    credential,
+    registry,
+    instanceId,
+    protocolVersion,
+    isDraining: () => draining,
+    guard,
+  });
+
+  return { kind: "serving", instanceId, stopped, requestDrain };
 }

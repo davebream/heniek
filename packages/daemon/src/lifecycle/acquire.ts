@@ -527,6 +527,11 @@ async function proceedAfterClaim(
     throw error;
   }
   tracer.record("bind", `bound ${options.daemonSocketFile}`);
+  // Immediately after listen (design's non-negotiable ordering): the bind
+  // itself never touches the claim path, but this is the earliest point a
+  // successor could have raced this process to a residual-skew takeover of
+  // the claim while the bind was in flight.
+  guard.assertStillHeld();
 
   deps.lockFileSystem.chmod(options.daemonSocketFile, 0o600);
   publishServingRecord(guard);
