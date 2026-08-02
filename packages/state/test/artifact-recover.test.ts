@@ -22,6 +22,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { CompleteStageArtifactInput } from "../src/artifact/complete-stage.js";
 import { completeStage } from "../src/artifact/complete-stage.js";
+import type { ArtifactFileSystem } from "../src/artifact/file-system.js";
 import { publishArtifact } from "../src/artifact/publish.js";
 import { recoverArtifacts } from "../src/artifact/recover.js";
 import {
@@ -42,6 +43,36 @@ import { makeTempDbPath } from "./helpers/temp-db.js";
 
 function sha256Hex(bytes: Uint8Array): string {
   return createHash("sha256").update(bytes).digest("hex");
+}
+
+/**
+ * K1 TOCTOU probe helper (Phase 5 fix cycle). Wraps a `FakeArtifactFileSystem`
+ * so the Nth `lstat` call whose path equals `path` plants a symlink at that
+ * path as a side effect, AFTER returning that call's own (still-real)
+ * result — simulating another writer swapping the container for a symlink
+ * between two of `recoverArtifacts`' own re-checks. Every other method
+ * (including `readdir`/`unlink`, and `calls` itself) delegates unchanged to
+ * `fs`, so assertions against `fs.calls` still see everything.
+ */
+function withContainerSwapAfterLstat(
+  fs: FakeArtifactFileSystem,
+  path: string,
+  swapAfterCall: number,
+): ArtifactFileSystem {
+  let count = 0;
+  return {
+    ...fs,
+    lstat(p: string) {
+      const result = fs.lstat(p);
+      if (p === path) {
+        count += 1;
+        if (count === swapAfterCall) {
+          fs.plantSymlink(path);
+        }
+      }
+      return result;
+    },
+  };
 }
 
 function countRows(db: StateDatabase, table: string): number {
@@ -189,14 +220,114 @@ describe("recoverArtifacts — the required cases (plan Task 5.1 done-when, adap
 });
 
 describe("recoverArtifacts — container discipline (mirrors store.ts's H2)", () => {
-  it("refuses when incoming/ is a symlink, not a real directory", () => {
+  it("refuses when incoming/ is a symlink, not a real directory, and never reaches readdir (K6, Phase 5 fix cycle)", () => {
     const symlinkFs = createFakeArtifactFileSystem(0);
     const symlinkStore = createArtifactStoreInternal(
       { root: "/sym-store", clock: createFakeClock(), ids: createDeterministicIds(1) },
       symlinkFs,
     );
     symlinkFs.plantSymlink(symlinkStore.incomingDir);
-    expect(() => recoverArtifacts(symlinkStore, db)).toThrowError(ArtifactRecoveryError);
+
+    // K6: asserting only `toThrowError(ArtifactRecoveryError)` would pass
+    // for the WRONG reason too — deleting `assertRealDirectory` entirely
+    // yields the same error class from `listIncomingEntries`'s ENOENT wrap.
+    // Assert on the message AND that `readdir` is never called, so the test
+    // actually isolates the container check rather than merely the error's
+    // class.
+    let caught: unknown;
+    try {
+      recoverArtifacts(symlinkStore, db);
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(ArtifactRecoveryError);
+    expect((caught as Error).message).toMatch(
+      /container is not a real directory \(refusing to operate on a symlink or non-directory\)/,
+    );
+    expect(symlinkFs.calls.filter((call) => call.method === "readdir")).toEqual([]);
+  });
+});
+
+describe("recoverArtifacts — TOCTOU re-verification between the initial check and the sweep (K1, Phase 5 fix cycle)", () => {
+  it("a container swapped for a symlink right after the initial check aborts before the incoming/ readdir ever runs", () => {
+    const toctouFs = createFakeArtifactFileSystem(0);
+    // Occurrence 1 of lstat(incomingDir) happens during
+    // createArtifactStoreInternal's own H2 check; occurrence 2 is
+    // recoverArtifacts' own initial assertRealDirectory. Swapping right
+    // after occurrence 2 means the very next re-check — immediately before
+    // the incoming/ readdir — is the one that must catch it.
+    const toctouStore = createArtifactStoreInternal(
+      { root: "/toctou-store-1", clock: createFakeClock(), ids: createDeterministicIds(1) },
+      withContainerSwapAfterLstat(toctouFs, "/toctou-store-1/incoming", 2),
+    );
+
+    let caught: unknown;
+    try {
+      recoverArtifacts(toctouStore, db);
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(ArtifactRecoveryError);
+    expect((caught as Error).message).toMatch(
+      /container is not a real directory \(refusing to operate on a symlink or non-directory\)/,
+    );
+
+    const readdirCallsOnIncoming = toctouFs.calls.filter(
+      (call) => call.method === "readdir" && call.args[0] === toctouStore.incomingDir,
+    );
+    expect(readdirCallsOnIncoming).toEqual([]);
+  });
+
+  it("a container swapped for a symlink after the readdir but before the first unlink aborts before any unlink runs", () => {
+    const toctouFs = createFakeArtifactFileSystem(0);
+    const toctouStore = createArtifactStoreInternal(
+      { root: "/toctou-store-2", clock: createFakeClock(), ids: createDeterministicIds(1) },
+      // Occurrence 1: construction. Occurrence 2: recoverArtifacts' initial
+      // check. Occurrence 3: the re-check immediately before the incoming/
+      // readdir. Swapping right after occurrence 3 means readdir itself
+      // still succeeds (the fake does not model readdir following a
+      // symlink), but the per-entry re-check inside the sweep loop —
+      // immediately before the first unlink — must catch it before any
+      // unlink runs.
+      withContainerSwapAfterLstat(toctouFs, "/toctou-store-2/incoming", 3),
+    );
+    toctouFs.openExclusive("/toctou-store-2/incoming/orphan.tmp");
+
+    let caught: unknown;
+    try {
+      recoverArtifacts(toctouStore, db);
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(ArtifactRecoveryError);
+    expect((caught as Error).message).toMatch(
+      /container is not a real directory \(refusing to operate on a symlink or non-directory\)/,
+    );
+
+    expect(toctouFs.calls.filter((call) => call.method === "unlink")).toEqual([]);
+  });
+});
+
+describe("recoverArtifacts — non-regular incoming/ entries are skipped, not fatal (K3, Phase 5 fix cycle)", () => {
+  it("a subdirectory under incoming/ is reported in skippedIncoming rather than aborting the whole pass", () => {
+    // A raw unlink on a directory throws EISDIR — an earlier revision let
+    // that abort the entire pass after only a partial removal, with no
+    // report returned, and every retry failed identically forever.
+    fakeFs.mkdir("/store/incoming/subdir");
+    const nestedFd = fakeFs.openExclusive("/store/incoming/subdir/nested.tmp");
+    fakeFs.close(nestedFd);
+    fakeFs.openExclusive("/store/incoming/orphan.tmp");
+
+    const report = recoverArtifacts(store, db);
+
+    expect(report.removedIncoming).toEqual(["orphan.tmp"]);
+    expect(report.skippedIncoming).toEqual(["subdir"]);
+    // The directory itself was never unlinked.
+    expect(
+      fakeFs.calls.filter(
+        (call) => call.method === "unlink" && call.args[0] === "/store/incoming/subdir",
+      ),
+    ).toEqual([]);
   });
 });
 

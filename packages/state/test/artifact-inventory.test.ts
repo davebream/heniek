@@ -4,6 +4,7 @@
  * `StateDatabase` paired with a fake, fault-injectable `ArtifactStore`.
  */
 
+import { createHash } from "node:crypto";
 import { rm } from "node:fs/promises";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { CompleteStageArtifactInput } from "../src/artifact/complete-stage.js";
@@ -127,5 +128,37 @@ describe("listArtifacts (plan Task 5.2)", () => {
     expect(rows).toHaveLength(2);
     const sortedIds = [...rows].map((row) => row.artifactId).sort((x, y) => x.localeCompare(y));
     expect(rows.map((row) => row.artifactId)).toEqual(sortedIds);
+  });
+
+  it("REQUIRED (K5, Phase 5 fix cycle): never mutates the filesystem — even with an unreferenced blob and a stray incoming/ entry present", () => {
+    // Mirrors artifact-recover.test.ts's own "classification is read-only"
+    // call-log assertion (line ~160 there). Before this test, non-mutation
+    // was guaranteed only by reading inventory.ts's source (it never calls
+    // unlink/link/write/mkdir/fchmod) — nothing in the suite pinned it, so a
+    // mutation that made listArtifacts unlink an unreferenced blob, or
+    // anything not named by an artifact row, would have left every other
+    // case in this file green.
+    const artifact = publishFor(new TextEncoder().encode("referenced"), "a.md");
+    completeStage(db, store, { runId: "run-1", stageId: "stage-1", artifacts: [artifact] });
+
+    const bytes = new TextEncoder().encode("unreferenced content, never named by any row");
+    const hash = createHash("sha256").update(bytes).digest("hex");
+    const unreferencedFd = fakeFs.openExclusive(`/store/blobs/sha256/${hash}`);
+    fakeFs.write(unreferencedFd, bytes);
+    fakeFs.close(unreferencedFd);
+    fakeFs.openExclusive("/store/incoming/leftover.tmp");
+
+    // Snapshot the call count now — setup above (publishFor/completeStage)
+    // legitimately makes write/link/fchmod calls of its own; only calls made
+    // BY listArtifacts itself must be free of mutation.
+    const callsBeforeListArtifacts = fakeFs.calls.length;
+    const rows = listArtifacts(db, store);
+    expect(rows).toHaveLength(1);
+
+    const mutatingMethods = new Set(["unlink", "link", "write", "mkdir", "fchmod"]);
+    const mutatingCalls = fakeFs.calls
+      .slice(callsBeforeListArtifacts)
+      .filter((call) => mutatingMethods.has(call.method));
+    expect(mutatingCalls).toEqual([]);
   });
 });

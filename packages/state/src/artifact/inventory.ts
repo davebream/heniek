@@ -20,6 +20,17 @@
  * the directory entry a later reader resolves. `listArtifacts` is that
  * later reader; a `false` here is the detection this package offers for
  * that window, not proof of a bug in how the row was written.
+ *
+ * **Scope limit, stated explicitly (K4, Phase 5 fix cycle).** This pass is
+ * unbounded and fully synchronous: it loads every `artifact` row in one
+ * query and re-hashes every referenced blob through synchronous
+ * `openReadOnly`/`readAt`/`close` calls, blocking the event loop for the
+ * whole call in proportion to the store's total referenced-blob bytes. That
+ * is an accepted cost for what this pass is — an operator-invoked evidence
+ * pass (OR-16), not a request-path or high-frequency operation — and must
+ * stay stated here rather than left implied: a caller with a large store or
+ * a latency-sensitive context must not invoke `listArtifacts` inline on a
+ * hot path.
  */
 
 import { createHash } from "node:crypto";

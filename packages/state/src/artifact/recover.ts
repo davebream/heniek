@@ -81,6 +81,40 @@
  * resolved with `unlink` directly (never followed) — a symlink planted
  * inside `incoming/` is removed as the symlink it is (its own directory
  * entry), never followed to whatever it points at.
+ *
+ * **TOCTOU re-verification (K1, Phase 5 fix cycle).** The container check
+ * above is a point-in-time `lstat`; every subsequent `readdir`/`unlink` is a
+ * *separate* path-based syscall that re-resolves `incoming/`/`blobs/sha256/`
+ * from scratch. A writer with filesystem access to `store.root` could swap
+ * `incoming/` for a symlink to `blobs/sha256/` between the initial check and
+ * the sweep, turning the unconditional `incoming/` removal into the exact
+ * AC-3 inversion this module exists to prevent — reached indirectly, through
+ * a swapped container rather than a schema violation. `readdir`/`unlink`
+ * are never called from an unguarded assumption that the earlier check still
+ * holds: `assertContainerIdentityUnchanged` re-runs the real-directory check
+ * (and compares `ino`/`dev` against the value pinned at the initial check)
+ * immediately before the `incoming/` `readdir`, immediately before *every*
+ * `unlink` inside the sweep loop, and immediately before the `blobs/sha256/`
+ * `readdir` used for classification. This does not claim to eliminate the
+ * race at the syscall level — no two separate path-based syscalls ever can,
+ * short of an `*at()`-family dirfd-relative API this port's `node:fs`
+ * adapter does not expose — but it shrinks the window from "the entire
+ * sweep" to "one syscall pair," and a detected swap aborts the whole pass
+ * with `ArtifactRecoveryError` instead of silently unlinking through the
+ * swapped path. This is a real, tested strengthening (see
+ * `artifact-recover.test.ts`'s TOCTOU cases), not merely narrower prose.
+ *
+ * **Non-regular `incoming/` entries are skipped, not fatal (K3, Phase 5 fix
+ * cycle).** A subdirectory under `incoming/` — which this module never
+ * creates itself, but which an operator or a hostile writer could — makes a
+ * raw `unlink` throw `EISDIR`. An earlier revision let that throw abort the
+ * whole pass after only *partial* removal, with no report returned; every
+ * retry then failed identically, forever. Each entry is now `lstat`-checked
+ * before its `unlink`: a directory entry is recorded in `skippedIncoming`
+ * and left in place (never removed, never crashes the pass) rather than
+ * aborting; a symlink entry is still `unlink`ed normally (removing the
+ * symlink's own directory entry, never following it — unchanged from
+ * before).
  */
 
 import { join } from "node:path";
@@ -93,8 +127,23 @@ export interface RecoverArtifactsReport {
   /** `incoming/` entry names removed this pass — every entry that existed, every time (no gating, see this module's docblock). */
   readonly removedIncoming: readonly string[];
   /**
+   * `incoming/` entry names present this pass but left in place because they
+   * are not regular files (e.g. a subdirectory) — never removed, reported so
+   * an operator can investigate (K3, Phase 5 fix cycle). A planted symlink is
+   * NOT reported here: it is still unlinked as its own directory entry (see
+   * this module's docblock).
+   */
+  readonly skippedIncoming: readonly string[];
+  /**
    * `blobs/sha256/<hex>` relative paths with no referencing `artifact` row
-   * — classified, never removed (see this module's docblock).
+   * — classified, never removed (see this module's docblock). Computed
+   * inside one `BEGIN IMMEDIATE` transaction against the referenced-hash
+   * query (K2, Phase 5 fix cycle) — see `readReferencedHashesAndBlobEntries`
+   * below. **Advisory only**: correct at the instant this call returns, not
+   * a live guarantee — nothing prevents a blob from becoming referenced (a
+   * concurrent publish-then-commit) or unreferenced (were a future GC ever
+   * built) immediately afterward. A caller must not cache this list past the
+   * call that produced it.
    */
   readonly unreferencedBlobs: readonly string[];
 }
@@ -106,7 +155,7 @@ export interface RecoverArtifactsReport {
  * helper would need a caller-supplied error constructor for no real
  * simplification).
  */
-function assertRealDirectory(fs: ArtifactFileSystem, path: string): void {
+function assertRealDirectory(fs: ArtifactFileSystem, path: string): ArtifactFileSystemStat {
   let stat: ArtifactFileSystemStat;
   try {
     stat = fs.lstat(path);
@@ -117,6 +166,29 @@ function assertRealDirectory(fs: ArtifactFileSystem, path: string): void {
     throw new ArtifactRecoveryError(
       path,
       "container is not a real directory (refusing to operate on a symlink or non-directory)",
+    );
+  }
+  return stat;
+}
+
+/**
+ * K1 (Phase 5 fix cycle) TOCTOU guard — see this module's docblock. Re-runs
+ * `assertRealDirectory` (so a swap to a symlink is caught the same way the
+ * initial check catches one) and additionally compares `ino`/`dev` against
+ * the stat pinned at the initial check, so a container replaced by a
+ * *different* real directory at the same path (not just a symlink) is also
+ * caught even though `isDirectory` alone would stay true.
+ */
+function assertContainerIdentityUnchanged(
+  fs: ArtifactFileSystem,
+  path: string,
+  pinned: ArtifactFileSystemStat,
+): void {
+  const current = assertRealDirectory(fs, path);
+  if (current.ino !== pinned.ino || current.dev !== pinned.dev) {
+    throw new ArtifactRecoveryError(
+      path,
+      "container identity changed since the initial check (possible TOCTOU swap) — aborting the recovery pass",
     );
   }
 }
@@ -144,21 +216,83 @@ function listReferencedHashes(db: StateDatabase): ReadonlySet<string> {
 }
 
 /**
+ * K2 (Phase 5 fix cycle): the referenced-hash query and the `blobs/sha256/`
+ * `readdir` used to run outside any transaction — two independent reads,
+ * torn against each other. A blob published and its `artifact` row
+ * committed *between* those two reads would be misclassified as
+ * unreferenced. Harmless while nothing acts on the list, but wrong for any
+ * future consumer that trusts it (e.g. a GC). Both reads now happen inside
+ * one `BEGIN IMMEDIATE`/`COMMIT`, the same write-lock discipline
+ * `command/commit.ts` uses, so a concurrent publisher's `commitStateChange`
+ * (which itself opens with `BEGIN IMMEDIATE`) cannot land between them. The
+ * result is still advisory-only the instant the transaction ends — see
+ * `RecoverArtifactsReport.unreferencedBlobs`'s docs.
+ */
+function readReferencedHashesAndBlobEntries(
+  db: StateDatabase,
+  fs: ArtifactFileSystem,
+  blobsDir: string,
+): { readonly referencedHashes: ReadonlySet<string>; readonly blobEntries: readonly string[] } {
+  const handle = internalHandle(db);
+  if (handle.isTransaction) {
+    throw new ArtifactRecoveryError(
+      blobsDir,
+      "recoverArtifacts: refusing to run inside a transaction opened by the caller",
+    );
+  }
+  handle.exec("BEGIN IMMEDIATE");
+  try {
+    const referencedHashes = listReferencedHashes(db);
+    const blobEntries = listBlobEntries(fs, blobsDir);
+    handle.exec("COMMIT");
+    return { referencedHashes, blobEntries };
+  } catch (error) {
+    if (handle.isTransaction) {
+      handle.exec("ROLLBACK");
+    }
+    throw error;
+  }
+}
+
+/**
  * Executes the sweep. See this module's docblock for the single-writer-lock
- * precondition, the no-loss proof, and the classify-never-remove rule for
- * blobs. Unconditional: every `incoming/` entry present when this call
- * starts is removed, every time — see this module's docblock for why no
- * gated mode exists.
+ * precondition, the no-loss proof, the TOCTOU re-verification (K1), the
+ * non-regular-entry handling (K3), and the classify-never-remove rule for
+ * blobs. Unconditional: every regular-file/symlink `incoming/` entry present
+ * when this call starts is removed, every time — see this module's docblock
+ * for why no gated mode exists.
  */
 export function recoverArtifacts(store: ArtifactStore, db: StateDatabase): RecoverArtifactsReport {
   const fs = internalArtifactFileSystem(store);
 
-  assertRealDirectory(fs, store.incomingDir);
-  assertRealDirectory(fs, store.blobsDir);
+  const incomingStat = assertRealDirectory(fs, store.incomingDir);
+  const blobsStat = assertRealDirectory(fs, store.blobsDir);
 
+  assertContainerIdentityUnchanged(fs, store.incomingDir, incomingStat);
   const removedIncoming: string[] = [];
+  const skippedIncoming: string[] = [];
   for (const name of listIncomingEntries(fs, store.incomingDir)) {
+    assertContainerIdentityUnchanged(fs, store.incomingDir, incomingStat);
     const path = join(store.incomingDir, name);
+
+    // K3: a subdirectory under incoming/ makes a raw unlink throw EISDIR —
+    // skip it into a reported bucket instead of aborting the whole pass
+    // after only a partial removal. A symlink entry is NOT skipped: it is
+    // still unlinked as its own directory entry (never followed), unchanged
+    // from before this fix.
+    let entryStat: ArtifactFileSystemStat;
+    try {
+      entryStat = fs.lstat(path);
+    } catch (error) {
+      throw new ArtifactRecoveryError(path, "failed to lstat an incoming/ entry", {
+        cause: error,
+      });
+    }
+    if (entryStat.isDirectory && !entryStat.isSymbolicLink) {
+      skippedIncoming.push(name);
+      continue;
+    }
+
     try {
       fs.unlink(path);
     } catch (error) {
@@ -169,10 +303,15 @@ export function recoverArtifacts(store: ArtifactStore, db: StateDatabase): Recov
     removedIncoming.push(name);
   }
 
-  const referencedHashes = listReferencedHashes(db);
-  const unreferencedBlobs = listBlobEntries(fs, store.blobsDir)
+  assertContainerIdentityUnchanged(fs, store.blobsDir, blobsStat);
+  const { referencedHashes, blobEntries } = readReferencedHashesAndBlobEntries(
+    db,
+    fs,
+    store.blobsDir,
+  );
+  const unreferencedBlobs = blobEntries
     .filter((hash) => !referencedHashes.has(hash))
     .map((hash) => `blobs/sha256/${hash}`);
 
-  return { removedIncoming, unreferencedBlobs };
+  return { removedIncoming, skippedIncoming, unreferencedBlobs };
 }
