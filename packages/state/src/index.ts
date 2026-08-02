@@ -1,4 +1,9 @@
 export {
+  type CompleteStageArtifactInput,
+  type CompleteStageInput,
+  completeStage,
+} from "./artifact/complete-stage.js";
+export {
   type ArtifactPublicationReceipt,
   type PublishArtifactInput,
   publishArtifact,

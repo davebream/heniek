@@ -14,7 +14,11 @@ import { join } from "node:path";
 import type { ArtifactId, ArtifactRefV1 } from "@heniek/contracts";
 import type { Static } from "@sinclair/typebox";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { commitStateChange } from "../src/command/commit.js";
+import {
+  commitStateChange,
+  commitStateChangeInternal,
+  type StageArtifactAssertion,
+} from "../src/command/commit.js";
 import { internalHandle, openStateDatabase, type StateDatabase } from "../src/database/open.js";
 import { latestSequence } from "../src/journal/read.js";
 import { currentSchemaVersion, runMigrations } from "../src/migrations/migrate.js";
@@ -74,6 +78,23 @@ const HASH_A = "a".repeat(64);
 const HASH_B = "b".repeat(64);
 
 /**
+ * `artifact.published` and `stage.completed` now reach `artifact`/
+ * `stage_artifact_alias` only through `commitStateChangeInternal`'s verified
+ * assertion machinery (AC-1, `command/commit.ts`'s
+ * `assertGuardedWritesAreVerified`) — the public `commitStateChange` refuses
+ * both unconditionally. This file exercises the **reducer's** and
+ * **replay's** behaviour, not filesystem publication (that is Phase 3/4's
+ * own `artifact-publish.test.ts`/`complete-stage` suites), so — mirroring
+ * `command.test.ts`'s identical `noopAssertion` — every case below drives
+ * the same internal entry point `completeStage` (the production wrapper)
+ * uses, with an always-succeeding assertion standing in for a real
+ * filesystem receipt.
+ */
+function noopAssertion(relativePath: string): StageArtifactAssertion {
+  return { relativePath, assert: () => {} };
+}
+
+/**
  * `artifact.run_id REFERENCES run_projection(run_id)` (issue #8, Phase 2 fix
  * cycle G1, finding F4): every case below that publishes or completes an
  * artifact without going through the full `seedAllFourTables` fixture still
@@ -98,23 +119,28 @@ function seedMinimalRun(): void {
  * event types (plan Task 2.2).
  */
 function publishArtifact(): void {
-  commitStateChange(db, {
-    runId: "run-1",
-    type: "artifact.published",
-    payload: {
+  const path = `blobs/sha256/${HASH_A}`;
+  commitStateChangeInternal(
+    db,
+    {
       runId: "run-1",
-      stageId: "stage-1",
-      artifactId: "artifact-1",
-      name: "plan.md",
-      contentHash: HASH_A,
-      byteLength: 42,
-      mediaType: "text/markdown",
-      contentSchemaId: "heniek://contract/Plan/v1",
-      producer: "planner",
-      sourceLineage: [],
-      path: `blobs/sha256/${HASH_A}`,
+      type: "artifact.published",
+      payload: {
+        runId: "run-1",
+        stageId: "stage-1",
+        artifactId: "artifact-1",
+        name: "plan.md",
+        contentHash: HASH_A,
+        byteLength: 42,
+        mediaType: "text/markdown",
+        contentSchemaId: "heniek://contract/Plan/v1",
+        producer: "planner",
+        sourceLineage: [],
+        path,
+      },
     },
-  });
+    { artifactRelativePaths: [path], assertions: [noopAssertion(path)] },
+  );
 }
 
 /**
@@ -124,27 +150,32 @@ function publishArtifact(): void {
  * §16.6, plan Task 2.2).
  */
 function completeStage(): void {
-  commitStateChange(db, {
-    runId: "run-1",
-    type: "stage.completed",
-    payload: {
+  const path = `blobs/sha256/${HASH_B}`;
+  commitStateChangeInternal(
+    db,
+    {
       runId: "run-1",
-      stageId: "stage-1",
-      artifacts: [
-        {
-          artifactId: "artifact-2",
-          name: "report.md",
-          contentHash: HASH_B,
-          byteLength: 7,
-          mediaType: "text/markdown",
-          contentSchemaId: "heniek://contract/Report/v1",
-          producer: "reviewer",
-          sourceLineage: ["artifact-1"],
-          path: `blobs/sha256/${HASH_B}`,
-        },
-      ],
+      type: "stage.completed",
+      payload: {
+        runId: "run-1",
+        stageId: "stage-1",
+        artifacts: [
+          {
+            artifactId: "artifact-2",
+            name: "report.md",
+            contentHash: HASH_B,
+            byteLength: 7,
+            mediaType: "text/markdown",
+            contentSchemaId: "heniek://contract/Report/v1",
+            producer: "reviewer",
+            sourceLineage: ["artifact-1"],
+            path,
+          },
+        ],
+      },
     },
-  });
+    { artifactRelativePaths: [path], assertions: [noopAssertion(path)] },
+  );
 }
 
 describe("converged", () => {
@@ -273,27 +304,32 @@ describe("reducer — artifact.published and stage.completed (design D11a, §16.
     expect(first?.artifact_id).toBe("artifact-2");
     expect(first?.revision).toBe(1);
 
-    commitStateChange(db, {
-      runId: "run-1",
-      type: "stage.completed",
-      payload: {
+    const secondPath = `blobs/sha256/${HASH_A}`;
+    commitStateChangeInternal(
+      db,
+      {
         runId: "run-1",
-        stageId: "stage-1",
-        artifacts: [
-          {
-            artifactId: "artifact-3",
-            name: "report.md",
-            contentHash: HASH_A,
-            byteLength: 9,
-            mediaType: "text/markdown",
-            contentSchemaId: "heniek://contract/Report/v1",
-            producer: "reviewer",
-            sourceLineage: [],
-            path: `blobs/sha256/${HASH_A}`,
-          },
-        ],
+        type: "stage.completed",
+        payload: {
+          runId: "run-1",
+          stageId: "stage-1",
+          artifacts: [
+            {
+              artifactId: "artifact-3",
+              name: "report.md",
+              contentHash: HASH_A,
+              byteLength: 9,
+              mediaType: "text/markdown",
+              contentSchemaId: "heniek://contract/Report/v1",
+              producer: "reviewer",
+              sourceLineage: [],
+              path: secondPath,
+            },
+          ],
+        },
       },
-    });
+      { artifactRelativePaths: [secondPath], assertions: [noopAssertion(secondPath)] },
+    );
 
     const second = handle
       .prepare(
@@ -341,15 +377,19 @@ describe("reducer binds to ArtifactRefV1's field names (G2, G4)", () => {
       sourceLineage: [],
     };
 
-    commitStateChange(db, {
-      runId: "run-1",
-      type: "stage.completed",
-      payload: {
+    commitStateChangeInternal(
+      db,
+      {
         runId: "run-1",
-        stageId: "stage-1",
-        artifacts: [ref],
+        type: "stage.completed",
+        payload: {
+          runId: "run-1",
+          stageId: "stage-1",
+          artifacts: [ref],
+        },
       },
-    });
+      { artifactRelativePaths: [ref.path], assertions: [noopAssertion(ref.path)] },
+    );
 
     const handle = internalHandle(db);
     const row = handle
@@ -370,23 +410,28 @@ describe("reducer binds to ArtifactRefV1's field names (G2, G4)", () => {
  */
 describe("sourceLineage bounds (G3)", () => {
   function publishWithLineage(sourceLineage: readonly string[]): void {
-    commitStateChange(db, {
-      runId: "run-1",
-      type: "artifact.published",
-      payload: {
+    const path = `blobs/sha256/${HASH_A}`;
+    commitStateChangeInternal(
+      db,
+      {
         runId: "run-1",
-        stageId: "stage-1",
-        artifactId: "artifact-lineage",
-        name: "lineage.md",
-        contentHash: HASH_A,
-        byteLength: 1,
-        mediaType: "text/markdown",
-        contentSchemaId: "heniek://contract/Plan/v1",
-        producer: "planner",
-        sourceLineage,
-        path: `blobs/sha256/${HASH_A}`,
+        type: "artifact.published",
+        payload: {
+          runId: "run-1",
+          stageId: "stage-1",
+          artifactId: "artifact-lineage",
+          name: "lineage.md",
+          contentHash: HASH_A,
+          byteLength: 1,
+          mediaType: "text/markdown",
+          contentSchemaId: "heniek://contract/Plan/v1",
+          producer: "planner",
+          sourceLineage,
+          path,
+        },
       },
-    });
+      { artifactRelativePaths: [path], assertions: [noopAssertion(path)] },
+    );
   }
 
   it("accepts sourceLineage at the 64-entry boundary", () => {
@@ -468,27 +513,32 @@ describe("commit.ts binds stage_artifact_alias's composite key by column (F5)", 
       artifactId: string,
       contentHash: string,
     ): void {
-      commitStateChange(db, {
-        runId: "run-1",
-        type: "stage.completed",
-        payload: {
+      const path = `blobs/sha256/${contentHash}`;
+      commitStateChangeInternal(
+        db,
+        {
           runId: "run-1",
-          stageId,
-          artifacts: [
-            {
-              artifactId,
-              name,
-              contentHash,
-              byteLength: 1,
-              mediaType: "text/markdown",
-              contentSchemaId: "heniek://contract/Report/v1",
-              producer: "reviewer",
-              sourceLineage: [],
-              path: `blobs/sha256/${contentHash}`,
-            },
-          ],
+          type: "stage.completed",
+          payload: {
+            runId: "run-1",
+            stageId,
+            artifacts: [
+              {
+                artifactId,
+                name,
+                contentHash,
+                byteLength: 1,
+                mediaType: "text/markdown",
+                contentSchemaId: "heniek://contract/Report/v1",
+                producer: "reviewer",
+                sourceLineage: [],
+                path,
+              },
+            ],
+          },
         },
-      });
+        { artifactRelativePaths: [path], assertions: [noopAssertion(path)] },
+      );
     }
 
     function readAlias(stageId: string, name: string): unknown {
