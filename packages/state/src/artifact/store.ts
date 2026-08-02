@@ -32,19 +32,24 @@
  * after `mkdir` and refuses (never falls through) unless it is a real,
  * non-symlink directory.
  *
- * **`clock` accessor removed (P6, post-Phase-3 adversarial review, fix
- * cycle 1) — still absent after Phase 5.** `ArtifactStoreOptions.clock` is
- * still accepted and stored — every caller already threads a `Clock`
- * through `createArtifactStore` for the store handle's lifetime. What is
- * deliberately absent is an `internalArtifactClock(store)` accessor: an
- * earlier Phase 5 revision of `recoverArtifacts` (`artifact/recover.ts`)
- * planned to use one to gate `incoming/` removal by comparing the store's
- * `Clock` against `lstat().mtimeMs` — the Phase 4/5 fix cycle rejected that
- * design outright (same three reasons H1 above already rejected it for the
- * on-open sweep; see `recover.ts`'s docblock for the full argument), so
- * `recoverArtifacts` never needed the store's `Clock` after all. With zero
- * call sites package-wide, the accessor stays unwritten — an untested,
- * unneeded accessor is a worse default than no accessor.
+ * **`clock` accessor deliberately absent — reaffirmed, not merely left
+ * over (Phase 4/5 fix cycle, dispatch-level decision).** `ArtifactStoreOptions
+ * .clock` is still accepted and stored — every caller already threads a
+ * `Clock` through `createArtifactStore` for the store handle's lifetime.
+ * A same-day revision of this module reintroduced an `internalArtifactClock`
+ * accessor so `recoverArtifacts` could gate `incoming/` removal by comparing
+ * that `Clock` against `lstat().mtimeMs`, citing a plan amendment as
+ * authority. That reintroduces exactly the pattern H1 above rejects, one
+ * module over: comparing an injected `Clock` against real kernel `mtimeMs`
+ * is unsound regardless of whether the caller opted in explicitly or the
+ * sweep ran automatically — the caller cannot make two different time
+ * domains comparable by choosing to invoke the comparison themselves. The
+ * dispatch-level decision for this fix cycle overrides the plan text here:
+ * `recoverArtifacts` has exactly one mode (unconditional), gated instead by
+ * a documented single-writer-lock precondition (see `recover.ts`'s
+ * docblock). No accessor is needed because nothing in this package compares
+ * `Clock` against `mtimeMs` — not on the automatic path (H1) and not on the
+ * explicit path either.
  */
 
 import { join } from "node:path";

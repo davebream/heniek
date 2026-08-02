@@ -3,17 +3,27 @@ export {
   type CompleteStageInput,
   completeStage,
 } from "./artifact/complete-stage.js";
+export { type ArtifactInventoryRow, listArtifacts } from "./artifact/inventory.js";
 export {
   type ArtifactPublicationReceipt,
   type PublishArtifactInput,
   publishArtifact,
 } from "./artifact/publish.js";
 export {
+  type RecoverArtifactsOptions,
+  type RecoverArtifactsReport,
+  recoverArtifacts,
+} from "./artifact/recover.js";
+export {
   type ArtifactStore,
   type ArtifactStoreOptions,
   createArtifactStore,
 } from "./artifact/store.js";
-export { type CommitReport, commitStateChange, type StateCommand } from "./command/commit.js";
+export {
+  type CommitReport,
+  commitStateChange,
+  type StateCommand,
+} from "./command/commit.js";
 export { type SchemaFingerprint, schemaFingerprint } from "./database/fingerprint.js";
 export {
   type OpenStateDatabaseOptions,
