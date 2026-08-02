@@ -1,0 +1,23 @@
+{
+  "name": "@heniek/daemon",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@heniek/config": "workspace:*",
+    "@heniek/contracts": "workspace:*",
+    "@heniek/secrets": "workspace:*",
+    "@heniek/state": "workspace:*"
+  },
+  "devDependencies": {
+    "@sinclair/typebox": "catalog:",
+    "tsx": "catalog:",
+    "vitest": "catalog:"
+  }
+}

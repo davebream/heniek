@@ -27,18 +27,21 @@
  * (documented precondition, not enforced here).** `recoverArtifacts`
  * assumes it is the only writer touching `store.root` for the duration of
  * the call — exactly the precondition `completeStage` already relies on for
- * its own transaction. Cross-process single-writer enforcement is
- * chartered to Q008 and explicitly out of scope for this issue (plan "Out
- * of Scope"); this package neither takes nor can take a filesystem-level
- * lock across processes today. An operator invoking `recoverArtifacts` is
- * responsible for serializing it against every publisher of the same store
- * — a file lock, a single-process scheduler, a maintenance window, or
- * whatever mechanism their deployment provides — **before** calling this
- * function, not something this function can verify or enforce. This is
- * chosen deliberately over an in-process liveness signal (e.g. a
- * non-blocking lock on each temp fd): a liveness lock would still only be
- * advisory against a genuinely hostile writer, adds a new cross-process
- * contract this issue never scoped, and duplicates work Q008 already owns.
+ * its own transaction. Cross-process single-writer enforcement is now
+ * delivered by `@heniek/daemon`'s `acquire.ts` (filesystem-authoritative
+ * instance claim, bind last), which callers running under the daemon get
+ * for free; this package still neither takes nor can take a
+ * filesystem-level lock itself, and that does not change with the daemon's
+ * arrival. Any caller that invokes `recoverArtifacts` **outside** the
+ * daemon's held claim — a script, a test harness, a future second daemon
+ * implementation — is responsible for arranging its own exclusion against
+ * every publisher of the same store — a file lock, a single-process
+ * scheduler, a maintenance window, or whatever mechanism its deployment
+ * provides — **before** calling this function, not something this function
+ * can verify or enforce. This is chosen deliberately over an in-process
+ * liveness signal (e.g. a non-blocking lock on each temp fd): a liveness
+ * lock would still only be advisory against a genuinely hostile writer and
+ * adds a cross-process contract this package does not itself take on.
  * Calling `recoverArtifacts` while a publisher is concurrently mid-write to
  * the SAME store is unsafe and is the caller's responsibility to avoid.
  *

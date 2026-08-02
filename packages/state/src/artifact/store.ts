@@ -20,7 +20,11 @@
  * Recovery is now an **explicit** operation, chartered to Phase 5's
  * `recoverArtifacts`, invoked deliberately by an operator entry point that
  * documents the single-writer-lock precondition — never wired to the
- * automatic on-open path.
+ * automatic on-open path. That precondition is satisfied for free by a
+ * caller running under `@heniek/daemon`'s held instance claim
+ * (`acquire.ts`), but this module still takes no filesystem-level lock of
+ * its own — the obligation to arrange exclusion falls to whatever process
+ * calls `recoverArtifacts`, daemon or not.
  *
  * **Container symlink/type discipline (H2).** `mkdir` tolerates a
  * pre-existing symlink at its target path (it resolves and treats the
@@ -39,7 +43,10 @@
  * handle's lifetime. No `internalArtifactClock(store)` accessor exists, and
  * none should be added: `recoverArtifacts` (`artifact/recover.ts`) has
  * exactly one mode (unconditional `incoming/` removal), gated instead by a
- * documented single-writer-lock precondition, never by comparing this
+ * documented single-writer-lock precondition — now delivered, for callers
+ * running under it, by `@heniek/daemon`'s `acquire.ts`, though this module
+ * itself still takes no lock and still relies entirely on the caller to
+ * arrange exclusion — never by comparing this
  * store's `Clock` against real kernel `mtimeMs` — that comparison is the
  * exact pattern this fix cycle rejects, for the same three reasons this
  * docblock's H1 paragraph above already gives for the automatic on-open

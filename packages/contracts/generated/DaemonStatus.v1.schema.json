@@ -1,0 +1,87 @@
+{
+  "$id": "heniek://contract/DaemonStatus/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "instanceId",
+    "lifecycleState",
+    "startedAt",
+    "reconciliation",
+    "artifactRecovery"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "instanceId": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "lifecycleState": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "startedAt": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "reconciliation": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "probed",
+        "resumable",
+        "failed",
+        "cancelled",
+        "unknown"
+      ],
+      "properties": {
+        "probed": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "resumable": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "failed": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "cancelled": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "unknown": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      }
+    },
+    "artifactRecovery": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "removedIncoming",
+        "skippedIncoming",
+        "unreferencedBlobs"
+      ],
+      "properties": {
+        "removedIncoming": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "skippedIncoming": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "unreferencedBlobs": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      }
+    }
+  }
+}
