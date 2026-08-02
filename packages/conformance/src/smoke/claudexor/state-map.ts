@@ -46,9 +46,35 @@ export type ClaudexorRunState = (typeof CLAUDEXOR_RUN_STATES)[number];
  * user interrupt would be certain and finished, and `recovery_required` is
  * non-terminal, so such a run would never settle without intervention).
  *
- * Canary 4 (daemon restart / recovery) is the experiment that decides this.
- * Until it reports, this mapping is a hypothesis, must be labelled as such in
- * the ADR, and must not be counted as a satisfied "bounded fallback".
+ * **Q008's own daemon restart does not decide this (re-deferred, not
+ * resolved).** Q008 (`@heniek/daemon`) shipped a filesystem-authoritative
+ * single-instance claim, a pre-bind crash-recovery reconciliation pass, and
+ * a classifier that tests against `packages/daemon/test/helpers/
+ * scripted-backend.ts` — a scripted, in-memory `ExecutionBackend` handle,
+ * never a real Claudexor engine. It consumes `ExecutionBackend` purely as a
+ * port and never persists a backend run handle across a restart to observe
+ * against a real engine, so it structurally cannot produce the deciding
+ * evidence here: deciding this mapping requires watching what a real,
+ * pinned Claudexor engine actually reports after an interruption, which is
+ * outside what a scripted handle can ever assert. The earlier "Canary 4
+ * (daemon restart / recovery)" pointer is retired as misleading about
+ * *which* daemon restart would decide it — Heniek's own restart, exercised
+ * exhaustively by Q008, is not that experiment.
+ *
+ * **Sharpened deciding criterion (post-Q008).** `recovery_required` now has
+ * a precise operational meaning on the Heniek side: "the probe did not
+ * return a status the backend asserts with knowledge" (Q008's classifier,
+ * `packages/daemon/src/recovery/classify.ts`). The still-open experiment is
+ * therefore narrower than before: observe whether a Claudexor `interrupted`
+ * is itself asserted *with* knowledge (the engine is certain the run ended
+ * this way) or merely reflects the engine's own uncertainty. A `interrupted`
+ * asserted with knowledge should map to `failed` or `cancelled`, not
+ * `recovery_required` — the deciding experiment must determine which of the
+ * two `interrupted` actually is.
+ *
+ * Until that experiment reports, this mapping is a hypothesis, must be
+ * labelled as such in the ADR, and must not be counted as a satisfied
+ * "bounded fallback".
  */
 export const INTERRUPTED_MAPPING_IS_PROVISIONAL = true;
 

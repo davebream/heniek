@@ -183,15 +183,21 @@ function reHashPinnedFd(fs: ArtifactFileSystem, fd: number): string {
  * TOCTOU window, documented not neutralised.** The pinned fd does NOT close
  * this window. SQLite's `BEGIN IMMEDIATE` write lock protects the
  * *database*, never the filesystem — nothing here or in `command/commit.ts`
- * takes any filesystem-level lock. Between this assertion returning and
- * `COMMIT`, and again between `COMMIT` and `completeStage`'s own `finally`
- * closing the fd, a hostile or buggy concurrent process can still `unlink`
- * the blob out from under the just-committed row: the pinned fd keeps the
- * *inode's bytes* alive for as long as this process holds it open, but it
- * does not, and cannot, keep the *directory entry* (the name a later reader
- * resolves) alive. Once the fd is closed the inode itself can be freed too,
- * so the committed row can end up naming a path with nothing there. No
- * design in this module beats a hostile unlinker; this is the residual gap
+ * takes any filesystem-level lock. `@heniek/daemon`'s `acquire.ts` closes
+ * the legitimate-writer case — it is what stops a *second daemon* from
+ * ever running against the same store — but it does not and cannot close
+ * this window: a hostile or buggy process with filesystem access to the
+ * store root is by definition not going through the daemon's claim at all,
+ * so the daemon's single-instance enforcement has nothing to arbitrate
+ * against it. Between this assertion returning and `COMMIT`, and again
+ * between `COMMIT` and `completeStage`'s own `finally` closing the fd, such
+ * a process can still `unlink` the blob out from under the just-committed
+ * row: the pinned fd keeps the *inode's bytes* alive for as long as this
+ * process holds it open, but it does not, and cannot, keep the *directory
+ * entry* (the name a later reader resolves) alive. Once the fd is closed
+ * the inode itself can be freed too, so the committed row can end up naming
+ * a path with nothing there. No design in this module beats a hostile
+ * unlinker; this is the residual gap
  * `packages/state/test/artifact-inventory.test.ts` (Task 5.2) exists to
  * detect after the fact, not to prevent.
  */

@@ -11,9 +11,14 @@
  * prove SQLite is atomic — that is SQLite's claim, relied upon here.
  *
  * **Explicitly out of scope, stated rather than faked:** power loss and lying
- * `fsync`, filesystem corruption, and concurrent writers from a second process
- * (Q008 owns single-instance enforcement). None of these is simulated
- * anywhere in this file.
+ * `fsync`, filesystem corruption, and concurrent writers from a second
+ * process. `@heniek/daemon`'s `acquire.ts` now delivers cross-process
+ * single-instance enforcement for callers running under the daemon, but
+ * this package still takes no filesystem-level lock itself — a caller
+ * outside the daemon's held claim still has to arrange its own exclusion,
+ * and that residual obligation is exactly why a second-process writer race
+ * remains out of scope for this suite. None of these is simulated anywhere
+ * in this file.
  *
  * Budget (R9): three children, one spawn each, no sleeps and no polling. The
  * parent asserts on files, never on timing.

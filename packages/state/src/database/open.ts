@@ -28,7 +28,7 @@ const ENTRY_ACCESS_MASK = 0o077;
 const SIDECAR_SUFFIXES = ["-wal", "-shm"] as const;
 
 export interface OpenStateDatabaseOptions {
-  /** Absolute path to state.sqlite. The caller (Q008) reads it from @heniek/config. */
+  /** Absolute path to state.sqlite. The caller (`@heniek/daemon`'s composition root) reads it from @heniek/config. */
   readonly path: string;
   readonly clock: Clock;
   readonly ids: IdGenerator;
@@ -208,8 +208,12 @@ function secureExistingSidecars(path: string, permissionsEnforced: boolean): voi
  * yield two independent `node:sqlite` connections, not a shared one — the
  * second writer degrades to `SQLITE_BUSY` after the 5s `timeout` above once
  * the first holds a write lock. Design D12/DG-5's single-writer posture is
- * documented, not enforced by this module; a caller needing a hard guarantee
- * must arrange it itself (e.g. Q008's single-instance enforcement).
+ * documented, not enforced by this module; cross-process enforcement is now
+ * delivered by `@heniek/daemon`'s `acquire.ts` (a filesystem-authoritative
+ * instance claim that binds the control socket last), via
+ * `openOwnedStateDatabase`. That does not change what this module itself
+ * does: `openStateDatabase` still takes no lock of its own, and any caller
+ * outside the daemon's held claim must still arrange exclusion itself.
  */
 export function openStateDatabase(options: OpenStateDatabaseOptions): StateDatabase {
   return openStateDatabaseInternal(options);
