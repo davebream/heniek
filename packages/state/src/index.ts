@@ -9,11 +9,7 @@ export {
   type PublishArtifactInput,
   publishArtifact,
 } from "./artifact/publish.js";
-export {
-  type RecoverArtifactsOptions,
-  type RecoverArtifactsReport,
-  recoverArtifacts,
-} from "./artifact/recover.js";
+export { type RecoverArtifactsReport, recoverArtifacts } from "./artifact/recover.js";
 export {
   type ArtifactStore,
   type ArtifactStoreOptions,
