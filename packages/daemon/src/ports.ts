@@ -7,7 +7,8 @@ import type { Clock, IdGenerator } from "@heniek/state";
  * landing Phase 3).
  *
  * No file under `src/` outside `src/runtime/**` may contain the literal
- * `node:net`, `node:crypto`, or `node:fs`, not even in an `import type` —
+ * specifiers for the Node networking, cryptography, and filesystem built-ins,
+ * not even in an `import type` —
  * the determinism gate is a text scan, so a type-only import is textually
  * indistinguishable from a value import. Every port below is therefore
  * declared **structurally**: no built-in module type is referenced here.
@@ -43,7 +44,7 @@ export interface HostWitness {
   current(): string | undefined;
 }
 
-/** Package-local stat shape — never `node:fs`'s `Stats`. */
+/** Package-local stat shape — never the filesystem built-in's `Stats` type. */
 export interface FileStat {
   readonly dev: bigint;
   readonly ino: bigint;
@@ -116,8 +117,8 @@ export interface LifecycleTraceSink {
 
 /**
  * HMAC + constant-time comparison, isolated behind a port so
- * `src/auth/verify.ts` stays pure while `node:crypto` is quarantined to
- * `src/runtime/mac.ts` — the resolution to the C6/C10 tension recorded in
+ * `src/auth/verify.ts` stays pure while the cryptography built-in is
+ * quarantined to `src/runtime/mac.ts` — the resolution to the C6/C10 tension recorded in
  * the plan's Task 3 Step 8 planner note.
  */
 export interface MacProvider {

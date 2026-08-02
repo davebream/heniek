@@ -16,6 +16,7 @@
     "@heniek/state": "workspace:*"
   },
   "devDependencies": {
+    "@sinclair/typebox": "catalog:",
     "tsx": "catalog:",
     "vitest": "catalog:"
   }
