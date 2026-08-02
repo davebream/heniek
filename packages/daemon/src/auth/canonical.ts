@@ -180,16 +180,14 @@ function removeMember(text: string, span: Span): string {
 }
 
 /**
- * Returns `line` with its `params.auth` member removed, or `undefined` when
- * the line has no such member — which for an authenticated call is itself an
- * authentication failure, and the caller reports it as the uniform
- * `unauthorized`.
- *
- * Throws `SyntaxError` only on input that is not well-formed JSON. Callers
- * receive lines the codec has already parsed successfully, so that is a
- * programming error rather than an attacker-reachable path.
+ * Locates the single `params.auth` member — a direct child of the object
+ * bound to the top-level `params`, never a member found by searching the
+ * whole document — shared by `canonicaliseRequest` and
+ * `extractAuthValueText` so both agree on exactly the same span.
  */
-export function canonicaliseRequest(line: string): string | undefined {
+function locateParamsAuth(
+  line: string,
+): { readonly member: Span; readonly valueStart: number } | undefined {
   const rootStart = skipWhitespace(line, 0);
   if (line[rootStart] !== "{") {
     return undefined;
@@ -203,10 +201,128 @@ export function canonicaliseRequest(line: string): string | undefined {
     return undefined;
   }
 
-  const auth = findMember(line, params.valueStart, "auth");
+  return findMember(line, params.valueStart, "auth");
+}
+
+/**
+ * Returns `line` with its `params.auth` member removed, or `undefined` when
+ * the line has no such member — which for an authenticated call is itself an
+ * authentication failure, and the caller reports it as the uniform
+ * `unauthorized`.
+ *
+ * Throws `SyntaxError` only on input that is not well-formed JSON. Callers
+ * receive lines the codec has already parsed successfully, so that is a
+ * programming error rather than an attacker-reachable path.
+ */
+export function canonicaliseRequest(line: string): string | undefined {
+  const auth = locateParamsAuth(line);
   if (auth === undefined) {
     return undefined;
   }
-
   return removeMember(line, auth.member);
+}
+
+/**
+ * Returns the raw text of the `params.auth` member's *value* only (not the
+ * key, not the surrounding comma) — the substring `src/auth/verify.ts`
+ * `JSON.parse`s and validates against `DaemonRequestAuth/v1` before any MAC
+ * is computed (design C6, plan Task 3 Step 2(e)). `undefined` under exactly
+ * the same conditions as `canonicaliseRequest`.
+ */
+export function extractAuthValueText(line: string): string | undefined {
+  const auth = locateParamsAuth(line);
+  if (auth === undefined) {
+    return undefined;
+  }
+  return line.slice(auth.valueStart, auth.member.end);
+}
+
+/**
+ * Returns `true` if any JSON object anywhere in `line` — top-level, nested
+ * inside another object, or nested inside an array — repeats a member name
+ * (design C6, plan Task 3 Step 2(a)). This is the defence the JWS/XML-
+ * wrapping attack family needs: `JSON.parse` alone cannot detect a
+ * duplicate key, since it silently keeps only the last occurrence, so a
+ * duplicate `"auth"` (or a duplicate anywhere else in the frame) is
+ * invisible to naive parsing and must be caught by walking every object's
+ * own key set explicitly, before any excision or MAC computation happens.
+ *
+ * Throws `SyntaxError` only on input that is not well-formed JSON — see
+ * `canonicaliseRequest`'s identical caveat.
+ */
+export function hasDuplicateKey(line: string): boolean {
+  return valueHasDuplicateKey(line, skipWhitespace(line, 0));
+}
+
+function valueHasDuplicateKey(text: string, index: number): boolean {
+  const i = skipWhitespace(text, index);
+  const char = text[i];
+  if (char === "{") {
+    return objectHasDuplicateKey(text, i);
+  }
+  if (char === "[") {
+    return arrayHasDuplicateKey(text, i);
+  }
+  // A string, number, or literal cannot itself contain a JSON object with
+  // duplicate keys; `endOfValue` below is what skips past it.
+  return false;
+}
+
+function objectHasDuplicateKey(text: string, objectStart: number): boolean {
+  const seen = new Set<string>();
+  let i = objectStart + 1;
+
+  for (;;) {
+    i = skipWhitespace(text, i);
+    if (i >= text.length) {
+      throw new SyntaxError("unterminated object");
+    }
+    if (text[i] === "}") {
+      return false;
+    }
+    if (text[i] === ",") {
+      i += 1;
+      continue;
+    }
+
+    const keyStart = i;
+    const keyEnd = endOfString(text, i);
+    const name = JSON.parse(text.slice(keyStart, keyEnd)) as string;
+    if (seen.has(name)) {
+      return true;
+    }
+    seen.add(name);
+
+    i = skipWhitespace(text, keyEnd);
+    if (text[i] !== ":") {
+      throw new SyntaxError(`expected ':' at ${i}`);
+    }
+    const valueStart = skipWhitespace(text, i + 1);
+    if (valueHasDuplicateKey(text, valueStart)) {
+      return true;
+    }
+    i = endOfValue(text, valueStart);
+  }
+}
+
+function arrayHasDuplicateKey(text: string, arrayStart: number): boolean {
+  let i = arrayStart + 1;
+
+  for (;;) {
+    i = skipWhitespace(text, i);
+    if (i >= text.length) {
+      throw new SyntaxError("unterminated array");
+    }
+    if (text[i] === "]") {
+      return false;
+    }
+    if (text[i] === ",") {
+      i += 1;
+      continue;
+    }
+    if (valueHasDuplicateKey(text, i)) {
+      return true;
+    }
+    i = endOfValue(text, i);
+  }
 }

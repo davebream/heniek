@@ -10,7 +10,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { canonicaliseRequest } from "../src/auth/canonical.js";
+import { canonicaliseRequest, extractAuthValueText, hasDuplicateKey } from "../src/auth/canonical.js";
 
 const AUTH = '"auth":{"keyId":"k1","sequence":3,"mac":"ab"}';
 
@@ -151,5 +151,67 @@ describe("canonicaliseRequest — absent auth", () => {
 
   it("returns undefined when the root is not an object", () => {
     expect(canonicaliseRequest("[1,2,3]")).toBeUndefined();
+  });
+});
+
+describe("extractAuthValueText", () => {
+  it("returns exactly the auth member's value text, not its key and not any surrounding comma", () => {
+    const line = `{"jsonrpc":"2.0","id":1,"method":"m","params":{"limit":10,${AUTH}}}`;
+
+    expect(extractAuthValueText(line)).toBe('{"keyId":"k1","sequence":3,"mac":"ab"}');
+  });
+
+  it("returns undefined under the same conditions canonicaliseRequest does", () => {
+    expect(
+      extractAuthValueText('{"jsonrpc":"2.0","id":1,"method":"m","params":{"a":1}}'),
+    ).toBeUndefined();
+    expect(extractAuthValueText('{"jsonrpc":"2.0","id":1,"method":"m"}')).toBeUndefined();
+  });
+
+  it("locates the same auth member canonicaliseRequest excises, even when a decoy sits elsewhere", () => {
+    const line = `{"jsonrpc":"2.0","id":1,"method":"m","params":{"payload":{"auth":"decoy"},${AUTH}}}`;
+
+    expect(extractAuthValueText(line)).toBe('{"keyId":"k1","sequence":3,"mac":"ab"}');
+  });
+});
+
+describe("hasDuplicateKey", () => {
+  it("is false for an ordinary well-formed request", () => {
+    const line = `{"jsonrpc":"2.0","id":1,"method":"m","params":{"a":1,${AUTH}}}`;
+    expect(hasDuplicateKey(line)).toBe(false);
+  });
+
+  it("is true when the top-level object repeats a key", () => {
+    expect(hasDuplicateKey('{"jsonrpc":"2.0","id":1,"id":2,"method":"m"}')).toBe(true);
+  });
+
+  it("is true when params repeats 'auth'", () => {
+    const line = `{"jsonrpc":"2.0","id":1,"method":"m","params":{${AUTH},${AUTH}}}`;
+    expect(hasDuplicateKey(line)).toBe(true);
+  });
+
+  it("is true for a duplicate key nested inside a value the top-level scan would otherwise skip over", () => {
+    const line =
+      '{"jsonrpc":"2.0","id":1,"method":"m","params":{"nested":{"x":1,"x":2}}}';
+    expect(hasDuplicateKey(line)).toBe(true);
+  });
+
+  it("is true for a duplicate key inside an object nested in an array", () => {
+    const line =
+      '{"jsonrpc":"2.0","id":1,"method":"m","params":{"xs":[1,{"y":1,"y":2}]}}';
+    expect(hasDuplicateKey(line)).toBe(true);
+  });
+
+  it("is false when the same key name appears in two different (non-duplicate) objects", () => {
+    // "auth" legitimately appears once at the top of `params` and, separately,
+    // as an ordinary string value elsewhere — not a repeated key of the same object.
+    const line = `{"jsonrpc":"2.0","id":1,"method":"m","params":{"label":"auth",${AUTH}}}`;
+    expect(hasDuplicateKey(line)).toBe(false);
+  });
+
+  it("does not mistake an 'auth'-shaped run of characters inside a string for a structural key", () => {
+    const line =
+      '{"jsonrpc":"2.0","id":1,"method":"m","params":{"note":"\\"auth\\": {\\"auth\\":1}"}}';
+    expect(hasDuplicateKey(line)).toBe(false);
   });
 });

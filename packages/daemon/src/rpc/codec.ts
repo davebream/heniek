@@ -62,6 +62,15 @@ export interface JsonRpcRequestFrame {
   readonly method: string;
   /** Whatever the caller sent; shape validation belongs to the method handler. */
   readonly params: unknown;
+  /**
+   * The exact decoded line this frame was parsed from (post CRLF-stripping,
+   * pre `JSON.parse`) — the byte span `src/auth/verify.ts`'s canonicaliser
+   * re-scans with its own tokenizer to compute the MAC's preimage. Never
+   * re-derived from `params`/`method`/`id` by re-serialising: that would
+   * open exactly the serialisation-ambiguity gap `src/auth/canonical.ts`'s
+   * docblock explains (design C6).
+   */
+  readonly raw: string;
 }
 
 export interface JsonRpcErrorFrame {
@@ -175,7 +184,7 @@ function toFrame(line: string): Frame {
     return invalidRequest(null, "id must be a string or an integer");
   }
 
-  return { kind: "request", id, method: record["method"], params: record["params"] };
+  return { kind: "request", id, method: record["method"], params: record["params"], raw: line };
 }
 
 function decodeLine(bytes: Uint8Array): string {
@@ -230,6 +239,24 @@ export function decodeChunk(state: DecoderState, chunk: Uint8Array): DecodeResul
   }
 
   return { frames, state: { pending: buffer, poisoned: false } };
+}
+
+/**
+ * `createCodec()` — the pure `(chunk: Uint8Array) => Frame[]` transform
+ * (plan Task 3 Step 1/Step 5). `decodeChunk`/`DecoderState` above are the
+ * actual engine, threading state explicitly so a test can construct any
+ * mid-stream state directly; this is a thin closure over that engine for
+ * the one caller (the future `src/runtime/socket-server.ts`, Phase 5) that
+ * wants one codec instance per accepted connection rather than carrying the
+ * state itself.
+ */
+export function createCodec(): (chunk: Uint8Array) => Frame[] {
+  let state = createDecoderState();
+  return (chunk: Uint8Array): Frame[] => {
+    const result = decodeChunk(state, chunk);
+    state = result.state;
+    return [...result.frames];
+  };
 }
 
 /** Encodes a successful response as one NDJSON line, terminator included. */
