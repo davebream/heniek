@@ -98,6 +98,11 @@ export function internalArtifactIds(store: ArtifactStore): IdGenerator {
   return internals(store, "internalArtifactIds").ids;
 }
 
+/** INTERNAL — exported from this module but NOT from src/index.ts. Package-private by construction, mirroring `internalArtifactFileSystem`/`internalArtifactIds`. Phase 5's `recoverArtifacts` consumer (`artifact/recover.ts`) — required by this task's explicit dispatch instructions and the plan's dated Phase-5 amendment (see `recover.ts`'s docblock); a same-day conflicting revision withheld this accessor, which this edit reinstates. */
+export function internalArtifactClock(store: ArtifactStore): Clock {
+  return internals(store, "internalArtifactClock").clock;
+}
+
 /**
  * H2: refuses a container path that is not a real, non-symlink directory.
  * Called after `mkdir`, which itself tolerates (and so cannot be trusted to
