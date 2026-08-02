@@ -25,6 +25,9 @@
 /** The two record states this grammar names (design C3). */
 export type ClaimState = "claiming" | "serving";
 
+/** The record version every writer in this package emits (design C3). */
+export const CLAIM_RECORD_VERSION = 1;
+
 export interface ClaimRecord {
   readonly recordVersion: number;
   readonly state: ClaimState;
@@ -42,6 +45,19 @@ export type ParsedClaimRecord =
 
 const MAGIC = "heniek-daemon";
 const FIELD_COUNT = 6;
+
+/**
+ * The `state` field is written **space-padded to a fixed width** so publish
+ * can rewrite it in place through the held fd (design C1 step 8 / plan
+ * round-2 override 3) instead of `rename`ing a new inode onto
+ * `daemon.pid` — a rename would install a different inode and break
+ * `assertStillHeld()` on the first client connection. A variable-width
+ * field would make the record change length on the `claiming → serving`
+ * transition, which an in-place positional write cannot express.
+ *
+ * 8 = `"claiming".length`, the longer of the two legal states.
+ */
+const STATE_FIELD_WIDTH = 8;
 const WITNESS_UNOBTAINABLE = "-";
 const PID_MIN = 1;
 const PID_MAX_EXCLUSIVE = 2 ** 31;
@@ -58,6 +74,27 @@ export const MAX_CLAIM_RECORD_BYTES = 1024;
 
 function byteLength(text: string): number {
   return new TextEncoder().encode(text).length;
+}
+
+/**
+ * The exact bytes the `state` field occupies on disk — the state name
+ * right-padded with spaces to `STATE_FIELD_WIDTH`. Publish writes precisely
+ * this string at `claimStateFieldOffset()`, so the record length is
+ * invariant across the `claiming → serving` transition.
+ */
+export function serialiseClaimState(state: ClaimState): string {
+  return state.padEnd(STATE_FIELD_WIDTH, " ");
+}
+
+/**
+ * Byte offset of the `state` field within a serialised record — the two
+ * preceding fixed fields (`magic`, `recordVersion`) plus their tabs. Both
+ * are ASCII, so byte offset and code-unit offset coincide; the function
+ * still measures bytes because `ClaimFileHandle.writeAt` is positional in
+ * bytes.
+ */
+export function claimStateFieldOffset(recordVersion: number): number {
+  return byteLength(`${MAGIC}\t${recordVersion}\t`);
 }
 
 /**
@@ -107,10 +144,13 @@ export function parseClaimRecord(raw: string): ParsedClaimRecord {
   }
   const recordVersion = Number(recordVersionField);
 
-  if (stateField !== "claiming" && stateField !== "serving") {
+  // The field is written space-padded to a fixed width (see
+  // `STATE_FIELD_WIDTH`); the padding is not part of the state name.
+  const stateName = stateField.trimEnd();
+  if (stateName !== "claiming" && stateName !== "serving") {
     return { kind: "malformed", reason: `unknown state: ${JSON.stringify(stateField)}` };
   }
-  const state: ClaimState = stateField;
+  const state: ClaimState = stateName;
 
   if (!PID_PATTERN.test(pidField)) {
     return { kind: "malformed", reason: `non-integer pid: ${JSON.stringify(pidField)}` };
@@ -143,7 +183,7 @@ export function serialiseClaimRecord(record: ClaimRecord): string {
   }
   const witnessField = record.bootWitness ?? WITNESS_UNOBTAINABLE;
   const line =
-    `${MAGIC}\t${record.recordVersion}\t${record.state}\t${record.pid}\t` +
+    `${MAGIC}\t${record.recordVersion}\t${serialiseClaimState(record.state)}\t${record.pid}\t` +
     `${witnessField}\t${record.instanceId}\n`;
   if (byteLength(line) > MAX_CLAIM_RECORD_BYTES) {
     throw new RangeError(`serialised claim record exceeds the ${MAX_CLAIM_RECORD_BYTES}-byte cap`);

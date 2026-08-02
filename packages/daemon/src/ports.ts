@@ -84,6 +84,15 @@ export interface ClaimFileHandle {
  */
 export interface LockFileSystem {
   createExclusive(path: string, mode: number): ClaimFileHandle;
+  /**
+   * `link(2)` — the mutual-exclusion primitive the claim is won with (design
+   * C1 step 2 / plan round-2 override 2). The record is written and flushed
+   * to an `O_EXCL` temp first, then linked onto the claim path: exactly one
+   * racer's `link` lands and every other gets `EEXIST`, so no reader can
+   * ever observe a half-written record at the claim path. Fails `EEXIST` if
+   * `newPath` exists, `ENOENT` if `existingPath` does not.
+   */
+  link(existingPath: string, newPath: string): void;
   readFile(path: string, maxBytes: number): string;
   lstat(path: string): FileStat;
   rename(fromPath: string, toPath: string): void;

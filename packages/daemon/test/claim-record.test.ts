@@ -5,9 +5,11 @@
 import { describe, expect, it } from "vitest";
 import {
   type ClaimRecord,
+  claimStateFieldOffset,
   MAX_CLAIM_RECORD_BYTES,
   parseClaimRecord,
   serialiseClaimRecord,
+  serialiseClaimState,
 } from "../src/lifecycle/claim-record.js";
 
 const RECORD: ClaimRecord = {
@@ -136,5 +138,39 @@ describe("serialiseClaimRecord — refuses to produce an out-of-grammar record",
     expect(() =>
       serialiseClaimRecord({ ...RECORD, instanceId: "a".repeat(MAX_CLAIM_RECORD_BYTES) }),
     ).toThrow(RangeError);
+  });
+});
+
+describe("fixed-width state field (plan round-2 override 3)", () => {
+  it("pads both states to the same width so an in-place publish cannot change the record length", () => {
+    expect(serialiseClaimState("claiming")).toHaveLength(8);
+    expect(serialiseClaimState("serving")).toHaveLength(8);
+
+    const claiming = serialiseClaimRecord({ ...RECORD, state: "claiming" });
+    const serving = serialiseClaimRecord({ ...RECORD, state: "serving" });
+    expect(serving).toHaveLength(claiming.length);
+  });
+
+  it("locates the state field at the offset publish writes to", () => {
+    const line = serialiseClaimRecord({ ...RECORD, state: "claiming" });
+    const offset = claimStateFieldOffset(RECORD.recordVersion);
+
+    expect(line.slice(offset, offset + 8)).toBe(serialiseClaimState("claiming"));
+  });
+
+  it("patching that offset yields exactly the serving record — the publish path in miniature", () => {
+    const line = serialiseClaimRecord({ ...RECORD, state: "claiming" });
+    const offset = claimStateFieldOffset(RECORD.recordVersion);
+    const patched = line.slice(0, offset) + serialiseClaimState("serving") + line.slice(offset + 8);
+
+    expect(patched).toBe(serialiseClaimRecord({ ...RECORD, state: "serving" }));
+    const parsed = parseClaimRecord(patched);
+    expect(parsed.kind).toBe("well-formed");
+    expect(parsed.kind === "well-formed" && parsed.record.state).toBe("serving");
+  });
+
+  it("parses a record whose state field carries the padding", () => {
+    const parsed = parseClaimRecord("heniek-daemon\t1\tserving \t1\tw\ti\n");
+    expect(parsed.kind === "well-formed" && parsed.record.state).toBe("serving");
   });
 });

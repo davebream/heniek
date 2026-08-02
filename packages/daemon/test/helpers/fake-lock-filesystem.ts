@@ -33,6 +33,7 @@
 
 export type FakeLockFileSystemStep =
   | "createExclusive"
+  | "link"
   | "readFile"
   | "lstat"
   | "rename"
@@ -241,6 +242,27 @@ export class FakeLockFileSystem {
     this.entries.set(path, entry);
     this.record("createExclusive", path, "ok");
     return this.makeHandle(entry, path);
+  }
+
+  /**
+   * Both paths end up sharing one `FakeEntry`, so they share an inode — the
+   * property the claim protocol depends on: after `link`, the retained temp
+   * handle's `stat()` and an `lstat` of the claim path report the same
+   * `(dev, ino)`, which is exactly what `assertStillHeld()` compares.
+   */
+  link(existingPath: string, newPath: string): void {
+    this.trigger("link", existingPath);
+    const entry = this.entries.get(existingPath);
+    if (entry === undefined) {
+      this.record("link", existingPath, "ENOENT");
+      throw makeFsError("ENOENT", existingPath, "link");
+    }
+    if (this.entries.has(newPath)) {
+      this.record("link", newPath, "EEXIST");
+      throw makeFsError("EEXIST", newPath, "link");
+    }
+    this.entries.set(newPath, entry);
+    this.record("link", `${existingPath}->${newPath}`, "ok");
   }
 
   readFile(path: string, maxBytes: number): string {

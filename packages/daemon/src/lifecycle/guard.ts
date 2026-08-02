@@ -37,6 +37,12 @@
  */
 
 import type { ClaimFileHandle, FileStat, LockFileSystem } from "../ports.js";
+import {
+  CLAIM_RECORD_VERSION,
+  type ClaimState,
+  claimStateFieldOffset,
+  serialiseClaimState,
+} from "./claim-record.js";
 import { ClaimLostError } from "./errors.js";
 
 /** The `(dev, ino)` pair a `ClaimGuard` compares against — a claim file's or, later, a socket's. */
@@ -53,8 +59,12 @@ export interface LockHandle {
   onLost(callback: (error: ClaimLostError) => void): void;
   /** Unlinks the claim path, but only after confirming it still carries this guard's current identity; always closes the claim handle. Idempotent. */
   release(): void;
-  /** Re-anchors the guard onto a freshly published claim file handle/identity (design C1 step 8 item 6). Closes the previously-held handle after the swap. */
-  adoptIdentity(newHandle: ClaimFileHandle, newIdentity: ClaimIdentity): void;
+  /**
+   * Rewrites the record's fixed-width `state` field in place through the held
+   * fd, after re-confirming the claim (design C1 step 8). The claim identity is
+   * unchanged by construction — that is the whole point of writing in place.
+   */
+  publishState(state: ClaimState): void;
 }
 
 export interface ClaimGuardOptions {
@@ -79,8 +89,11 @@ function identityMatches(current: FileStat, expected: ClaimIdentity): boolean {
 }
 
 export function createClaimGuard(options: ClaimGuardOptions): LockHandle {
-  let claimHandle = options.claimHandle;
-  let claimIdentity = options.claimIdentity;
+  // Both are fixed for the guard's lifetime: publish rewrites the record
+  // through this fd rather than installing a new inode, so the identity this
+  // guard vouches for never changes.
+  const claimHandle = options.claimHandle;
+  const claimIdentity = options.claimIdentity;
   let held = true;
   const lostCallbacks: Array<(error: ClaimLostError) => void> = [];
 
@@ -93,6 +106,26 @@ export function createClaimGuard(options: ClaimGuardOptions): LockHandle {
     throw error;
   }
 
+  function assertStillHeld(): void {
+    if (!held) {
+      fail(`the claim at ${options.claimPath} has already been released`);
+    }
+    let current: FileStat;
+    try {
+      current = options.lockFileSystem.lstat(options.claimPath);
+    } catch (error) {
+      if (isErrnoCode(error, "ENOENT")) {
+        fail(`the claim record at ${options.claimPath} has been removed`);
+      }
+      throw error;
+    }
+    if (!identityMatches(current, claimIdentity)) {
+      fail(
+        `the claim record at ${options.claimPath} no longer matches the identity this process holds`,
+      );
+    }
+  }
+
   return {
     instanceId: options.instanceId,
 
@@ -100,25 +133,7 @@ export function createClaimGuard(options: ClaimGuardOptions): LockHandle {
       return held;
     },
 
-    assertStillHeld(): void {
-      if (!held) {
-        fail(`the claim at ${options.claimPath} has already been released`);
-      }
-      let current: FileStat;
-      try {
-        current = options.lockFileSystem.lstat(options.claimPath);
-      } catch (error) {
-        if (isErrnoCode(error, "ENOENT")) {
-          fail(`the claim record at ${options.claimPath} has been removed`);
-        }
-        throw error;
-      }
-      if (!identityMatches(current, claimIdentity)) {
-        fail(
-          `the claim record at ${options.claimPath} no longer matches the identity this process holds`,
-        );
-      }
-    },
+    assertStillHeld,
 
     onLost(callback: (error: ClaimLostError) => void): void {
       lostCallbacks.push(callback);
@@ -143,11 +158,10 @@ export function createClaimGuard(options: ClaimGuardOptions): LockHandle {
       held = false;
     },
 
-    adoptIdentity(newHandle: ClaimFileHandle, newIdentity: ClaimIdentity): void {
-      const previousHandle = claimHandle;
-      claimHandle = newHandle;
-      claimIdentity = newIdentity;
-      previousHandle.close();
+    publishState(state: ClaimState): void {
+      assertStillHeld();
+      claimHandle.writeAt(serialiseClaimState(state), claimStateFieldOffset(CLAIM_RECORD_VERSION));
+      claimHandle.sync();
     },
   };
 }

@@ -114,89 +114,80 @@ describe("ClaimGuard — basic identity comparison", () => {
   });
 });
 
-describe("ClaimGuard.adoptIdentity — the publish re-anchor (design C1 step 8 item 6, plan finding C2)", () => {
-  function publish(fs: FakeLockFileSystem) {
-    const tempPath = "/run/heniek/.daemon.pid.abc123";
-    const tempHandle = fs.createExclusive(tempPath, 0o600);
-    tempHandle.write("heniek-daemon\t1\tserving\t123\tboot-1\tinstance-1\n");
-    const tempStat = tempHandle.stat();
-    const newIdentity: ClaimIdentity = { dev: tempStat.dev, ino: tempStat.ino };
-    fs.rename(tempPath, CLAIM_PATH);
-    return { tempHandle, newIdentity };
+describe("ClaimGuard.publishState — the in-place publish (design C1 step 8, plan round-2 override 3)", () => {
+  function guardOver(fs: FakeLockFileSystem) {
+    const { handle, identity } = claim(fs);
+    return createClaimGuard({
+      instanceId: "instance-1",
+      claimPath: CLAIM_PATH,
+      claimHandle: handle,
+      claimIdentity: identity,
+      lockFileSystem: fs,
+    });
   }
 
-  it("without adoptIdentity, a publish-by-rename makes assertStillHeld() fail (the inode it pins is now stale)", () => {
+  it("flips the state field to serving, leaving every other field and the length intact", () => {
     const fs = new FakeLockFileSystem();
-    const { handle, identity } = claim(fs);
-    const guard = createClaimGuard({
-      instanceId: "instance-1",
-      claimPath: CLAIM_PATH,
-      claimHandle: handle,
-      claimIdentity: identity,
-      lockFileSystem: fs,
-    });
+    const guard = guardOver(fs);
 
-    publish(fs);
+    guard.publishState("serving");
 
-    // `claimIdentity` still pins the original `claiming` inode; `rename`
-    // installed a different one at `CLAIM_PATH` — exactly the failure mode
-    // `adoptIdentity` exists to fix.
-    expect(() => guard.assertStillHeld()).toThrow(ClaimLostError);
+    expect(fs.readFile(CLAIM_PATH, 1024)).toBe(
+      "heniek-daemon\t1\tserving \t123\tboot-1\tinstance-1\n",
+    );
   });
 
-  it("assertStillHeld() passes immediately after adoptIdentity re-anchors the guard", () => {
+  it("keeps the claim identity — this is the regression that killed the daemon on its first client", () => {
     const fs = new FakeLockFileSystem();
-    const { handle, identity } = claim(fs);
-    const guard = createClaimGuard({
-      instanceId: "instance-1",
-      claimPath: CLAIM_PATH,
-      claimHandle: handle,
-      claimIdentity: identity,
-      lockFileSystem: fs,
-    });
+    const guard = guardOver(fs);
+    const before = fs.snapshot()[CLAIM_PATH];
 
-    const { tempHandle, newIdentity } = publish(fs);
-    guard.adoptIdentity(tempHandle, newIdentity);
+    guard.publishState("serving");
 
+    // A rename-based publish would install a different inode here, and every
+    // later assertStillHeld() — one runs per accepted connection — would fail.
+    expect(fs.snapshot()[CLAIM_PATH]?.ino).toBe(before?.ino);
     expect(() => guard.assertStillHeld()).not.toThrow();
     expect(guard.isHeld()).toBe(true);
   });
 
-  it("release() after adoptIdentity actually unlinks the current (post-publish) path", () => {
+  it("never renames a new inode onto the claim path", () => {
     const fs = new FakeLockFileSystem();
-    const { handle, identity } = claim(fs);
-    const guard = createClaimGuard({
-      instanceId: "instance-1",
-      claimPath: CLAIM_PATH,
-      claimHandle: handle,
-      claimIdentity: identity,
-      lockFileSystem: fs,
-    });
+    const guard = guardOver(fs);
 
-    const { tempHandle, newIdentity } = publish(fs);
-    guard.adoptIdentity(tempHandle, newIdentity);
+    guard.publishState("serving");
+
+    expect(fs.countOperations("rename")).toBe(0);
+    expect(fs.countOperations("writeAt", "ok")).toBe(1);
+  });
+
+  it("flushes the record so a reader can never follow a published name to uncommitted bytes", () => {
+    const fs = new FakeLockFileSystem();
+    const guard = guardOver(fs);
+
+    guard.publishState("serving");
+
+    expect(fs.countOperations("sync", "ok")).toBe(1);
+  });
+
+  it("re-confirms the claim first, and refuses to write when it has been lost", () => {
+    const fs = new FakeLockFileSystem();
+    const guard = guardOver(fs);
+
+    fs.unlink(CLAIM_PATH);
+
+    expect(() => guard.publishState("serving")).toThrow(ClaimLostError);
+    expect(fs.countOperations("writeAt")).toBe(0);
+  });
+
+  it("release() after publish still unlinks the record", () => {
+    const fs = new FakeLockFileSystem();
+    const guard = guardOver(fs);
+
+    guard.publishState("serving");
 
     expect(fs.has(CLAIM_PATH)).toBe(true);
     guard.release();
     expect(fs.has(CLAIM_PATH)).toBe(false);
-  });
-
-  it("closes the previously-held handle only after the swap, never before", () => {
-    const fs = new FakeLockFileSystem();
-    const { handle, identity } = claim(fs);
-    const guard = createClaimGuard({
-      instanceId: "instance-1",
-      claimPath: CLAIM_PATH,
-      claimHandle: handle,
-      claimIdentity: identity,
-      lockFileSystem: fs,
-    });
-
-    const before = fs.countOperations("close");
-    const { tempHandle, newIdentity } = publish(fs);
-    guard.adoptIdentity(tempHandle, newIdentity);
-    const after = fs.countOperations("close");
-
-    expect(after).toBe(before + 1);
   });
 });

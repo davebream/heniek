@@ -25,6 +25,7 @@ import type {
   SocketProbe,
 } from "../ports.js";
 import {
+  CLAIM_RECORD_VERSION,
   type ClaimRecord,
   MAX_CLAIM_RECORD_BYTES,
   parseClaimRecord,
@@ -43,7 +44,6 @@ import {
 } from "./errors.js";
 import { type ClaimIdentity, createClaimGuard, type LockHandle } from "./guard.js";
 
-const RECORD_VERSION = 1;
 /** design C1 step 7: exactly one takeover retry, then `ClaimContended`. Modelled as a two-attempt claim budget — see the loop in `acquireClaim`. */
 const MAX_CLAIM_ATTEMPTS = 2;
 const INSTANCE_ID_BYTES = 16;
@@ -143,28 +143,77 @@ type ClaimAttempt =
   | { readonly kind: "claimed"; readonly handle: ClaimFileHandle; readonly identity: ClaimIdentity }
   | { readonly kind: "contended" };
 
-/** design C1 step 2: `openSync(daemonPidFile, "wx", 0o600)` — `"wx"`, never `"ax"` (`"ax"` implies `O_APPEND`). `EEXIST` routes to the contended path. */
+/**
+ * design C1 step 2 (plan round-2 override 2): the claim is won by writing the
+ * **complete** LF-terminated record to an `O_EXCL` temp, `fsync`ing it, then
+ * `link(2)`ing that temp onto `daemonPidFile` — not by opening `daemonPidFile`
+ * `"wx"` and writing into it.
+ *
+ * The difference matters to a reader, not to the winner. Under `"wx"` the
+ * claim path exists, empty, from the instant of the open, so a racer that
+ * `readFile`s between the open and the write observes a zero-length record.
+ * That is indistinguishable from a torn write, so it classifies as
+ * `claim-in-progress` and the racer spins. Linking a file that is already
+ * complete and flushed means the claim path goes from absent to fully-formed
+ * in one atomic step: no reader can ever observe a partial record there.
+ *
+ * `link` keeps the mutual exclusion `"wx"` provided — exactly one racer's link
+ * lands, every other gets `EEXIST`, which routes to the contended path.
+ *
+ * The temp handle is retained as *the* claim handle and the temp path is
+ * unlinked: after `link` both names denote one inode, so unlinking the temp
+ * name leaves the claim path holding that inode with the handle still open on
+ * it. This is what makes the retained fd's identity equal to
+ * `lstat(daemonPidFile)`'s, which `assertStillHeld()` requires.
+ */
 function tryClaim(deps: AcquireDeps, options: AcquireOptions, instanceId: string): ClaimAttempt {
-  let handle: ClaimFileHandle;
-  try {
-    handle = deps.lockFileSystem.createExclusive(options.daemonPidFile, 0o600);
-  } catch (error) {
-    if (isErrnoCode(error, "EEXIST")) {
-      return { kind: "contended" };
-    }
-    throw error;
-  }
+  const tempPath = `${options.runtimeDirectory}/.daemon.pid.claim.${randomHex(deps.randomSource, SCRATCH_SUFFIX_BYTES)}`;
+  const handle: ClaimFileHandle = deps.lockFileSystem.createExclusive(tempPath, 0o600);
 
-  const record: ClaimRecord = {
-    recordVersion: RECORD_VERSION,
-    state: "claiming",
-    pid: options.ownPid,
-    bootWitness: deps.hostWitness.current(),
-    instanceId,
-  };
-  handle.write(serialiseClaimRecord(record));
-  const stat = handle.stat();
-  return { kind: "claimed", handle, identity: { dev: stat.dev, ino: stat.ino } };
+  let linked = false;
+  try {
+    const record: ClaimRecord = {
+      recordVersion: CLAIM_RECORD_VERSION,
+      state: "claiming",
+      pid: options.ownPid,
+      bootWitness: deps.hostWitness.current(),
+      instanceId,
+    };
+    handle.write(serialiseClaimRecord(record));
+    // Flush before publishing the name: a reader that follows the link must
+    // never see bytes the writer has not committed.
+    handle.sync();
+
+    try {
+      deps.lockFileSystem.link(tempPath, options.daemonPidFile);
+    } catch (error) {
+      if (isErrnoCode(error, "EEXIST")) {
+        return { kind: "contended" };
+      }
+      throw error;
+    }
+    linked = true;
+
+    const stat = handle.stat();
+    return { kind: "claimed", handle, identity: { dev: stat.dev, ino: stat.ino } };
+  } finally {
+    // The temp name has served its purpose either way. On the contended and
+    // error paths the handle is useless too, so close it; on the winning path
+    // the handle is the caller's claim handle and stays open.
+    discardQuietly(deps, tempPath);
+    if (!linked) {
+      handle.close();
+    }
+  }
+}
+
+/** Best-effort `unlink`; a leftover scratch name must never fail an acquire. */
+function discardQuietly(deps: AcquireDeps, path: string): void {
+  try {
+    deps.lockFileSystem.unlink(path);
+  } catch {
+    // Nothing to do — the scratch name is inert either way.
+  }
 }
 
 type ContendedInspection =
@@ -361,37 +410,26 @@ function reclaimStaleSocket(
 }
 
 /**
- * design C1 step 8: publish is a re-anchor, not a plain write. Writes the
- * complete, LF-terminated `serving` record to a fresh `O_EXCL` temp file,
- * verifies `daemonPidFile` still carries the guard's *current* (pre-publish)
- * identity, `rename`s the temp file onto `daemonPidFile`, then atomically
- * adopts the new handle/identity onto the guard.
+ * design C1 step 8 (plan round-2 override 3): publish rewrites the
+ * fixed-width `state` field **in place, through the fd the claim is held
+ * on**. It does not build a new record and it never `rename`s a new inode
+ * onto `daemonPidFile`.
+ *
+ * A rename would install a *different* inode at the claim path, so from that
+ * instant `fstat(claimFd).ino !== lstat(daemonPidFile).ino` permanently, and
+ * `assertStillHeld()` — which runs on every accepted connection — would kill
+ * the daemon on its first client. Re-anchoring the guard onto the new inode
+ * was the previous workaround; it is strictly weaker, because between the
+ * rename and the re-anchor the guard vouches for an inode the process no
+ * longer holds.
+ *
+ * Rewriting `state` in place changes no other field and no byte count, so
+ * the record stays complete and LF-terminated throughout: a concurrent
+ * reader sees either `claiming` or `serving`, never a torn or truncated
+ * line. `sync` then commits it.
  */
-function publishServingRecord(
-  deps: AcquireDeps,
-  options: AcquireOptions,
-  guard: LockHandle,
-  instanceId: string,
-): void {
-  const tempPath = `${options.runtimeDirectory}/.daemon.pid.${randomHex(deps.randomSource, SCRATCH_SUFFIX_BYTES)}`;
-  const tempHandle = deps.lockFileSystem.createExclusive(tempPath, 0o600);
-  const record: ClaimRecord = {
-    recordVersion: RECORD_VERSION,
-    state: "serving",
-    pid: options.ownPid,
-    bootWitness: deps.hostWitness.current(),
-    instanceId,
-  };
-  tempHandle.write(serialiseClaimRecord(record));
-  const tempStat = tempHandle.stat();
-  const newIdentity: ClaimIdentity = { dev: tempStat.dev, ino: tempStat.ino };
-
-  // Verify `daemonPidFile` still carries the original claim identity before
-  // renaming onto it (design C1 step 8 item 4).
-  guard.assertStillHeld();
-
-  deps.lockFileSystem.rename(tempPath, options.daemonPidFile);
-  guard.adoptIdentity(tempHandle, newIdentity);
+function publishServingRecord(guard: LockHandle): void {
+  guard.publishState("serving");
 }
 
 async function proceedAfterClaim(
@@ -430,7 +468,7 @@ async function proceedAfterClaim(
   }
 
   deps.lockFileSystem.chmod(options.daemonSocketFile, 0o600);
-  publishServingRecord(deps, options, guard, instanceId);
+  publishServingRecord(guard);
   // The first call against the newly adopted (post-publish) identity.
   guard.assertStillHeld();
 
