@@ -89,3 +89,21 @@ export {
   DAEMON_RECOVERY_METHOD,
   DAEMON_STATUS_METHOD,
 } from "./rpc/methods.js";
+export { createSystemClock } from "./runtime/clock.js";
+export type { ConnectionHandlerDeps } from "./runtime/compose.js";
+export { attachDaemonRpcServer, createConnectionHandler } from "./runtime/compose.js";
+export { createSystemHostWitness } from "./runtime/host-witness.js";
+export { createNodeLockFileSystem } from "./runtime/lock-filesystem.js";
+export { createHmacSha256MacProvider } from "./runtime/mac.js";
+export { createSystemProcessLiveness } from "./runtime/process-liveness.js";
+export { createSystemRandomSource } from "./runtime/random-source.js";
+export type { SignalHandlerDeps } from "./runtime/signals.js";
+export { installSignalHandlers } from "./runtime/signals.js";
+export { createNodeSocketProbe } from "./runtime/socket-probe.js";
+export type { RawConnection, SocketServerOptions } from "./runtime/socket-server.js";
+export {
+  createNodeSocketBinder,
+  MAX_CONCURRENT_CONNECTIONS,
+  MAX_UNAUTHENTICATED_CONNECTIONS,
+} from "./runtime/socket-server.js";
+export { createStderrTraceSink } from "./runtime/trace-sink.js";

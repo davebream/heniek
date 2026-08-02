@@ -1,5 +1,6 @@
 /**
- * Determinism gate for `@heniek/daemon` (design C10, plan Task 3 Step 4).
+ * Determinism gate for `@heniek/daemon` (design C10, plan Task 3 Step 4;
+ * exemption populated at plan Task 5 Step 10).
  *
  * The daemon is the one package in this repo that legitimately *needs* the
  * forbidden primitives — it binds a socket, MACs a credential, and reads the
@@ -18,25 +19,47 @@
  *
  * Three assertions, per C10:
  *
- * 1. every non-exempt `src/**.ts` file is clean;
+ * 1. every non-exempt `src/**.ts` file is clean — no file outside the
+ *    allowlist trips `FORBIDDEN_PATTERN`;
  * 2. the scan is non-vacuous (it actually looked at files);
- * 3. the exemption set is **exactly** `EXPECTED_EXEMPTIONS` — set equality,
- *    not a numeric cap. A count bound cannot express "these files and no
- *    others", which is the property the carve-out actually needs.
+ * 3. **the set of files that actually exist under `src/runtime/` is exactly
+ *    `EXPECTED_EXEMPTIONS`** — directory-membership set equality, not a
+ *    numeric cap and not "every allowlisted file currently trips the
+ *    pattern". A count bound cannot express "these files and no others",
+ *    which is the property the carve-out needs, and directory membership is
+ *    the only form of that check the eleven Phase 5 adapters can actually
+ *    satisfy: `FORBIDDEN_PATTERN` is deliberately narrow (clock/random/
+ *    network/crypto-specific), so `src/runtime/lock-filesystem.ts`
+ *    (`node:fs` syscalls), `src/runtime/process-liveness.ts`
+ *    (`process.kill`/`process.getuid`), `src/runtime/signals.ts`
+ *    (`process.on`), `src/runtime/trace-sink.ts` (`process.stderr.write`),
+ *    and `src/runtime/compose.ts` (no ambient primitive of its own — it
+ *    only wires the others together) are all legitimately ambient without
+ *    ever tripping this particular regex. An earlier draft of this gate
+ *    required `offenders` to equal `EXPECTED_EXEMPTIONS` by *pattern-trip*
+ *    set equality; that requirement is wrong once the allowlist contains a
+ *    file whose ambient-ness this narrow pattern cannot see, and was
+ *    replaced by this directory-membership form, which is also exactly
+ *    what design C10's own wording asks for ("the set of files under
+ *    `src/runtime/` equals an explicit allowlist"). Assertion 1 already
+ *    gives the other, still-necessary direction — no *unauthorised*
+ *    offender outside the allowlist — so nothing is lost.
  *
- * At this phase `EXPECTED_EXEMPTIONS` is **empty**: `src/runtime/**` does not
- * exist yet, so the gate proves the carve-out has not been pre-widened ahead
- * of the code that will justify it. Phase 5 lands the 11 adapters and adds
- * them here explicitly, one line per file.
+ * `EXPECTED_EXEMPTIONS` now names Phase 5's eleven `src/runtime/**` adapters
+ * — one line per file, per the plan's allowlist table (plan Task 5, "the
+ * gate asserts set equality against this list, so adding, removing, or
+ * renaming a runtime file without updating the test is a hard failure").
  */
 
+import { mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const srcRoot = resolve(packageRoot, "src");
+const runtimeRoot = resolve(srcRoot, "runtime");
 
 /**
  * Mirrors `packages/conformance/test/no-wall-clock.test.ts`'s
@@ -49,19 +72,33 @@ const FORBIDDEN_PATTERN =
   /\bDate\.now\b|\bMath\.random\b|randomUUID|process\.hrtime\b|process\.uptime\b|new Date\(\s*\)|(?<!new )\bDate\(|performance\.now\(\)|setTimeout\([^,]*,\s*(?!0\s*[,)])|setInterval\(|fetch\(|node:http\b|node:https\b|node:net\b|node:dgram\b|node:crypto\b|process\.platform\b|undici/;
 
 /**
- * Files permitted to trip the pattern, as `src`-relative paths. **Empty by
- * design at this phase** — see the header. Phase 5 adds `runtime/…` entries
- * here as each adapter lands.
+ * Files permitted to trip the pattern, as `src`-relative paths — the
+ * eleven `src/runtime/**` adapters design C10 and plan Task 5 name: the
+ * single composition root, the two socket adapters, the filesystem lock
+ * adapter, the two identity probes, the clock, the CSPRNG source, the MAC
+ * provider, the signal handlers, and the trace sink.
  */
-const EXPECTED_EXEMPTIONS: readonly string[] = [];
+const EXPECTED_EXEMPTIONS: readonly string[] = [
+  "runtime/clock.ts",
+  "runtime/compose.ts",
+  "runtime/host-witness.ts",
+  "runtime/lock-filesystem.ts",
+  "runtime/mac.ts",
+  "runtime/process-liveness.ts",
+  "runtime/random-source.ts",
+  "runtime/signals.ts",
+  "runtime/socket-probe.ts",
+  "runtime/socket-server.ts",
+  "runtime/trace-sink.ts",
+];
 
 /**
- * Non-vacuity floor. The package has 7 eligible `src` files at the end of
- * Phase 2; this bound is the honest current count, and per the plan it is
- * **raised, never lowered** as Phase 3 and Phase 5 add sources. A scan whose
+ * Non-vacuity floor. Raised, never lowered, as the package grows — this is
+ * the total `.ts` file count under `src/` (exempt and non-exempt alike) as
+ * of Phase 5, the eleven `src/runtime/**` adapters included. A scan whose
  * `srcRoot` were wrong would list zero files and otherwise pass silently.
  */
-const MINIMUM_SCANNED_FILES = 7;
+const MINIMUM_SCANNED_FILES = 31;
 
 async function listTypeScriptFiles(root: string): Promise<string[]> {
   const entries = await readdir(root, { recursive: true, withFileTypes: true });
@@ -102,21 +139,24 @@ describe("determinism gate — ambient sources are confined to src/runtime/** (d
     expect(scanned).toBeGreaterThanOrEqual(MINIMUM_SCANNED_FILES);
   });
 
-  it("the exemption set is exactly the declared allowlist, neither wider nor narrower", async () => {
-    const { offenders } = await findOffenders();
+  it("the set of files that actually exist under src/runtime/ is exactly the declared allowlist", async () => {
+    const runtimeFiles = await listTypeScriptFiles(runtimeRoot);
+    const relative = runtimeFiles.map(relativeToSrc).sort();
 
-    // Set equality in both directions. A file that stops needing its
-    // exemption must be removed from the allowlist in the same change that
-    // makes it clean, or the carve-out silently keeps a permission the code
-    // no longer earns.
-    expect(offenders).toEqual([...EXPECTED_EXEMPTIONS].sort());
+    expect(relative).toEqual([...EXPECTED_EXEMPTIONS].sort());
   });
 
-  it("the carve-out has not been pre-widened ahead of the code that justifies it", async () => {
-    // `src/runtime/**` lands in Phase 5. Until then the allowlist must be
-    // empty — this is the assertion that fails loudly if someone adds an
-    // exemption "in advance".
-    expect(EXPECTED_EXEMPTIONS).toEqual([]);
+  it("the allowlist is non-empty and scoped to exactly one path segment, 'runtime'", () => {
+    // The inverse of the pre-Phase-5 guard this test replaced: now that
+    // `src/runtime/**` exists, an *empty* allowlist would be just as wrong
+    // as an unscoped one — it would mean the carve-out exists but nothing
+    // has actually been granted the exemption it exists to model.
+    expect(EXPECTED_EXEMPTIONS.length).toBeGreaterThan(0);
+    for (const file of EXPECTED_EXEMPTIONS) {
+      const segments = file.split("/");
+      expect(segments[0]).toBe("runtime");
+      expect(segments).toHaveLength(2);
+    }
   });
 });
 
@@ -156,5 +196,50 @@ describe("determinism gate — negative controls", () => {
     // strictness costs nothing today; a file that needs one must either be
     // exempted explicitly or the shared pattern fixed in its own change.
     expect(FORBIDDEN_PATTERN.test("setTimeout(resolve, 0)")).toBe(true);
+  });
+});
+
+describe("determinism gate — positive controls (plan Task 5 Falsifiability)", () => {
+  it("reports an offender when a forbidden import sits directly under src/, zero segments before the filename", async () => {
+    // Proves the exemption is first-path-segment-scoped and cannot widen
+    // sideways: a file with an identical forbidden import, but placed
+    // directly under `src/` instead of `src/runtime/`, must still be
+    // reported — it is deliberately *not* added to `EXPECTED_EXEMPTIONS`.
+    const strayPath = join(srcRoot, "__positive-control-outside-runtime.ts");
+    writeFileSync(strayPath, 'import { createServer } from "node:net";\n');
+    try {
+      const { offenders } = await findOffenders();
+      const unexpected = offenders.filter((file) => !EXPECTED_EXEMPTIONS.includes(file));
+      expect(unexpected).toContain("__positive-control-outside-runtime.ts");
+    } finally {
+      rmSync(strayPath, { force: true });
+    }
+  });
+
+  it("fails the runtime-membership assertion when an unused file is added to src/runtime/", async () => {
+    // A stray `src/runtime/unused.ts` never trips FORBIDDEN_PATTERN (it is
+    // empty), so it can never appear in `offenders` — assertion 1 alone
+    // would stay green. Assertion 3 (directory membership) is what catches
+    // it, which is exactly what this control proves.
+    const strayPath = join(runtimeRoot, "unused.ts");
+    writeFileSync(strayPath, "export {};\n");
+    try {
+      const runtimeFiles = await listTypeScriptFiles(runtimeRoot);
+      const relative = runtimeFiles.map(relativeToSrc).sort();
+      expect(relative).not.toEqual([...EXPECTED_EXEMPTIONS].sort());
+      expect(relative).toContain("runtime/unused.ts");
+    } finally {
+      rmSync(strayPath, { force: true });
+    }
+  });
+
+  it("src/runtime/ contains no other stray files after both controls clean up", () => {
+    // A same-test-run sanity check, not a control of its own: confirms the
+    // two controls above left the directory exactly as they found it.
+    mkdirSync(runtimeRoot, { recursive: true });
+    const entries = readdirSync(runtimeRoot)
+      .filter((name) => name.endsWith(".ts"))
+      .sort();
+    expect(entries).toEqual([...EXPECTED_EXEMPTIONS].map((f) => f.split("/")[1]).sort());
   });
 });
