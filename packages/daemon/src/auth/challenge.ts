@@ -1,51 +1,37 @@
 /**
- * Per-connection challenge and replay window (design C6).
+ * Per-connection challenge and replay-sequence state (design C6, STD-12,
+ * plan Task 3 Step 8).
  *
- * Each accepted connection gets a fresh 32-byte challenge and its own
- * `lastSequence`, both living in the connection's state and dying with it.
+ * `mintConnectionAuthState` runs once per *accepted* connection — before
+ * `daemon.hello` is ever called — so `daemon.hello`'s job is only to read
+ * this state back and report it, never to mint it (plan Task 3 Step 3).
  *
- * **The window deliberately does not survive restart**, and that is a property
- * rather than an omission. The secret is rotated on every process start
- * (STD-11), so a request captured against instance *N* cannot verify against
- * *N+1* under any sequence; and every connection gets a fresh challenge, so
- * replaying the same bytes on a new connection of the *same* instance fails
- * too. There is therefore no persistent anti-replay state to corrupt, to skew,
- * or to reconcile after a crash — and no clock anywhere in the auth path,
- * which is what lets the whole verifier stay pure and deterministic.
+ * The window this state protects dies with the connection by design: it
+ * never needs to survive a restart, because the credential itself is
+ * rotated on every daemon start (STD-11) and every connection gets a fresh
+ * challenge, so a captured request can never verify against a different
+ * instance or a different connection of the same instance. There is
+ * therefore no persistent anti-replay state to corrupt, skew, or reconcile
+ * after a crash, and no clock anywhere in the auth path.
  */
 
 import type { RandomSource } from "../ports.js";
 
-/** Challenge width, matching `DaemonHelloResult/v1`'s 64-hex-character field. */
+/** 32 bytes — 4x the corresponding STD-11 floor for the credential secret itself. */
 export const CHALLENGE_BYTES = 32;
 
-export interface ConnectionAuth {
+export interface ConnectionAuthState {
   readonly challenge: Uint8Array;
-  /**
-   * Highest sequence accepted **on this connection**. Starts at 0, and a
-   * request must exceed it strictly, so a replay of an accepted request is
-   * rejected even though its MAC is perfectly valid.
-   */
-  readonly lastSequence: number;
+  /** Mutable: advances to `sequence` on every successfully authenticated request (design C6). */
+  lastSequence: number;
+  /** `daemon.hello` may be called at most once per connection (plan-review round 1, finding m5). */
+  helloCalled: boolean;
 }
 
-export function createConnectionAuth(randomSource: RandomSource): ConnectionAuth {
-  return { challenge: randomSource.bytes(CHALLENGE_BYTES), lastSequence: 0 };
-}
-
-/** Lower-case hex, the encoding every hex-shaped contract field uses. */
-export function toHex(bytes: Uint8Array): string {
-  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
-}
-
-/** Inverse of `toHex`; returns `undefined` unless `text` is exactly `byteLength` lower-case hex bytes. */
-export function fromHex(text: string, byteLength: number): Uint8Array | undefined {
-  if (text.length !== byteLength * 2 || !/^[a-f0-9]+$/.test(text)) {
-    return undefined;
-  }
-  const out = new Uint8Array(byteLength);
-  for (let i = 0; i < byteLength; i += 1) {
-    out[i] = Number.parseInt(text.slice(i * 2, i * 2 + 2), 16);
-  }
-  return out;
+export function mintConnectionAuthState(randomSource: RandomSource): ConnectionAuthState {
+  return {
+    challenge: randomSource.bytes(CHALLENGE_BYTES),
+    lastSequence: 0,
+    helloCalled: false,
+  };
 }

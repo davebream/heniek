@@ -1,156 +1,232 @@
 /**
- * Request authentication (design C6). Pure over the injected `MacProvider`:
- * the cryptography built-in is quarantined to `src/runtime/mac.ts`, which is
- * what lets this module — the part with the actual decision content — be unit
- * tested without `node:crypto` and stay inside C10's carve-out.
+ * The per-request authentication core (design C6, plan Task 3 Steps 2 and
+ * 8). `verifyRequest` checks, in order:
  *
- * A request is authentic iff, in this order:
+ *  0. the raw line contains no duplicate JSON member name anywhere — a
+ *     structural envelope defect, not an authentication failure, and the
+ *     one check that runs *before* anything else and can reject with a
+ *     kind distinct from "unauthorized" (plan Task 3 Step 2(a));
+ *  1. `params.auth` is present exactly once as a direct child of `params`
+ *     and validates against the closed `DaemonRequestAuth/v1` shape (Step
+ *     2(e)) — using `src/auth/canonical.ts`'s real JSON tokenizer to locate
+ *     it, never a substring search;
+ *  2. `keyId` matches the current credential's;
+ *  3. `sequence` is strictly greater than `lastSequence` on this connection;
+ *  4. `mac === HMAC-SHA256(secret, challenge ‖ "\n" ‖ sequence ‖ "\n" ‖
+ *     canonicalRequestBytes)`, where `canonicalRequestBytes` is the exact
+ *     received line with the `params.auth` member excised by
+ *     `canonicaliseRequest` — never a re-serialisation of a parsed object.
  *
- * 0. `params.auth` validates closed against `DaemonRequestAuth/v1`'s shape.
- *    **This runs before any MAC is computed.** Every byte inside the
- *    `params.auth` span is excised from the signed preimage by construction,
- *    so anything an attacker puts there is unauthenticated; closing the shape
- *    is what makes that safe, by limiting the span to exactly `keyId`,
- *    `sequence`, and `mac`.
- * 1. `keyId` matches the current credential's.
- * 2. `sequence` strictly exceeds this connection's `lastSequence`.
- * 3. the MAC matches, compared in constant time.
- *
- * **Failure is uniform.** The outcome carries no reason, because a caller must
- * not learn whether the key was unknown, the sequence stale, or the MAC wrong
- * — nor, since authentication runs before method lookup, whether the method
- * exists at all (STD-9, CWE-204). Checks 1–3 are all evaluated before the
- * verdict is formed rather than short-circuited, so the work done does not
- * vary with which one failed.
+ * The MAC computation and comparison run **unconditionally** once the
+ * duplicate-key check has passed — regardless of whether `params.auth` was
+ * even present, whether `keyId` matched, or whether `sequence` was in the
+ * replay window — so the amount of work performed, and therefore its
+ * timing, does not vary with *why* a request is about to be rejected
+ * (STD-9's second, timing, oracle). Every rejection this function can
+ * produce past that first check is folded by `src/rpc/dispatch.ts` into the
+ * single, uniform `-32001` response; this function's `reason` field exists
+ * for tests and tracing only and must never reach the wire.
  */
 
 import type { MacProvider } from "../ports.js";
-import { canonicaliseRequest } from "./canonical.js";
-import { type ConnectionAuth, fromHex } from "./challenge.js";
+import { canonicaliseRequest, extractAuthValueText, hasDuplicateKey } from "./canonical.js";
+import type { ConnectionAuthState } from "./challenge.js";
 
-/** Digest width of HMAC-SHA256, and therefore of a `mac` field. */
+export interface AuthenticatedCredential {
+  readonly keyId: string;
+  readonly secret: Uint8Array;
+}
+
+export type VerifyResult =
+  | { readonly kind: "authenticated" }
+  /** A duplicate JSON member name was found anywhere in the frame — an envelope defect, not an authentication failure (plan Task 3 Step 2(a)). */
+  | { readonly kind: "malformed-envelope"; readonly reason: string }
+  | { readonly kind: "unauthorized"; readonly reason: string };
+
+const HEX_DIGITS = "0123456789abcdef";
+const HEX64_PATTERN = /^[a-f0-9]{64}$/;
+const FALLBACK_MAC_HEX = "0".repeat(64);
 const MAC_BYTES = 32;
 const SEQUENCE_MAX = 2 ** 31 - 1;
 
+export function bytesToHex(bytes: Uint8Array): string {
+  let out = "";
+  for (const byte of bytes) {
+    out += HEX_DIGITS[byte >> 4];
+    out += HEX_DIGITS[byte & 0x0f];
+  }
+  return out;
+}
+
+/** Inverse of `bytesToHex`. Never throws — callers only ever pass a string this module has already shape-checked as 64 lowercase hex characters. */
+export function hexToBytes(hex: string): Uint8Array {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < bytes.length; i++) {
+    bytes[i] = Number.parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  }
+  return bytes;
+}
+
+const textEncoder = new TextEncoder();
+
 /**
- * The `params.auth` envelope, mirroring `DaemonRequestAuth/v1`. Validated
- * structurally here rather than by pulling the TypeBox validator in, so this
- * module keeps its only dependency on the `MacProvider` port.
+ * Builds the signed preimage: `challenge ‖ "\n" ‖ sequence ‖ "\n" ‖
+ * canonicalRequestBytes` (design C6). The separators keep the fields
+ * unambiguous — without them, a sequence of `12` followed by a canonical
+ * line starting `3…` would build the same bytes as a sequence of `123`.
  */
-export interface RequestAuthEnvelope {
+export function buildAuthMacMessage(
+  challenge: Uint8Array,
+  sequence: number,
+  canonicalRequestBytes: string,
+): Uint8Array {
+  const suffix = textEncoder.encode(`\n${sequence}\n${canonicalRequestBytes}`);
+  const message = new Uint8Array(challenge.length + suffix.length);
+  message.set(challenge, 0);
+  message.set(suffix, challenge.length);
+  return message;
+}
+
+interface RequestAuthEnvelope {
   readonly keyId: string;
   readonly sequence: number;
   readonly mac: string;
 }
 
-export type VerifyOutcome =
-  | { readonly ok: true; readonly auth: ConnectionAuth }
-  /** Deliberately reasonless — see the header. */
-  | { readonly ok: false };
-
-const REJECTED: VerifyOutcome = { ok: false };
-
-export interface VerifyInput {
-  readonly auth: ConnectionAuth;
-  /** The exact line as received, before any re-serialisation. */
-  readonly rawLine: string;
-  /** The credential id this daemon currently authenticates against. */
-  readonly keyId: string;
-  readonly secret: Uint8Array;
-}
+const REQUEST_AUTH_KEYS = ["schemaVersion", "keyId", "sequence", "mac"] as const;
 
 /**
- * Validates `params.auth`'s shape closed. Returns `undefined` for anything
- * that is not exactly the three expected members with the expected types —
- * including extra members, which `additionalProperties: false` forbids on the
- * contract and which would otherwise ride along inside the excised span.
+ * Hand-validates the closed `DaemonRequestAuth/v1` shape (design C4/C6)
+ * without a runtime TypeBox dependency — `@sinclair/typebox` is a
+ * type-only `devDependency` in this package (plan Task 1 Step 2). This
+ * mirrors the schema's constraints (`additionalProperties: false`,
+ * `sequence` an integer in `[1, 2^31 - 1]`, `mac` exactly 64 lowercase hex
+ * characters) by hand, the same way `src/rpc/codec.ts` hand-rolls framing
+ * instead of taking a library dependency (OR-10).
  */
-export function parseAuthEnvelope(value: unknown): RequestAuthEnvelope | undefined {
+function validateRequestAuthEnvelope(value: unknown): RequestAuthEnvelope | undefined {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     return undefined;
   }
   const record = value as Record<string, unknown>;
-
   const keys = Object.keys(record);
-  if (keys.length !== 3) {
+  if (keys.length !== REQUEST_AUTH_KEYS.length) {
     return undefined;
   }
-
-  const keyId = record["keyId"];
-  const sequence = record["sequence"];
-  const mac = record["mac"];
-
-  if (typeof keyId !== "string" || keyId.length === 0) {
+  for (const key of keys) {
+    if (!(REQUEST_AUTH_KEYS as readonly string[]).includes(key)) {
+      return undefined;
+    }
+  }
+  if (record.schemaVersion !== 1) {
     return undefined;
   }
-  if (typeof sequence !== "number" || !Number.isInteger(sequence)) {
+  if (typeof record.keyId !== "string" || record.keyId.length < 1) {
     return undefined;
   }
-  if (sequence < 1 || sequence > SEQUENCE_MAX) {
+  if (
+    typeof record.sequence !== "number" ||
+    !Number.isInteger(record.sequence) ||
+    record.sequence < 1 ||
+    record.sequence > SEQUENCE_MAX
+  ) {
     return undefined;
   }
   // Shape-checking `mac` here is what keeps `constantTimeEqual`'s
-  // throw-on-unequal-length behaviour from ever becoming a crash or a length
-  // oracle: it only ever sees two 32-byte buffers.
-  if (typeof mac !== "string" || fromHex(mac, MAC_BYTES) === undefined) {
+  // throw-on-unequal-length behaviour (STD-10) from ever becoming a crash
+  // or a length oracle: `hexToBytes` below only ever sees a 64-character
+  // hex string, valid or the fixed-width fallback.
+  if (typeof record.mac !== "string" || !HEX64_PATTERN.test(record.mac)) {
     return undefined;
   }
-
-  return { keyId, sequence, mac };
+  return { keyId: record.keyId, sequence: record.sequence, mac: record.mac };
 }
 
-/**
- * Builds the signed preimage: `challenge ‖ "\n" ‖ sequence ‖ "\n" ‖ canonical`.
- *
- * The challenge is included in its **hex** form — the same 64 characters
- * `daemon.hello` handed the client — so the preimage is a pure text
- * construction and there is no raw-bytes-versus-hex ambiguity for a client to
- * get wrong. The separators keep the fields unambiguous: without them, a
- * sequence of `12` followed by a canonical line starting `3…` would build the
- * same bytes as a sequence of `123`.
- */
-export function buildPreimage(
-  challengeHex: string,
-  sequence: number,
-  canonical: string,
-): Uint8Array {
-  return new TextEncoder().encode(`${challengeHex}\n${sequence}\n${canonical}`);
+function describeRejection(
+  envelope: RequestAuthEnvelope | undefined,
+  keyIdMatches: boolean,
+  sequenceAdvances: boolean,
+  macMatches: boolean,
+): string {
+  if (envelope === undefined) {
+    return "missing or malformed params.auth";
+  }
+  if (!keyIdMatches) {
+    return "unknown keyId";
+  }
+  if (!sequenceAdvances) {
+    return "sequence did not advance";
+  }
+  if (!macMatches) {
+    return "mac mismatch";
+  }
+  return "unauthorized";
 }
 
 export function verifyRequest(
-  input: VerifyInput,
-  envelope: RequestAuthEnvelope,
   macProvider: MacProvider,
-  challengeHex: string,
-): VerifyOutcome {
-  const canonical = canonicaliseRequest(input.rawLine);
-  if (canonical === undefined) {
-    // No `params.auth` span to excise — the request cannot have been signed.
-    return REJECTED;
+  credential: AuthenticatedCredential,
+  connection: ConnectionAuthState,
+  rawLine: string,
+): VerifyResult {
+  let duplicate: boolean;
+  try {
+    duplicate = hasDuplicateKey(rawLine);
+  } catch {
+    // Defensive only: `src/rpc/codec.ts` already proved `rawLine` parses
+    // with `JSON.parse` before this function is ever called, so the
+    // tokenizer disagreeing is an internal inconsistency, not a real
+    // client input.
+    return { kind: "malformed-envelope", reason: "request line could not be re-scanned" };
+  }
+  if (duplicate) {
+    return { kind: "malformed-envelope", reason: "duplicate JSON member name in request" };
   }
 
-  const provided = fromHex(envelope.mac, MAC_BYTES);
-  if (provided === undefined) {
-    return REJECTED;
+  let canonicalRequestBytes: string;
+  let authValueText: string | undefined;
+  try {
+    canonicalRequestBytes = canonicaliseRequest(rawLine) ?? rawLine;
+    authValueText = extractAuthValueText(rawLine);
+  } catch {
+    return { kind: "malformed-envelope", reason: "request line could not be re-scanned" };
   }
 
-  const expected = macProvider.hmacSha256(
-    input.secret,
-    buildPreimage(challengeHex, envelope.sequence, canonical),
+  let envelope: RequestAuthEnvelope | undefined;
+  if (authValueText !== undefined) {
+    try {
+      envelope = validateRequestAuthEnvelope(JSON.parse(authValueText));
+    } catch {
+      envelope = undefined;
+    }
+  }
+
+  // The MAC is computed and compared unconditionally from this point on —
+  // never short-circuited by a missing `params.auth`, an unknown `keyId`,
+  // or a stale `sequence` — so the timing of every rejection past the
+  // duplicate-key check is identical (STD-9's timing oracle).
+  const sequence = envelope?.sequence ?? 0;
+  const macHex = envelope?.mac ?? FALLBACK_MAC_HEX;
+  const suppliedKeyId = envelope?.keyId ?? "";
+
+  const expectedMac = macProvider.hmacSha256(
+    credential.secret,
+    buildAuthMacMessage(connection.challenge, sequence, canonicalRequestBytes),
   );
+  const suppliedMac = hexToBytes(macHex);
+  const macMatches =
+    suppliedMac.length === MAC_BYTES && macProvider.constantTimeEqual(suppliedMac, expectedMac);
+  const keyIdMatches = suppliedKeyId === credential.keyId;
+  const sequenceAdvances = sequence > connection.lastSequence;
 
-  // All three evaluated before the verdict: no short-circuit, so the work done
-  // does not reveal which check failed.
-  const macMatches = macProvider.constantTimeEqual(expected, provided);
-  const keyMatches = envelope.keyId === input.keyId;
-  const sequenceAdvances = envelope.sequence > input.auth.lastSequence;
-
-  if (!macMatches || !keyMatches || !sequenceAdvances) {
-    return REJECTED;
+  const authenticated = envelope !== undefined && keyIdMatches && sequenceAdvances && macMatches;
+  if (!authenticated) {
+    return {
+      kind: "unauthorized",
+      reason: describeRejection(envelope, keyIdMatches, sequenceAdvances, macMatches),
+    };
   }
 
-  return {
-    ok: true,
-    auth: { challenge: input.auth.challenge, lastSequence: envelope.sequence },
-  };
+  connection.lastSequence = sequence;
+  return { kind: "authenticated" };
 }

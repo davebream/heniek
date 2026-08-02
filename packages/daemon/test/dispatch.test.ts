@@ -1,22 +1,22 @@
 /**
  * `dispatchFrame` — envelope validation → `daemon.hello` → drain check →
  * authenticate → registry lookup → handler (design C8, plan Task 3 Step 6).
+ *
+ * `dispatchFrame` returns the exact NDJSON wire line, so every assertion
+ * below either parses that line back with `JSON.parse` or compares two
+ * lines directly — the same thing a real client on the other end of the
+ * socket would do.
  */
 
 import { describe, expect, it, vi } from "vitest";
 import { mintConnectionAuthState } from "../src/auth/challenge.js";
 import type { AuthenticatedCredential } from "../src/auth/verify.js";
 import { buildAuthMacMessage, bytesToHex } from "../src/auth/verify.js";
-import type { MacProvider, RandomSource } from "../src/ports.js";
-import type { ErrorFrame, JsonRpcId, RequestFrame } from "../src/rpc/codec.js";
-import { encodeResponseLine } from "../src/rpc/codec.js";
+import type { JsonRpcErrorFrame, JsonRpcId, JsonRpcRequestFrame } from "../src/rpc/codec.js";
 import type { DispatchDeps } from "../src/rpc/dispatch.js";
 import { dispatchFrame } from "../src/rpc/dispatch.js";
-import {
-  createMethodRegistry,
-  DAEMON_HELLO_METHOD,
-  DAEMON_STATUS_METHOD,
-} from "../src/rpc/methods.js";
+import { DAEMON_HELLO_METHOD, DAEMON_STATUS_METHOD, createMethodRegistry } from "../src/rpc/methods.js";
+import type { MacProvider, RandomSource } from "../src/ports.js";
 
 function counterRandomSource(): RandomSource {
   let counter = 0;
@@ -63,12 +63,7 @@ function credential(): AuthenticatedCredential {
   return { keyId: KEY_ID, secret: SECRET };
 }
 
-function requestFrame(
-  id: JsonRpcId,
-  method: string,
-  raw: string,
-  params: unknown = {},
-): RequestFrame {
+function requestFrame(id: JsonRpcId, method: string, raw: string, params: unknown = {}): JsonRpcRequestFrame {
   return { kind: "request", id, method, params, raw };
 }
 
@@ -91,7 +86,7 @@ function signedFrame(
   id: number,
   method: string,
   sequence: number,
-): RequestFrame {
+): JsonRpcRequestFrame {
   const canonical = `{"jsonrpc":"2.0","id":${id},"method":"${method}","params":{}}`;
   const mac = bytesToHex(
     deps.macProvider.hmacSha256(
@@ -104,24 +99,25 @@ function signedFrame(
   return requestFrame(id, method, raw);
 }
 
+function parseLine(line: string): { id: JsonRpcId; result?: unknown; error?: { code: number; message: string } } {
+  return JSON.parse(line.trimEnd());
+}
+
 describe("dispatchFrame — daemon.hello", () => {
   it("succeeds pre-auth and returns a well-formed DaemonHelloResult/v1 shape", async () => {
     const deps = baseDeps();
     const connection = mintConnectionAuthState(counterRandomSource());
-    const response = await dispatchFrame(
-      deps,
-      connection,
-      requestFrame(1, DAEMON_HELLO_METHOD, "irrelevant"),
-    );
+    const line = await dispatchFrame(deps, connection, requestFrame(1, DAEMON_HELLO_METHOD, "irrelevant"));
 
-    expect("result" in response).toBe(true);
-    const result = (response as { result: Record<string, unknown> }).result;
+    expect(line.endsWith("\n")).toBe(true);
+    const parsed = parseLine(line);
+    expect(parsed.error).toBeUndefined();
+    const result = parsed.result as Record<string, unknown>;
     expect(result.schemaVersion).toBe(1);
     expect(result.protocolVersion).toBe(1);
     expect(result.instanceId).toBe("instance-1");
     expect(result.macAlgorithm).toBe("hmac-sha256");
     expect(result.keyId).toBe(KEY_ID);
-    expect(typeof result.challenge).toBe("string");
     expect(result.challenge).toMatch(/^[0-9a-f]{64}$/);
     expect(connection.helloCalled).toBe(true);
   });
@@ -132,38 +128,33 @@ describe("dispatchFrame — daemon.hello", () => {
     await dispatchFrame(deps, connection, requestFrame(1, DAEMON_HELLO_METHOD, "x"));
 
     const authenticated = signedFrame(deps, connection, 2, DAEMON_STATUS_METHOD, 5);
-    const okResponse = await dispatchFrame(deps, connection, authenticated);
-    expect("result" in okResponse).toBe(true);
+    const okLine = await dispatchFrame(deps, connection, authenticated);
+    expect(parseLine(okLine).error).toBeUndefined();
     expect(connection.lastSequence).toBe(5);
 
-    const second = await dispatchFrame(deps, connection, requestFrame(3, DAEMON_HELLO_METHOD, "y"));
-    expect("error" in second).toBe(true);
-    expect((second as { error: { code: number } }).error.code).toBe(-32600);
+    const secondHelloLine = await dispatchFrame(deps, connection, requestFrame(3, DAEMON_HELLO_METHOD, "y"));
+    expect(parseLine(secondHelloLine).error?.code).toBe(-32600);
     // Untouched: helloCalled stays true, lastSequence stays 5.
     expect(connection.lastSequence).toBe(5);
 
     // The sequence-5 request cannot be replayed after the rejected re-hello.
-    const replay = await dispatchFrame(deps, connection, authenticated);
-    expect((replay as { error: { code: number } }).error.code).toBe(-32001);
+    const replayLine = await dispatchFrame(deps, connection, authenticated);
+    expect(parseLine(replayLine).error?.code).toBe(-32001);
   });
 });
 
 describe("dispatchFrame — no method-existence oracle", () => {
-  it("unauthenticated daemon.status and an unauthenticated fabricated method produce byte-identical response lines", async () => {
+  it("unauthenticated daemon.status and an unauthenticated fabricated method produce byte-identical wire lines", async () => {
     const deps = baseDeps();
     const connection1 = mintConnectionAuthState(counterRandomSource());
     const connection2 = mintConnectionAuthState(counterRandomSource());
 
-    const realMethodResponse = await dispatchFrame(
+    const realLine = await dispatchFrame(
       deps,
       connection1,
-      requestFrame(
-        1,
-        DAEMON_STATUS_METHOD,
-        '{"jsonrpc":"2.0","id":1,"method":"daemon.status","params":{}}',
-      ),
+      requestFrame(1, DAEMON_STATUS_METHOD, '{"jsonrpc":"2.0","id":1,"method":"daemon.status","params":{}}'),
     );
-    const fabricatedResponse = await dispatchFrame(
+    const fabricatedLine = await dispatchFrame(
       deps,
       connection2,
       requestFrame(
@@ -172,9 +163,6 @@ describe("dispatchFrame — no method-existence oracle", () => {
         '{"jsonrpc":"2.0","id":1,"method":"daemon.notARealMethod","params":{}}',
       ),
     );
-
-    const realLine = encodeResponseLine(realMethodResponse);
-    const fabricatedLine = encodeResponseLine(fabricatedResponse);
 
     expect(realLine).toBe(fabricatedLine);
     expect(realLine).toContain('"code":-32001');
@@ -185,16 +173,15 @@ describe("dispatchFrame — no method-existence oracle", () => {
 describe("dispatchFrame — authenticated dispatch", () => {
   it("routes an authenticated request to its registered handler", async () => {
     const deps = baseDeps({
-      registry: createMethodRegistry([
-        [DAEMON_STATUS_METHOD, () => ({ lifecycleState: "serving" })],
-      ]),
+      registry: createMethodRegistry([[DAEMON_STATUS_METHOD, () => ({ lifecycleState: "serving" })]]),
     });
     const connection = mintConnectionAuthState(counterRandomSource());
     const frame = signedFrame(deps, connection, 1, DAEMON_STATUS_METHOD, 1);
 
-    const response = await dispatchFrame(deps, connection, frame);
-    expect("result" in response).toBe(true);
-    expect((response as { result: unknown }).result).toEqual({ lifecycleState: "serving" });
+    const line = await dispatchFrame(deps, connection, frame);
+    const parsed = parseLine(line);
+    expect(parsed.error).toBeUndefined();
+    expect(parsed.result).toEqual({ lifecycleState: "serving" });
   });
 
   it("returns -32601 for an authenticated but unregistered method", async () => {
@@ -202,8 +189,8 @@ describe("dispatchFrame — authenticated dispatch", () => {
     const connection = mintConnectionAuthState(counterRandomSource());
     const frame = signedFrame(deps, connection, 1, "daemon.notARealMethod", 1);
 
-    const response = await dispatchFrame(deps, connection, frame);
-    expect((response as { error: { code: number } }).error.code).toBe(-32601);
+    const line = await dispatchFrame(deps, connection, frame);
+    expect(parseLine(line).error?.code).toBe(-32601);
   });
 
   it("a handler throw yields a bare -32603 and reports the full error via onHandlerError, not on the wire", async () => {
@@ -223,10 +210,10 @@ describe("dispatchFrame — authenticated dispatch", () => {
     const connection = mintConnectionAuthState(counterRandomSource());
     const frame = signedFrame(deps, connection, 1, DAEMON_STATUS_METHOD, 1);
 
-    const response = await dispatchFrame(deps, connection, frame);
-    const errorBody = (response as { error: { code: number; message: string } }).error;
-    expect(errorBody.code).toBe(-32603);
-    expect(errorBody.message).not.toContain("/secret/path");
+    const line = await dispatchFrame(deps, connection, frame);
+    const errorBody = parseLine(line).error;
+    expect(errorBody?.code).toBe(-32603);
+    expect(errorBody?.message).not.toContain("/secret/path");
     expect(onHandlerError).toHaveBeenCalledWith(DAEMON_STATUS_METHOD, handlerError);
   });
 });
@@ -235,29 +222,16 @@ describe("dispatchFrame — draining", () => {
   it("still answers daemon.hello normally while draining", async () => {
     const deps = baseDeps({ isDraining: () => true });
     const connection = mintConnectionAuthState(counterRandomSource());
-    const response = await dispatchFrame(
-      deps,
-      connection,
-      requestFrame(1, DAEMON_HELLO_METHOD, "x"),
-    );
-    expect("result" in response).toBe(true);
+    const line = await dispatchFrame(deps, connection, requestFrame(1, DAEMON_HELLO_METHOD, "x"));
+    expect(parseLine(line).error).toBeUndefined();
   });
 
   it("rejects daemon.status with -32000 draining while draining", async () => {
     const deps = baseDeps({ isDraining: () => true });
     const connection = mintConnectionAuthState(counterRandomSource());
-    const frame = signedFrame(
-      { ...deps, isDraining: () => false },
-      connection,
-      1,
-      DAEMON_STATUS_METHOD,
-      1,
-    );
-    const response = await dispatchFrame(deps, connection, frame);
-    expect((response as { error: { code: number; message: string } }).error).toEqual({
-      code: -32000,
-      message: "draining",
-    });
+    const frame = signedFrame({ ...deps, isDraining: () => false }, connection, 1, DAEMON_STATUS_METHOD, 1);
+    const line = await dispatchFrame(deps, connection, frame);
+    expect(parseLine(line).error).toEqual({ code: -32000, message: "draining" });
   });
 });
 
@@ -265,16 +239,10 @@ describe("dispatchFrame — codec-level error frames pass through unchanged", ()
   it("relays an error Frame's code, message, and id verbatim", async () => {
     const deps = baseDeps();
     const connection = mintConnectionAuthState(counterRandomSource());
-    const errorFrame: ErrorFrame = {
-      kind: "error",
-      id: 5,
-      code: -32700,
-      message: "parse error",
-      fatal: false,
-    };
+    const errorFrame: JsonRpcErrorFrame = { kind: "error", id: 5, code: -32700, message: "parse error", fatal: false };
 
-    const response = await dispatchFrame(deps, connection, errorFrame);
-    expect(response).toEqual({
+    const line = await dispatchFrame(deps, connection, errorFrame);
+    expect(JSON.parse(line.trimEnd())).toEqual({
       jsonrpc: "2.0",
       id: 5,
       error: { code: -32700, message: "parse error" },

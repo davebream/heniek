@@ -41,3 +41,52 @@ export type {
   SocketProbe,
   SocketProbeVerdict,
 } from "./ports.js";
+
+export {
+  canonicaliseRequest,
+  extractAuthValueText,
+  hasDuplicateKey,
+} from "./auth/canonical.js";
+export type { ConnectionAuthState } from "./auth/challenge.js";
+export { CHALLENGE_BYTES, mintConnectionAuthState } from "./auth/challenge.js";
+export type { DaemonCredential } from "./auth/credential.js";
+export {
+  CREDENTIAL_ENTRY_NAME,
+  CREDENTIAL_KEY_ID_BYTES,
+  CREDENTIAL_SECRET_BYTES,
+  mintCredential,
+  persistCredential,
+  removeCredential,
+} from "./auth/credential.js";
+export { UNAUTHORIZED_MESSAGE } from "./auth/errors.js";
+export type { AuthenticatedCredential, VerifyResult } from "./auth/verify.js";
+export { buildAuthMacMessage, bytesToHex, hexToBytes, verifyRequest } from "./auth/verify.js";
+export type {
+  DecodeResult,
+  DecoderState,
+  Frame,
+  JsonRpcErrorFrame,
+  JsonRpcId,
+  JsonRpcRequestFrame,
+} from "./rpc/codec.js";
+export {
+  createCodec,
+  createDecoderState,
+  decodeChunk,
+  encodeError,
+  encodeResult,
+  ERROR_CODES,
+  JSON_RPC_VERSION,
+  MAX_LINE_BYTES,
+} from "./rpc/codec.js";
+export type { DispatchDeps } from "./rpc/dispatch.js";
+export { dispatchFrame } from "./rpc/dispatch.js";
+export { DRAINING_MESSAGE } from "./rpc/errors.js";
+export type { MethodHandler, MethodRegistry } from "./rpc/methods.js";
+export {
+  AUTHENTICATED_METHODS,
+  createMethodRegistry,
+  DAEMON_HELLO_METHOD,
+  DAEMON_RECOVERY_METHOD,
+  DAEMON_STATUS_METHOD,
+} from "./rpc/methods.js";
