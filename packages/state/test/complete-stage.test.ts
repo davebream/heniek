@@ -14,6 +14,7 @@ import { publishArtifact } from "../src/artifact/publish.js";
 import { type ArtifactStore, createArtifactStoreInternal } from "../src/artifact/store.js";
 import { commitStateChange } from "../src/command/commit.js";
 import { internalHandle, openStateDatabase, type StateDatabase } from "../src/database/open.js";
+import { StageAssertionFailedError } from "../src/errors.js";
 import { runMigrations } from "../src/migrations/migrate.js";
 import { createDeterministicIds, createFakeClock } from "./helpers/determinism.js";
 import {
@@ -384,5 +385,87 @@ describe("completeStage — AC-2: a retry creates a NEW immutable attempt (dispa
     expect(firstRowAfter?.content_hash).toBe(firstReceipt.contentHash);
     expect(firstRowAfter?.revision).toBe(1);
     expect(firstRowAfter?.byte_length).toBe(firstReceipt.byteLength);
+  });
+});
+
+describe("completeStage — J1 (Phase 4 fix cycle): S2's fstat/lstat never leak a raw errno", () => {
+  it("fstat EBADF on an already-closed receipt fd is wrapped as StageAssertionFailedError, not a raw errno", () => {
+    const artifact = publishFor(new TextEncoder().encode("closed before completeStage"), "a.md");
+    // Simulates a receipt whose fd was already closed — e.g. reused across
+    // two completeStage calls — so the S2 assertion's own fstat(fd) hits a
+    // real, no-tolerance EBADF rather than any semantic nlink/size check.
+    fakeFs.close(artifact.receipt.fd);
+
+    let caught: unknown;
+    try {
+      completeStage(db, store, { runId: "run-1", stageId: "stage-1", artifacts: [artifact] });
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(StageAssertionFailedError);
+    expect((caught as Error).message).not.toMatch(/EBADF/);
+    expect((caught as { cause?: unknown }).cause).toBeDefined();
+    expect(((caught as { cause?: unknown }).cause as { code?: string } | undefined)?.code).toBe(
+      "EBADF",
+    );
+    expect(countRows(db, "artifact")).toBe(0);
+  });
+
+  it("lstat ENOENT on a vanished blob path is wrapped as StageAssertionFailedError, not a raw errno — the nlink===1 case the >= 1 relaxation admits, where that one remaining link is incoming/ residue, not the blob address itself", () => {
+    const artifact = publishFor(new TextEncoder().encode("blob address vacated"), "a.md");
+    const finalPath = `/store/${artifact.receipt.relativePath}`;
+
+    // A crashed publisher's incoming/ residue keeps the pinned fd's inode
+    // alive through a SECOND name, then the blob's own address is removed —
+    // leaving nlink === 1 (admitted by the S2 `>= 1` relaxation) but the
+    // ONE remaining link is the incoming/ leftover, not
+    // `relativePath` itself.
+    fakeFs.link(finalPath, "/store/incoming/leftover.tmp");
+    fakeFs.unlink(finalPath);
+    expect(fakeFs.linkCountOf("/store/incoming/leftover.tmp")).toBe(1);
+
+    let caught: unknown;
+    try {
+      completeStage(db, store, { runId: "run-1", stageId: "stage-1", artifacts: [artifact] });
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(StageAssertionFailedError);
+    expect((caught as Error).message).not.toMatch(/ENOENT/);
+    expect((caught as { cause?: unknown }).cause).toBeDefined();
+    expect(((caught as { cause?: unknown }).cause as { code?: string } | undefined)?.code).toBe(
+      "ENOENT",
+    );
+    expect(countRows(db, "artifact")).toBe(0);
+  });
+});
+
+describe("completeStage — J4 (Phase 4 fix cycle): the finally guards fs resolution and payload/assertion construction too", () => {
+  it("closes every receipt fd even when a throw happens before commitStateChangeInternal is ever called", () => {
+    const artifact = publishFor(new TextEncoder().encode("throws before the write lock"), "a.md");
+    const originalReceipt = artifact.receipt;
+    // A receipt whose `relativePath` throws on access — models any failure
+    // during the assertions/artifactRelativePaths/payload construction that
+    // (pre-fix) ran BEFORE completeStage's try block began, so it could
+    // leak this artifact's fd past the finally entirely.
+    const brokenReceipt = new Proxy(originalReceipt, {
+      get(target, prop, receiver) {
+        if (prop === "relativePath") {
+          throw new Error("simulated failure while building assertions/payload");
+        }
+        return Reflect.get(target, prop, receiver);
+      },
+    });
+    const broken: CompleteStageArtifactInput = { ...artifact, receipt: brokenReceipt };
+
+    expect(() =>
+      completeStage(db, store, { runId: "run-1", stageId: "stage-1", artifacts: [broken] }),
+    ).toThrow("simulated failure while building assertions/payload");
+
+    // The fd is closed despite commitStateChangeInternal never having run.
+    expect(() => fakeFs.fstat(originalReceipt.fd)).toThrow();
+    expect(countRows(db, "artifact")).toBe(0);
   });
 });

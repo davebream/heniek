@@ -36,6 +36,20 @@ const RUN_SCOPED_TYPES = new Set(["run.created", "run.status_changed", "run.work
  * stage-scoped — `run_id` is required, exactly like the `run.*` types —
  * but neither starts with the `run.` prefix `RUN_SCOPED_TYPES` matches, so
  * they get their own set rather than being folded into it.
+ *
+ * **J3 (Phase 4 fix cycle, post-Phase-4 adversarial review) — `artifact.published`
+ * is journal-forward-compatible only, not a live production path.**
+ * `completeStage` (`artifact/complete-stage.ts`) only ever emits
+ * `stage.completed`, and the public `commitStateChange` path structurally
+ * refuses to write `artifact`/`stage_artifact_alias` at all
+ * (`command/commit.ts`'s `assertGuardedWritesAreVerified`). No shipped API
+ * in this package emits `artifact.published`; the reducer/`eventScope`
+ * branches below exist so that a *future* issue is free to add a standalone
+ * publish-without-completing event type without a schema/reducer migration,
+ * and so replay stays correct if one ever does. Until that future issue
+ * lands, every `artifact.published` case in this file is reachable only
+ * from this package's own tests — do not read test coverage of it as
+ * evidence of a live call path.
  */
 const STAGE_SCOPED_TYPES = new Set(["artifact.published", "stage.completed"]);
 

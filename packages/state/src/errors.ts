@@ -216,13 +216,22 @@ export class ArtifactQuarantinedError extends StateStoreError {
  * (design D4, plan Task 4.2/4.3). `reason` is a short, already-safe
  * description (e.g. "nlink was 0") — never a derived byte count or path
  * component beyond `relativePath` itself.
+ *
+ * `options.cause` (Phase 4 fix cycle, J1) — optional, mirroring
+ * `ArtifactValidationError`'s `{ cause }` pattern: `complete-stage.ts`'s S2
+ * assertion calls the `ArtifactFileSystem` port directly (`fstat`/`lstat`),
+ * and those raw `node:fs` `ErrnoException`s must not escape this package's
+ * typed error boundary. Every existing call site that predates this option
+ * (S2's semantic checks, S3's bijection check in `command/commit.ts`) simply
+ * omits it — a message built purely from already-known values, no wrapped
+ * cause.
  */
 export class StageAssertionFailedError extends StateStoreError {
   readonly relativePath: string;
   readonly reason: string;
 
-  constructor(relativePath: string, reason: string) {
-    super(`stage artifact assertion failed for ${relativePath}: ${reason}`);
+  constructor(relativePath: string, reason: string, options?: { readonly cause?: unknown }) {
+    super(`stage artifact assertion failed for ${relativePath}: ${reason}`, options);
     this.name = "StageAssertionFailedError";
     this.relativePath = relativePath;
     this.reason = reason;
