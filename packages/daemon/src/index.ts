@@ -1,0 +1,17 @@
+export type {
+  BoundSocket,
+  ClaimFileHandle,
+  Clock,
+  FileStat,
+  HostWitness,
+  IdGenerator,
+  LifecycleTraceEvent,
+  LifecycleTraceSink,
+  LockFileSystem,
+  MacProvider,
+  ProcessLiveness,
+  RandomSource,
+  SocketBinder,
+  SocketProbe,
+  SocketProbeVerdict,
+} from "./ports.js";

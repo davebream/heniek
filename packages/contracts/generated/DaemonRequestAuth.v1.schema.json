@@ -1,0 +1,31 @@
+{
+  "$id": "heniek://contract/DaemonRequestAuth/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "keyId",
+    "sequence",
+    "mac"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "keyId": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "sequence": {
+      "minimum": 1,
+      "maximum": 2147483647,
+      "type": "integer"
+    },
+    "mac": {
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "HMAC-SHA256, hex-encoded",
+      "type": "string"
+    }
+  }
+}

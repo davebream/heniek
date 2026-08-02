@@ -32,6 +32,30 @@
       "path": "generated/CreatePullRequestInput.v1.schema.json"
     },
     {
+      "schemaId": "heniek://contract/DaemonCredentialRotation/v1",
+      "schemaVersion": 1,
+      "sha256": "65e3c3e630db735f111349c152cad0689ec622ab24236d2cef24d9fd099fe38a",
+      "path": "generated/DaemonCredentialRotation.v1.schema.json"
+    },
+    {
+      "schemaId": "heniek://contract/DaemonHelloResult/v1",
+      "schemaVersion": 1,
+      "sha256": "238a2a706c495f67986ba079f6e6abe15ba80c33ec56f19de3992ac15778470b",
+      "path": "generated/DaemonHelloResult.v1.schema.json"
+    },
+    {
+      "schemaId": "heniek://contract/DaemonRequestAuth/v1",
+      "schemaVersion": 1,
+      "sha256": "1f831c8b10a4df7001fc99ee2c425ad8a42bd911380f0a22a1907db3545781d1",
+      "path": "generated/DaemonRequestAuth.v1.schema.json"
+    },
+    {
+      "schemaId": "heniek://contract/DaemonStatus/v1",
+      "schemaVersion": 1,
+      "sha256": "a91375e3509ceb2663a96e656d18e32c722085a1cb574328159cee7ff4fef854",
+      "path": "generated/DaemonStatus.v1.schema.json"
+    },
+    {
       "schemaId": "heniek://contract/ExecutionRequest/v1",
       "schemaVersion": 1,
       "sha256": "0642730af967d4a595cf4855a738e975b8577f6e18c6c1cb4e75a08be0edb02e",
@@ -78,6 +102,12 @@
       "schemaVersion": 1,
       "sha256": "be0a661b93dee4b9f8a0c9b4e642864ebf99e94cbc4d06b3790b0a01bf2dc601",
       "path": "generated/Run.v1.schema.json"
+    },
+    {
+      "schemaId": "heniek://contract/RunRecoveryClassification/v1",
+      "schemaVersion": 1,
+      "sha256": "0aee0e26d3e2d4434ec97ebdf41774720829842d4cec4a1dda823d2419577b13",
+      "path": "generated/RunRecoveryClassification.v1.schema.json"
     },
     {
       "schemaId": "heniek://contract/TaskContext/v1",
