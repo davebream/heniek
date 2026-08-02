@@ -194,6 +194,24 @@ export interface StartDaemonDeps {
   readonly backend: ExecutionBackend;
   /** Defaults to `1`. */
   readonly protocolVersion?: number;
+  /**
+   * Optional coordination hook invoked once draining begins — after the
+   * trace has already recorded `serving -> draining` but strictly before
+   * the socket is closed — and awaited before the drain proceeds any
+   * further (plan Task 6 Step 3b). Lets a caller hold the
+   * "draining-but-still-bound" window open for an external synchronisation
+   * point: `daemon.hello` remains answerable throughout the drain (design
+   * C9's exemption), so a concurrent starter's probe genuinely can observe
+   * `serving` and concede rather than refuse — but only if the socket is
+   * still listening at the instant that probe runs. Without this hook the
+   * window between `draining = true` and `server.close()` is a single
+   * synchronous step with no externally observable gap (verified
+   * empirically — `server.close()` on a Unix domain socket stops accepting
+   * and unlinks the path before any other code can run), so a test cannot
+   * otherwise arrange to land its probe inside it. Defaults to an immediate
+   * resolve; production callers never need to supply it.
+   */
+  readonly onDraining?: () => Promise<void> | void;
 }
 
 export type StartDaemonOutcome =
@@ -365,6 +383,10 @@ export async function startDaemon(deps: StartDaemonDeps): Promise<StartDaemonOut
     }
     draining = true;
     servingTracer.record("drain", reason);
+    // See `StartDaemonDeps.onDraining`'s docblock — held open only when a
+    // caller supplied the hook; a no-op `Promise.resolve()` otherwise, so
+    // production behaviour is unchanged.
+    await deps.onDraining?.();
     // `close()` stops accepting new connections and unlinks the socket path
     // this process created (STD-3) — safe here, unlike on claim loss, since
     // this process still legitimately owns both.
