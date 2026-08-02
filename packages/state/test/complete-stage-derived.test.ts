@@ -37,3 +37,77 @@ describe("§16.6 step 6 is derived, never performed (design D7, plan Task 4.6)",
     expect(completeStageModule.completeStage.length).toBe(3);
   });
 });
+
+describe("AC-1's second leg (Phase 4 fix cycle 1, Q2): the package barrel's exact runtime export surface", () => {
+  /**
+   * AC-1 stands on two legs: the table-keyed guard in `command/commit.ts`
+   * (tested elsewhere) AND `commitStateChangeInternal` never being reachable
+   * from the public barrel. Only the first leg had a test before this one —
+   * the release/dispatch name-pattern check above regex-filters names, so it
+   * cannot catch a re-export of an already-named internal entry point like
+   * `commitStateChangeInternal`. This test pins the exact runtime key list
+   * (`Object.keys`, not a source-text grep — a grep can be fooled by a
+   * comment or a renamed local; `Object.keys` cannot, and type-only exports
+   * never appear in it, so this list is exactly what a runtime consumer can
+   * actually reach) so ANY new export — a second `commitStateChangeInternal`
+   * leak or anything else — turns this test red and forces a deliberate,
+   * reviewed update rather than a silent surface-area change.
+   *
+   * Accuracy note (Q2): `package.json`'s `exports` map
+   * (`{".": "./src/index.ts"}`) blocks only bare-specifier deep imports. It
+   * does NOT block relative traversal — `test/command.test.ts` already
+   * imports `commitStateChangeInternal` via `../src/command/commit.js`, and
+   * `private: true` + `workspace:*` makes any in-repo consumer a pnpm
+   * symlink straight into this package's `src/`. So the barrel is a
+   * *convention* enforced by this test, not a structural guarantee enforced
+   * by the module resolver — this test is what actually makes "not publicly
+   * exported" a falsifiable claim rather than an aspiration.
+   */
+  it("Object.keys(barrel) is exactly this pinned list — commitStateChangeInternal is not in it", () => {
+    const runtimeExports = Object.keys(packageBarrel).sort();
+    expect(runtimeExports).toEqual(
+      [
+        "ArtifactCountExceededError",
+        "ArtifactDigestMismatchError",
+        "ArtifactQuarantinedError",
+        "ArtifactRecoveryError",
+        "ArtifactValidationError",
+        "CausalityViolationError",
+        "EMPTY_PROJECTION_STATE",
+        "InsecureStateDatabaseError",
+        "MIGRATIONS",
+        "MigrationError",
+        "PayloadTooLargeError",
+        "ReducerError",
+        "SchemaVersionError",
+        "StageAssertionFailedError",
+        "StateDatabaseCorruptionError",
+        "StateStoreError",
+        "applyEvent",
+        "commitStateChange",
+        "compareProjectionToReplay",
+        "completeStage",
+        "createArtifactStore",
+        "currentSchemaVersion",
+        "eventScope",
+        "latestSequence",
+        "listArtifacts",
+        "migrationManifest",
+        "openStateDatabase",
+        "projectionDigest",
+        "publishArtifact",
+        "readAllRunProjections",
+        "readEvents",
+        "readEventsForRun",
+        "readIdentity",
+        "readRunProjection",
+        "recoverArtifacts",
+        "replayJournal",
+        "runMigrations",
+        "schemaFingerprint",
+        "stageArtifactAliasKey",
+      ].sort(),
+    );
+    expect(runtimeExports).not.toContain("commitStateChangeInternal");
+  });
+});

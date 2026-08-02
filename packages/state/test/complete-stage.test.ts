@@ -320,7 +320,11 @@ describe("completeStage — AC-2: a retry creates a NEW immutable attempt (dispa
    */
   it("two retries with identical bytes share one blob but leave two distinct, immutable artifact rows — only the alias moves", () => {
     const bytes = new TextEncoder().encode("byte-identical retry content");
-
+    // Q4 (Phase 4 fix cycle 1, post-Phase-4 adversarial review): the
+    // previous version of this test compared only content_hash/revision/
+    // byte_length after the retry, leaving created_at and
+    // last_event_sequence unproven. A whole-row snapshot before and after
+    // closes that gap.
     const firstReceipt = publishArtifact(store, { bytes });
     const firstInput: CompleteStageArtifactInput = {
       receipt: firstReceipt,
@@ -331,6 +335,8 @@ describe("completeStage — AC-2: a retry creates a NEW immutable attempt (dispa
       sourceLineage: [],
     };
     completeStage(db, store, { runId: "run-1", stageId: "stage-1", artifacts: [firstInput] });
+    const firstRowBeforeRetry = artifactRow(firstReceipt.artifactId);
+    expect(firstRowBeforeRetry).toBeDefined();
 
     // The retry: identical bytes, a fresh publishArtifact call. Adopts the
     // SAME blob on disk (shared content address) but mints a NEW artifactId.
@@ -357,6 +363,10 @@ describe("completeStage — AC-2: a retry creates a NEW immutable attempt (dispa
     expect(secondRow?.revision).toBe(1);
     expect(firstRow?.content_hash).toBe(secondRow?.content_hash);
     expect(firstRow?.relative_path).toBe(secondRow?.relative_path);
+
+    // Q4: whole-row byte-identity — created_at and last_event_sequence were
+    // previously unproven by the narrower field-by-field comparison above.
+    expect(firstRow).toEqual(firstRowBeforeRetry);
 
     // Only the alias moved: still exactly one alias row, now at revision 2,
     // re-pointed at the later attempt's artifact.
@@ -442,6 +452,60 @@ describe("completeStage — J1 (Phase 4 fix cycle): S2's fstat/lstat never leak 
   });
 });
 
+describe("completeStage — Q1 (Phase 4 fix cycle 1): content mutated through the pinned receipt fd is now detected", () => {
+  it("same-length bytes written through the still-open non-adopt receipt fd between publish and completeStage are refused, and nothing is written", () => {
+    const original = new TextEncoder().encode("sixteen-bytes!!!");
+    const artifact = publishFor(original, "a.md");
+    expect(artifact.receipt.adopted).toBe(false);
+
+    // Models the exact Q1 threat: fchmod(0o400) does not revoke access
+    // through an fd that was already open O_RDWR before the chmod ran, so
+    // any code holding the receipt can overwrite the blob's bytes in place
+    // (same length — size/nlink/ino/dev all stay unchanged) between
+    // publishArtifact and completeStage. `corruptFile` mutates the SAME
+    // inode object the pinned fd's entry references, so this is observable
+    // through the fd, not merely through a re-open by path.
+    const tampered = new TextEncoder().encode("TAMPERED-BYTES!!");
+    expect(tampered.length).toBe(original.length);
+    fakeFs.corruptFile(`/store/${artifact.receipt.relativePath}`, tampered);
+
+    let caught: unknown;
+    try {
+      completeStage(db, store, { runId: "run-1", stageId: "stage-1", artifacts: [artifact] });
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(StageAssertionFailedError);
+    expect((caught as Error).message).toMatch(/content_hash/);
+    expect(countRows(db, "artifact")).toBe(0);
+    expect(countRows(db, "stage_artifact_alias")).toBe(0);
+  });
+
+  it("the adopt path is exempt — its fd was never writable, so no re-hash is needed there", () => {
+    const bytes = new TextEncoder().encode("shared adopt-path content");
+    const first = publishFor(bytes, "a.md");
+    completeStage(db, store, { runId: "run-1", stageId: "stage-1", artifacts: [first] });
+
+    const adoptedReceipt = publishArtifact(store, { bytes });
+    expect(adoptedReceipt.adopted).toBe(true);
+    const adoptedInput: CompleteStageArtifactInput = {
+      receipt: adoptedReceipt,
+      name: "b.md",
+      mediaType: "text/plain",
+      contentSchemaId: "heniek://contract/Report/v1",
+      producer: "reviewer",
+      sourceLineage: [],
+    };
+    const report = completeStage(db, store, {
+      runId: "run-1",
+      stageId: "stage-1",
+      artifacts: [adoptedInput],
+    });
+    expect(report.writes.some((write) => write.table === "artifact")).toBe(false);
+  });
+});
+
 describe("completeStage — J4 (Phase 4 fix cycle): the finally guards fs resolution and payload/assertion construction too", () => {
   it("closes every receipt fd even when a throw happens before commitStateChangeInternal is ever called", () => {
     const artifact = publishFor(new TextEncoder().encode("throws before the write lock"), "a.md");
@@ -467,5 +531,79 @@ describe("completeStage — J4 (Phase 4 fix cycle): the finally guards fs resolu
     // The fd is closed despite commitStateChangeInternal never having run.
     expect(() => fakeFs.fstat(originalReceipt.fd)).toThrow();
     expect(countRows(db, "artifact")).toBe(0);
+  });
+});
+
+describe("completeStage — J3 (Phase 4 fix cycle 2): a hand-built receipt is refused, even when every field matches a genuinely staged blob", () => {
+  it("a receipt that never went through publishArtifact is refused by the publication-brand check, before any filesystem assertion runs", () => {
+    const bytes = new TextEncoder().encode("forged, but byte-identical to a real publish");
+    const digest = sha256Hex(bytes);
+    const relativePath = `blobs/sha256/${digest}`;
+    const finalPath = `/store/${relativePath}`;
+
+    // Stage a real, correctly-hashed, correctly-addressed file directly
+    // through the filesystem port — bypassing publishArtifact entirely.
+    // Every field of the hand-built receipt below will genuinely match this
+    // file (right hash, right size, right inode) — the only thing missing
+    // is the brand only publishArtifact's own return statement sets.
+    const tempFd = fakeFs.openExclusive("/store/incoming/forged.tmp");
+    fakeFs.write(tempFd, bytes);
+    fakeFs.fsync(tempFd);
+    fakeFs.link("/store/incoming/forged.tmp", finalPath);
+
+    const forgedReceipt = {
+      artifactId: "art-forged",
+      relativePath,
+      contentHash: digest,
+      byteLength: bytes.length,
+      fd: tempFd,
+      adopted: false,
+      // Deliberately no publication brand — this is exactly what an
+      // external caller (or a same-package caller bypassing the type
+      // system with `as`) would produce by hand.
+    } as unknown as CompleteStageArtifactInput["receipt"];
+
+    const input: CompleteStageArtifactInput = {
+      receipt: forgedReceipt,
+      name: "forged.md",
+      mediaType: "text/markdown",
+      contentSchemaId: "heniek://contract/Report/v1",
+      producer: "attacker",
+      sourceLineage: [],
+    };
+
+    let caught: unknown;
+    try {
+      completeStage(db, store, { runId: "run-1", stageId: "stage-1", artifacts: [input] });
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(StageAssertionFailedError);
+    expect((caught as Error).message).toMatch(/publication brand/);
+    expect(countRows(db, "artifact")).toBe(0);
+    expect(countRows(db, "stage_artifact_alias")).toBe(0);
+    // Refused before any filesystem assertion ran — the temp fd this test
+    // opened directly is still open (completeStage's finally does close
+    // every artifact.receipt.fd it was handed, brand or not, so the fd IS
+    // closed by the time completeStage returns — this asserts that instead,
+    // proving the refusal happened without ever reaching S2's fstat/lstat).
+    expect(() => fakeFs.fstat(tempFd)).toThrow();
+  });
+
+  it("a receipt built by spreading a real publishArtifact receipt (e.g. the existing byteLength-forgery test) still carries the brand and is accepted or refused on its own merits, never on the brand", () => {
+    // Guards against a future "fix" that makes the brand check too strict —
+    // spreading a real receipt (as the pre-existing size-mismatch regression
+    // test at "a size mismatch under the pinned fd is refused" does) must
+    // keep the brand, since object spread copies own symbol-keyed
+    // properties too.
+    const artifact = publishFor(new TextEncoder().encode("spread keeps the brand"), "a.md");
+    const spread: CompleteStageArtifactInput = { ...artifact, receipt: { ...artifact.receipt } };
+    const report = completeStage(db, store, {
+      runId: "run-1",
+      stageId: "stage-1",
+      artifacts: [spread],
+    });
+    expect(report.writes.some((write) => write.table === "artifact")).toBe(true);
   });
 });

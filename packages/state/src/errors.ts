@@ -238,13 +238,20 @@ export class StageAssertionFailedError extends StateStoreError {
   }
 }
 
-/** A recovery-sweep failure (design D5/D5a, plan Task 5.1) — unable to classify or remove an `incoming/` entry. */
+/**
+ * A recovery-sweep failure (design D5/D5a, plan Task 5.1) — unable to
+ * classify or remove an `incoming/` entry. `options.cause`, mirroring
+ * `StageAssertionFailedError`'s J1 pattern: `artifact/recover.ts` calls the
+ * `ArtifactFileSystem` port directly (`lstat`/`unlink`/`readdir`), and a raw
+ * `node:fs` `ErrnoException` from any of those must not escape this
+ * package's typed error boundary either.
+ */
 export class ArtifactRecoveryError extends StateStoreError {
   readonly path: string;
   readonly reason: string;
 
-  constructor(path: string, reason: string) {
-    super(`artifact recovery failed for ${path}: ${reason}`);
+  constructor(path: string, reason: string, options?: { readonly cause?: unknown }) {
+    super(`artifact recovery failed for ${path}: ${reason}`, options);
     this.name = "ArtifactRecoveryError";
     this.path = path;
     this.reason = reason;

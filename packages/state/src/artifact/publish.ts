@@ -24,6 +24,7 @@ import {
   ArtifactDigestMismatchError,
   ArtifactQuarantinedError,
   ArtifactValidationError,
+  StageAssertionFailedError,
 } from "../errors.js";
 import { type ArtifactFileSystem, isErrnoCode } from "./file-system.js";
 import { type ArtifactStore, internalArtifactFileSystem, internalArtifactIds } from "./store.js";
@@ -39,6 +40,79 @@ export interface PublishArtifactInput {
   readonly expectedContentHash?: string;
 }
 
+/**
+ * J3 (Phase 4 fix cycle 2, post-Phase-4 adversarial review) — module-private
+ * brand, set only by `publishArtifact`'s own return statement below. Not
+ * exported from `src/index.ts`; importable only from within this package
+ * (today, only `artifact/complete-stage.ts`), mirroring
+ * `internalArtifactFileSystem`'s package-private-by-construction discipline
+ * (`store.ts`).
+ *
+ * `ArtifactPublicationReceipt` is an unbranded structural interface, and
+ * `completeStage`'s S2 assertion never re-hashes on the adopt path (Q1 above
+ * skips it deliberately — the adopt fd never held write access). Before this
+ * brand, a caller could hand-build an object satisfying the interface's
+ * declared shape, stage a same-length file at the right content address via
+ * `node:fs` directly, and pass every S2 check (isDirectory/nlink/size/ino/
+ * dev) without ever having gone through `publishArtifact`.
+ * `test/artifact-publish.test.ts` demonstrates exactly this forgery working
+ * before this fix.
+ *
+ * **Honest scope — read this before treating the brand as more than it is.**
+ * This closes the *API-surface* hole: a branded receipt can only originate
+ * from a call to `publishArtifact` on this same store, which hashed the
+ * bytes through the pinned fd it hands back, and `completeStage`'s S2 `ino`/
+ * `dev` check pins that receipt to the specific inode `publishArtifact`
+ * validated. It does **not** provide integrity against in-process code —
+ * anything running in this process can still `import("node:fs")` and write
+ * directly into `<store.root>/blobs/sha256/<hex>`, bypassing this package
+ * entirely; no brand, no fd pin, and no S2 check can detect that (that
+ * residual gap is what `listArtifacts`'s `verified` re-hash, Task 5.2,
+ * exists to catch *after the fact*, not prevent). Do not describe this brand
+ * as an integrity guarantee — it is a construction-provenance guarantee
+ * about this package's own public API, nothing broader.
+ */
+const PUBLICATION_RECEIPT_BRAND: unique symbol = Symbol("ArtifactPublicationReceipt.brand");
+
+interface BrandedArtifactPublicationReceipt extends ArtifactPublicationReceipt {
+  readonly [PUBLICATION_RECEIPT_BRAND]: true;
+}
+
+/**
+ * J3 — runtime half of the brand check (the compile-time half is that
+ * `PUBLICATION_RECEIPT_BRAND` is never exported from `src/index.ts`, so no
+ * external caller can *name* the symbol to satisfy it). A same-package
+ * caller — or any caller willing to bypass the type system with `as` — could
+ * still construct a same-shaped object at runtime; this is what actually
+ * refuses it at `completeStage`'s boundary regardless of how the object was
+ * built. Never exported from `src/index.ts`.
+ */
+export function assertReceiptIsBranded(receipt: ArtifactPublicationReceipt): void {
+  if ((receipt as Partial<BrandedArtifactPublicationReceipt>)[PUBLICATION_RECEIPT_BRAND] !== true) {
+    throw new StageAssertionFailedError(
+      receipt.relativePath,
+      "receipt did not originate from publishArtifact (missing publication brand) — completeStage " +
+        "refuses a hand-built ArtifactPublicationReceipt even when every field matches a genuinely " +
+        "staged blob",
+    );
+  }
+}
+
+/**
+ * Q5 (Phase 4 fix cycle 1, post-Phase-4 adversarial review) — documentation
+ * accuracy, not a defect. A receipt is **content-only**: it attests that
+ * `bytes` hashing to `contentHash` were durably published at `relativePath`,
+ * and nothing more. It carries no `runId`/`stageId` and is never checked
+ * against either — AC-1's guarantee is byte-exactness of the referenced
+ * content, not an attestation about which run or stage produced it. Folding
+ * one run's receipt into a different run/stage's `completeStage` call is
+ * therefore accepted, not refused: this is inherent to content addressing
+ * (two identical byte sequences share one address regardless of who
+ * produced them) and is exactly what AC-2's dedup/adopt behaviour depends
+ * on. Do not read `fd`'s pinning (below) as identity/ownership proof — it
+ * proves only that the bytes at `relativePath` have not changed since this
+ * receipt was minted.
+ */
 export interface ArtifactPublicationReceipt {
   readonly artifactId: ArtifactId;
   /** `blobs/sha256/<hex>` — relative to the store's root. */
@@ -106,7 +180,7 @@ function openTempExclusive(
   throw new ArtifactValidationError(INCOMING_DIR_LABEL, "write", { cause: lastError });
 }
 
-/** R4 step 2. Any error is fatal — the temp file is left for the gated recovery sweep. `relativePath` (P3) is store-root-relative, used only for the error message — the syscall itself operates on `fd`. */
+/** R4 step 2. Any error is fatal — the temp file is left in `incoming/` for Phase 5's explicit `recoverArtifacts` operator entry point to remove later (no automatic sweep runs on open, per `store.ts`'s H1 fix). `relativePath` (P3) is store-root-relative, used only for the error message — the syscall itself operates on `fd`. */
 function writeAll(
   fs: ArtifactFileSystem,
   fd: number,
@@ -363,19 +437,22 @@ export function publishArtifact(
       fs.unlink(tempPath);
     } catch (error) {
       if (!isErrnoCode(error, "ENOENT")) {
-        // Best-effort — the gated recovery sweep cleans up any leftover
-        // temp later (R4 step 8).
+        // Best-effort — Phase 5's explicit recoverArtifacts operator entry
+        // point cleans up any leftover temp later (R4 step 8); no automatic
+        // sweep runs here or on store open.
       }
     }
 
-    return {
+    const receipt: BrandedArtifactPublicationReceipt = {
       artifactId: ids.next("art") as ArtifactId,
       relativePath,
       contentHash: digest,
       byteLength,
       fd: receiptFd,
       adopted: linkOutcome.adopted,
+      [PUBLICATION_RECEIPT_BRAND]: true,
     };
+    return receipt;
   } catch (error) {
     if (tempFdOwned) {
       closeQuietly(fs, tempFd);

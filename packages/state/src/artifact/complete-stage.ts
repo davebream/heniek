@@ -27,15 +27,24 @@ import { StageAssertionFailedError } from "../errors.js";
 import type { CausationEventId } from "../journal/event.js";
 import type { JsonValue } from "../json.js";
 import type { ArtifactFileSystem } from "./file-system.js";
-import type { ArtifactPublicationReceipt } from "./publish.js";
+import { type ArtifactPublicationReceipt, assertReceiptIsBranded } from "./publish.js";
 import { type ArtifactStore, internalArtifactFileSystem } from "./store.js";
 
 /**
  * One published artifact `completeStage` will fold into the `stage.completed`
- * payload and alias. `receipt` is `publishArtifact`'s own output — the same
- * fd the validated bytes were written through (S1); `completeStage` takes
- * ownership of that fd and closes it (see this module's docblock and the
- * `finally` in `completeStage` below).
+ * payload and alias. `receipt` is `publishArtifact`'s own output.
+ *
+ * J7 (Phase 4 fix cycle 2, post-Phase-4 adversarial review) — corrected: on
+ * the normal-publish path (`receipt.adopted === false`) `receipt.fd` is the
+ * same `O_RDWR` fd the validated bytes were written through (S1). On the
+ * idempotent-adopt path (`receipt.adopted === true`, an `EEXIST` on `link`
+ * resolved by re-hashing the already-committed blob) the fd is instead a
+ * fresh `O_RDONLY` re-open of that existing blob — **not** the fd the bytes
+ * were originally written through, since this call never wrote any (see
+ * `publish.ts`'s own `ArtifactPublicationReceipt.fd` docs for the full
+ * adopt-path rationale). Either way `completeStage` takes ownership of the
+ * fd and closes it (see this module's docblock and the `finally` in
+ * `completeStage` below).
  */
 export interface CompleteStageArtifactInput {
   readonly receipt: ArtifactPublicationReceipt;
@@ -191,7 +200,7 @@ function assertArtifactStillValid(
   store: ArtifactStore,
   artifact: CompleteStageArtifactInput,
 ): void {
-  const { relativePath, byteLength, fd } = artifact.receipt;
+  const { relativePath, byteLength, fd, contentHash, adopted } = artifact.receipt;
   const fdStat = safeFstat(fs, relativePath, fd);
   if (fdStat.isDirectory) {
     throw new StageAssertionFailedError(
@@ -214,6 +223,17 @@ function assertArtifactStillValid(
       relativePath,
       "the blob path no longer names the inode the validated bytes were written to",
     );
+  }
+  // Q1: see this function's docblock — only the non-adopt path's fd was
+  // ever writable, so only that path needs the re-hash.
+  if (!adopted) {
+    const recomputed = reHashPinnedFd(fs, fd);
+    if (recomputed !== contentHash) {
+      throw new StageAssertionFailedError(
+        relativePath,
+        `content_hash ${contentHash} no longer matches the pinned fd's bytes (recomputed ${recomputed})`,
+      );
+    }
   }
 }
 
@@ -252,6 +272,15 @@ export function completeStage(
   input: CompleteStageInput,
 ): CommitReport {
   try {
+    // J3 (Phase 4 fix cycle 2, post-Phase-4 adversarial review): refuse any
+    // receipt that did not originate from `publishArtifact` on this store,
+    // before doing anything else — see `publish.ts`'s docblock on
+    // `PUBLICATION_RECEIPT_BRAND` for exactly what this does and does not
+    // prove.
+    for (const artifact of input.artifacts) {
+      assertReceiptIsBranded(artifact.receipt);
+    }
+
     const fs = internalArtifactFileSystem(store);
 
     const assertions: StageArtifactAssertion[] = input.artifacts.map((artifact) => ({

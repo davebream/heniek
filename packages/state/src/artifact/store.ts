@@ -33,17 +33,18 @@
  * non-symlink directory.
  *
  * **`clock` accessor removed (P6, post-Phase-3 adversarial review, fix
- * cycle 1).** `ArtifactStoreOptions.clock` is still accepted and stored —
- * every caller already threads a `Clock` through `createArtifactStore` for
- * the store handle's lifetime, and Phase 5's `recoverArtifacts` will need
- * it for the gated sweep's age comparison. What is deliberately absent is
- * an `internalArtifactClock(store)` accessor: after H1 deleted the on-open
- * recovery sweep, that accessor had zero call sites package-wide, so
- * nothing proved it returned the right value. Rather than leave an
- * untested accessor for a later builder to trust, it is not reintroduced
- * until Phase 5 adds `recoverArtifacts` — its first real consumer — along
- * with a test asserting it returns the exact `Clock` instance
- * `createArtifactStore` was given.
+ * cycle 1) — still absent after Phase 5.** `ArtifactStoreOptions.clock` is
+ * still accepted and stored — every caller already threads a `Clock`
+ * through `createArtifactStore` for the store handle's lifetime. What is
+ * deliberately absent is an `internalArtifactClock(store)` accessor: an
+ * earlier Phase 5 revision of `recoverArtifacts` (`artifact/recover.ts`)
+ * planned to use one to gate `incoming/` removal by comparing the store's
+ * `Clock` against `lstat().mtimeMs` — the Phase 4/5 fix cycle rejected that
+ * design outright (same three reasons H1 above already rejected it for the
+ * on-open sweep; see `recover.ts`'s docblock for the full argument), so
+ * `recoverArtifacts` never needed the store's `Clock` after all. With zero
+ * call sites package-wide, the accessor stays unwritten — an untested,
+ * unneeded accessor is a worse default than no accessor.
  */
 
 import { join } from "node:path";
