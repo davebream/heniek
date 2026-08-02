@@ -35,21 +35,17 @@ export const DaemonRequestAuthV1 = versioned("DaemonRequestAuth", 1, {
   mac: Type.String({ pattern: HEX_32_BYTES, description: "HMAC-SHA256, hex-encoded" }),
 });
 
-/**
- * `daemon.rotateCredential`'s result (plan-review round 1, finding M2 — the
- * prior draft shipped no versioned result contract). Carries **no** secret
- * material, only the new opaque `keyId` and when rotation happened.
- * Rotation is atomic and total: the new secret is written to the
- * `SecretStore` first, then installed; every connection — including the
- * rotating caller's — validates against the new `keyId` from the next frame
- * onward; a frame carrying the previous `keyId` after rotation receives the
- * uniform `-32001`.
+/*
+ * There is deliberately no `DaemonCredentialRotation/v1` and no
+ * `daemon.rotateCredential` method (plan-review round 2, finding 13; design
+ * `## Alternatives Considered` row S). Round 1's finding M2 had added the
+ * schema as that method's result contract; round 2 withdrew the method
+ * itself, and the contract had no other consumer. The secret is rotated
+ * once per process start, **before the socket is bound**, so no live client
+ * can observe a key change mid-session and there is nothing for a rotation
+ * RPC to report. `keyId` stays on `DaemonHelloResult/v1` so a client learns
+ * the key it is about to authenticate against from the handshake itself.
  */
-export const DaemonCredentialRotationV1 = versioned("DaemonCredentialRotation", 1, {
-  instanceId: Type.String({ minLength: 1 }),
-  keyId: Type.String({ minLength: 1 }),
-  rotatedAt: Type.String({ format: "date-time" }),
-});
 
 /**
  * `daemon.status`'s result (design C9, OR-19) — makes the lifecycle

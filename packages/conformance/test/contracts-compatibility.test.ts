@@ -49,14 +49,24 @@ const manifestPath = resolve(packageRoot, "../contracts/generated/manifest.json"
  * unpublished, unconsumed schema, not a "versioning act" in the semver
  * sense.
  *
- * Q008 raised the count 14 → 19 by **pure addition**: five new schemas —
- * `DaemonHelloResult/v1`, `DaemonRequestAuth/v1`,
- * `DaemonCredentialRotation/v1`, `DaemonStatus/v1`, and
+ * Q008 raised the count 14 → 18 by **pure addition**: four new schemas —
+ * `DaemonHelloResult/v1`, `DaemonRequestAuth/v1`, `DaemonStatus/v1`, and
  * `RunRecoveryClassification/v1` (the daemon's local-control surface and its
  * crash-recovery classification result). No existing entry was altered —
  * all fourteen pre-Q008 `sha256` values below are byte-identical to their
  * prior values. `RunRecoveryClass` is a plain tuple, not a `RunStatus`
  * value, so `Run/v1`'s pinned `be0a661b93de…` also stays untouched.
+ *
+ * A fifth daemon schema, `DaemonCredentialRotation/v1`, was briefly added
+ * and pinned (plan review round 1, finding M2) as the result contract for a
+ * `daemon.rotateCredential` method, then removed again when plan review
+ * round 2 (finding 13) withdrew that method. Removing a pinned schema is
+ * normally exactly what this gate exists to block; it is admissible here on
+ * the same zero-consumer evidence recorded above for `ArtifactRef/v1` — the
+ * schema was added and removed within this unmerged branch, `@heniek/contracts`
+ * is `"private": true` and never published, and a repo-wide grep for
+ * `DaemonCredentialRotationV1` finds no reference outside the file that
+ * declared it. Nothing ever constructed or read one.
  */
 const EXPECTED_SCHEMAS: readonly {
   readonly schemaId: string;
@@ -93,12 +103,6 @@ const EXPECTED_SCHEMAS: readonly {
     schemaVersion: 1,
     sha256: "55873424bc47a8bd87d409ef294271c8fd81d1b7a6111b92bb8501f782dba79c",
     path: "generated/CreatePullRequestInput.v1.schema.json",
-  },
-  {
-    schemaId: "heniek://contract/DaemonCredentialRotation/v1",
-    schemaVersion: 1,
-    sha256: "65e3c3e630db735f111349c152cad0689ec622ab24236d2cef24d9fd099fe38a",
-    path: "generated/DaemonCredentialRotation.v1.schema.json",
   },
   {
     schemaId: "heniek://contract/DaemonHelloResult/v1",
@@ -181,7 +185,7 @@ const EXPECTED_SCHEMAS: readonly {
 ];
 
 describe("packages/contracts generated manifest is unchanged (AC4)", () => {
-  it("manifest.json lists exactly the 19 known schemas with their recorded sha256", async () => {
+  it("manifest.json lists exactly the 18 known schemas with their recorded sha256", async () => {
     const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
     expect(manifest).toEqual({
       schemaVersion: "heniek.contracts-manifest.v1",

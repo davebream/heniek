@@ -32,12 +32,6 @@
       "path": "generated/CreatePullRequestInput.v1.schema.json"
     },
     {
-      "schemaId": "heniek://contract/DaemonCredentialRotation/v1",
-      "schemaVersion": 1,
-      "sha256": "65e3c3e630db735f111349c152cad0689ec622ab24236d2cef24d9fd099fe38a",
-      "path": "generated/DaemonCredentialRotation.v1.schema.json"
-    },
-    {
       "schemaId": "heniek://contract/DaemonHelloResult/v1",
       "schemaVersion": 1,
       "sha256": "238a2a706c495f67986ba079f6e6abe15ba80c33ec56f19de3992ac15778470b",
