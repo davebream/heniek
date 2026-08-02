@@ -469,7 +469,8 @@ async function proceedAfterClaim(
 
   deps.lockFileSystem.chmod(options.daemonSocketFile, 0o600);
   publishServingRecord(guard);
-  // The first call against the newly adopted (post-publish) identity.
+  // Publish wrote in place, so the identity is unchanged by construction;
+  // this re-check confirms the record survived the publish window.
   guard.assertStillHeld();
 
   return { kind: "acquired", handle: guard, socket, instanceId };

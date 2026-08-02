@@ -152,9 +152,9 @@ export class ClaimContended extends DaemonLifecycleError {
 }
 
 /**
- * Raised by `ClaimGuard.assertStillHeld()` when the held claim (or, after
- * `adoptIdentity`, the published record) no longer matches the identity
- * this process holds. Not itself exit-coded — this fires *after*
+ * Raised by `ClaimGuard.assertStillHeld()` when the record at the claim path
+ * no longer matches the identity this process holds — it was unlinked, or
+ * something replaced it. Not itself exit-coded — this fires *after*
  * acquisition, during the served lifetime, and the caller (the future
  * runtime composition root) decides how to react to `onLost` (design C1
  * step 9, OR-19).

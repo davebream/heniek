@@ -2,29 +2,28 @@
  * `ClaimGuard` — the `LockHandle` design C1 step 9 returns from
  * `acquireClaim` on the winning path (plan Task 2 Step 7).
  *
- * `assertStillHeld()` compares `claimHandle.stat()` (the identity captured
- * when the currently-adopted claim file handle was opened) against
- * `lockFileSystem.lstat(claimPath)` on `(dev, ino)` — catching an unlink or
- * replacement of the published record.
+ * `assertStillHeld()` compares the identity captured when the claim file
+ * handle was opened against `lockFileSystem.lstat(claimPath)` on
+ * `(dev, ino)` — catching an unlink or replacement of the published record.
  *
- * `adoptIdentity` exists because publishing the `serving` record replaces
- * the very inode the guard was constructed against: `claimIdentity` at
- * construction time pins the **original** `claiming` record's inode (from
- * `acquire.ts`'s step-2 `createExclusive`), and a `renameSync` of a temp
- * file onto `daemonPidFile` (`acquire.ts`'s publish step) installs a
- * **different** inode at that path. From that instant
- * `fstat(claimFd).ino !== lstat(daemonPidFile).ino` *permanently*, unless
- * the guard is told to re-anchor. `adoptIdentity` atomically swaps the
- * guard's internal claim handle and claim identity to the caller-supplied
- * values and closes the old handle only *after* the swap — it must be
- * called by the publish step immediately after the `rename`, before the
- * first post-publish `assertStillHeld()`.
+ * **The guard's identity never changes** (plan round-2 override 3). It is
+ * fixed at construction and holds for the process lifetime, because publish
+ * rewrites the record's fixed-width `state` field in place through the held
+ * fd rather than installing a new inode at the claim path.
  *
- * `release()` unlinks only after confirming the path still carries the
- * **current** (post-`adoptIdentity`) claim identity — this is what makes a
- * clean shutdown actually remove the published record instead of either
- * wrongly no-op'ing (comparing against the stale `claiming` identity) or
- * wrongly refusing to unlink.
+ * An earlier revision published by `rename`ing a temp file onto
+ * `daemonPidFile` and then re-anchoring the guard onto the new inode
+ * (`adoptIdentity`). That is why this file no longer has such a method: a
+ * rename makes `fstat(claimFd).ino !== lstat(daemonPidFile).ino`
+ * *permanently*, so `assertStillHeld()` — which runs on every accepted
+ * connection — would kill the daemon on its first client. Re-anchoring
+ * papered over it but left a window in which the guard vouched for an inode
+ * the process no longer held. Writing in place removes the failure mode
+ * rather than compensating for it.
+ *
+ * `release()` unlinks only after confirming the path still carries this
+ * guard's identity, so a clean shutdown removes the published record
+ * instead of either wrongly no-op'ing or wrongly refusing to unlink.
  *
  * Socket-identity comparison (design C1 step 9's second half — the
  * published record survives `unlink` of the socket path, so a same-uid
@@ -32,8 +31,8 @@
  * lands once `src/runtime/socket-server.ts` (Phase 5) gives this guard a
  * bound socket to compare against; this phase implements exactly the
  * six-method surface plan Task 2 Step 7 names — `instanceId`, `isHeld()`,
- * `assertStillHeld()`, `onLost(cb)`, `release()`, `adoptIdentity(newFd,
- * newIdentity)` — over the claim identity alone.
+ * `assertStillHeld()`, `onLost(cb)`, `release()`, `publishState(state)` —
+ * over the claim identity alone.
  */
 
 import type { ClaimFileHandle, FileStat, LockFileSystem } from "../ports.js";
