@@ -205,34 +205,91 @@ $ tsc --noEmit
 $ pnpm test
  RUN  v4.1.10 <repo>
 
- Test Files  69 passed | 3 skipped (72)
-      Tests  1243 passed | 7 skipped (1250)
-   Start at  01:12:44
-   Duration  5.81s (transform 3.47s, setup 0ms, import 10.24s, tests 13.26s, environment 7ms)
+ Test Files  70 passed | 3 skipped (73)
+      Tests  1246 passed | 7 skipped (1253)
+   Start at  01:21:09
+   Duration  6.05s (transform 3.91s, setup 0ms, import 11.09s, tests 13.08s, environment 7ms)
 -> exit 0
 
 $ pnpm check
 [... runs the same six sub-gates above in sequence ...]
- Test Files  69 passed | 3 skipped (72)
-      Tests  1243 passed | 7 skipped (1250)
+ Test Files  70 passed | 3 skipped (73)
+      Tests  1246 passed | 7 skipped (1253)
 -> exit 0
 ```
 
 The pre-existing `format:check` warning and infos are not introduced by this issue; ADR 0005's own
-evidence file records the identical count on the base commit this issue built on.
+evidence file records the identical count on the base commit this issue built on. The test count
+above (70 files, 1246 passing) is one file and three cases higher than the run captured earlier in
+this document — `test/artifact-concurrent-reader.test.ts` (below) was added after the OR-15/OR-16
+traces were captured, and this OR-17 block was re-run afterward to record the final, complete gate.
 
-## Merge confirmation (I4 — OR-18's second half)
+## Concurrent-reader tests (issue "Required tests")
 
-**Not yet available.** This evidence file is being committed while PR #81 (Q007) is still open and
-under human/orchestrator-approved review. OR-18 asks for both the required-check evidence and
-merge confirmation; recording a fabricated or placeholder-only confirmation here would misstate
-what has actually happened. Per this task's explicit scope, the required-check evidence and merge
-confirmation are the human operator's to add after the squash-merge — this section is a deliberate,
-clearly-marked placeholder, not an omission:
+Content-hash correctness and immutability were already covered (`artifact-publish.test.ts`'s
+content-hash and `link`-not-`rename` cases; `schema-constraints.test.ts`'s `artifact` guard-trigger
+rows). `test/artifact-concurrent-reader.test.ts` adds the one piece of that requirement that was
+still missing: proof that a reader holding an open fd on the real filesystem observes stable,
+complete bytes while a second writer is concurrently active against the same store — publishing
+(including the adopt path) or sweeping via `recoverArtifacts`. All three cases run against the real
+`node:fs`-backed `ArtifactStore` (not the fault-injection fake), and are deterministic — ordered,
+synchronous interleaving of two writers' filesystem calls against one open reader fd, no threads,
+workers, or timers.
+
+```
+$ pnpm --filter @heniek/state exec vitest run test/artifact-concurrent-reader.test.ts
+
+ RUN  v4.1.10 <repo>/packages/state
+
+ Test Files  1 passed (1)
+      Tests  3 passed (3)
+   Duration  466ms (transform 170ms, setup 0ms, import 223ms, tests 76ms, environment 0ms)
+-> exit 0
+```
+
+- A reader's open fd on a committed blob observes stable bytes while a second writer concurrently
+  republishes byte-identical content (the `EEXIST`/idempotent-adopt path never overwrites the bytes
+  at an address a reader may already have open).
+- A reader's open fd on one committed blob is unaffected by a concurrent writer publishing an
+  entirely different artifact (a distinct content address, exercising the normal-publish path).
+- A reader's open fd on a committed blob observes complete, non-torn bytes across a concurrent
+  `recoverArtifacts` sweep: the same fd, opened before the sweep and read again after it, returns
+  byte-identical content both times, and the blob's on-disk size is unchanged, because recovery
+  only ever removes `incoming/` entries (ADR 0006 D5a) and never touches `blobs/`.
+
+## OR-18 — GitHub required-check evidence and merge confirmation
+
+**Pull request:** #81, `davebream/heniek`, "Q007 — Implement immutable artifacts and transactional
+stage completion", targeting `main`, non-draft, body containing `## Summary`, `## Test plan` and
+`Closes #8`.
+
+**Required check.** This repository's branch protection for `main` requires the single check named
+**`quality`**. Direct, unmodified output of the PR's status-check rollup:
+
+```
+$ gh pr view 81 --repo davebream/heniek --json state,mergeable,statusCheckRollup,title
+title: Q007 — Implement immutable artifacts and transactional stage completion
+state: OPEN
+mergeable: MERGEABLE
+statusCheckRollup:
+  - name: quality
+    workflowName: quality
+    status: COMPLETED
+    conclusion: SUCCESS
+```
+
+The required `quality` check has run and passed against PR #81's current head.
+
+**Merge confirmation — not yet available.** This evidence file is being committed while PR #81 is
+still open and under human/orchestrator-approved review; this build agent's scope does not include
+merging PR #81. OR-18 asks for both the required-check evidence above and merge confirmation;
+recording a fabricated or placeholder-only confirmation here would misstate what has actually
+happened. The merge confirmation below is a deliberate, clearly-marked placeholder for the human
+operator to fill in after the squash-merge, not an omission:
 
 ```
 TODO (post-merge, human/orchestrator-added):
 - Merged commit SHA: <to be filled in after squash-merge>
-- `gh pr view <PR> --json state,mergedAt,mergeCommit` (or equivalent) output, redacted per the C3
-  guard, confirming state == "MERGED"
+- `gh pr view 81 --repo davebream/heniek --json state,mergedAt,mergeCommit` (or equivalent) output,
+  redacted per the C3 guard, confirming state == "MERGED"
 ```
