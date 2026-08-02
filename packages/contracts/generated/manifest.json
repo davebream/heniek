@@ -106,7 +106,7 @@
     {
       "schemaId": "heniek://contract/RunRecoveryClassification/v1",
       "schemaVersion": 1,
-      "sha256": "0aee0e26d3e2d4434ec97ebdf41774720829842d4cec4a1dda823d2419577b13",
+      "sha256": "bd4fe19884b2fcf1f6377f202def77a6cf7fce170349ee186bfdc7bf504b077c",
       "path": "generated/RunRecoveryClassification.v1.schema.json"
     },
     {

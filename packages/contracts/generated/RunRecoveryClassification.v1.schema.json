@@ -84,10 +84,6 @@
         {
           "const": "error",
           "type": "string"
-        },
-        {
-          "const": "absent",
-          "type": "string"
         }
       ]
     }
