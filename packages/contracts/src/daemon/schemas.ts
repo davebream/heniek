@@ -90,14 +90,20 @@ export const DaemonStatusV1 = versioned("DaemonStatus", 1, {
  * references the plain-tuple `RunRecoveryClass`, never `defineStates`; the
  * probe outcome names how the classification was reached, distinct from
  * both the classification and the projected `RunStatus`.
+ *
+ * `probeOutcome` is deliberately `"status" | "error"` with no `"absent"`
+ * member (plan review round 1, reviewer B, finding MINOR 2).
+ * `ExecutionBackend.status(runId)` (`../execution-backend/backend.js`)
+ * has no unknown-run channel and contracts define no typed not-found
+ * error, so a conforming backend can only ever produce those two
+ * outcomes; `"absent"` was reachable solely through a test helper's
+ * marker and does not belong in a versioned wire contract. A run whose
+ * status cannot be resolved classifies as `unknown` with
+ * `probeOutcome: "error"`.
  */
 export const RunRecoveryClassificationV1 = versioned("RunRecoveryClassification", 1, {
   runId: RunId,
   classification: Type.Union(RunRecoveryClass.map((value) => Type.Literal(value))),
   runStatus: RunStatus.schema,
-  probeOutcome: Type.Union([
-    Type.Literal("status"),
-    Type.Literal("error"),
-    Type.Literal("absent"),
-  ]),
+  probeOutcome: Type.Union([Type.Literal("status"), Type.Literal("error")]),
 });
