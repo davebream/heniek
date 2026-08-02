@@ -203,7 +203,9 @@ describe("recoverArtifacts — container discipline (mirrors store.ts's H2)", ()
 describe("recoverArtifacts — the no-loss proof is pinned, not merely asserted in prose", () => {
   it("SQLite itself refuses a committed row whose relative_path names an incoming/ path (migration 4's CHECK)", () => {
     const handle = internalHandle(db);
-    const sequenceRow = internalHandle(db).prepare("SELECT MAX(sequence) AS s FROM state_event").get();
+    const sequenceRow = internalHandle(db)
+      .prepare("SELECT MAX(sequence) AS s FROM state_event")
+      .get();
     const sequence = Number(sequenceRow?.s ?? 0);
     let caught: unknown;
     try {
