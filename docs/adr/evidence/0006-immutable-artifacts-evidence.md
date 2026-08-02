@@ -220,9 +220,10 @@ $ pnpm check
 
 The pre-existing `format:check` warning and infos are not introduced by this issue; ADR 0005's own
 evidence file records the identical count on the base commit this issue built on. The test count
-above (70 files, 1246 passing) is one file and three cases higher than the run captured earlier in
-this document — `test/artifact-concurrent-reader.test.ts` (below) was added after the OR-15/OR-16
-traces were captured, and this OR-17 block was re-run afterward to record the final, complete gate.
+above (70 files, 1246 passing) includes `test/artifact-concurrent-reader.test.ts` (below), which
+was added after the OR-15 and OR-16 traces were captured. Those two traces are single-file runs,
+so their counts are not comparable to this whole-suite total; this OR-17 block was re-run after
+the concurrent-reader file landed so that it records the final, complete gate.
 
 ## Concurrent-reader tests (issue "Required tests")
 
