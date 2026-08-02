@@ -11,7 +11,9 @@
 
 import { createHash } from "node:crypto";
 import { internalHandle, type StateDatabase } from "../database/open.js";
-import { type JsonValue, stringifyCanonical } from "../json.js";
+import { toSafeInteger, toText } from "../database/pragma.js";
+import { StateDatabaseCorruptionError } from "../errors.js";
+import { type JsonValue, parseJsonValue, stringifyCanonical } from "../json.js";
 import {
   type CodebaseRow,
   type RepositoryRow,
@@ -38,11 +40,67 @@ export type CodebaseState = CodebaseRow;
 export type RepositoryState = RepositoryRow;
 export type WorkspaceState = WorkspaceRow;
 
+/**
+ * The `artifact` row (design D11, D11a; plan Task 2.2). Immutable once
+ * written — `revision` is always `1`, and the table carries no
+ * `*_causal_update` trigger to guard a second revision, because there is
+ * never a second one. Keyed by `artifactId`.
+ */
+export interface ArtifactState {
+  readonly artifactId: string;
+  readonly runId: string;
+  readonly stageId: string;
+  readonly name: string;
+  readonly contentHash: string;
+  readonly byteLength: number;
+  readonly mediaType: string;
+  readonly contentSchemaId: string;
+  readonly producer: string;
+  readonly sourceLineage: readonly string[];
+  readonly relativePath: string;
+  readonly createdAt: string;
+  readonly revision: number;
+  readonly lastEventSequence: number;
+}
+
+/**
+ * The `stage_artifact_alias` row — the §16.2 "active artifact alias". The
+ * one deliberately mutable row in the design: a retry re-points `artifactId`
+ * to a new, still-immutable artifact rather than mutating it. Keyed by
+ * `stageArtifactAliasKey(runId, stageId, name)`, since the table's primary
+ * key is the composite `(run_id, stage_id, name)`.
+ */
+export interface StageArtifactAliasState {
+  readonly runId: string;
+  readonly stageId: string;
+  readonly name: string;
+  readonly artifactId: string;
+  readonly revision: number;
+  readonly lastEventSequence: number;
+  readonly updatedAt: string;
+}
+
+/**
+ * `stage_artifact_alias`'s primary key is the composite `(run_id, stage_id,
+ * name)`, but `ProjectionState`'s per-table maps are all `Record<string, …>`
+ * (design precedent: every other table has a single-column key). U+0000
+ * never appears in any of the three constituent ids (they are caller-chosen
+ * identifiers, never raw artifact bytes), so joining on it cannot collide
+ * two distinct triples onto the same string the way a printable delimiter
+ * like `:` could if an id ever contained one.
+ */
+export function stageArtifactAliasKey(runId: string, stageId: string, name: string): string {
+  return `${runId}\u0000${stageId}\u0000${name}`;
+}
+
 export interface ProjectionState {
   readonly runs: Readonly<Record<string, RunState>>;
   readonly codebases: Readonly<Record<string, CodebaseState>>;
   readonly repositories: Readonly<Record<string, RepositoryState>>;
   readonly workspaces: Readonly<Record<string, WorkspaceState>>;
+  readonly artifacts: Readonly<Record<string, ArtifactState>>;
+  /** Keyed by `stageArtifactAliasKey`. */
+  readonly stageArtifactAliases: Readonly<Record<string, StageArtifactAliasState>>;
 }
 
 export const EMPTY_PROJECTION_STATE: ProjectionState = Object.freeze({
@@ -50,9 +108,17 @@ export const EMPTY_PROJECTION_STATE: ProjectionState = Object.freeze({
   codebases: Object.freeze({}),
   repositories: Object.freeze({}),
   workspaces: Object.freeze({}),
+  artifacts: Object.freeze({}),
+  stageArtifactAliases: Object.freeze({}),
 });
 
-export type ProjectionTable = "codebase" | "repository" | "run_projection" | "workspace";
+export type ProjectionTable =
+  | "artifact"
+  | "codebase"
+  | "repository"
+  | "run_projection"
+  | "stage_artifact_alias"
+  | "workspace";
 
 export interface ProjectionWrite {
   readonly table: ProjectionTable;
@@ -65,16 +131,20 @@ export interface ProjectionWrite {
 
 /**
  * Alphabetical, and load-bearing rather than incidental: `repository` and
- * `workspace` both carry a foreign key to `codebase`, and emitting writes in
- * this order means a parent row is always inserted before any child that
- * cites it. (The six-event vocabulary never touches two tables in one event,
- * so this ordering is currently belt-and-braces — but it is the property a
- * future multi-table event would silently need.)
+ * `workspace` both carry a foreign key to `codebase`, `stage_artifact_alias`
+ * carries one to `artifact`, and emitting writes in this order means a
+ * parent row is always inserted before any child that cites it.
+ * `stage.completed` (design D4) is the first event to touch two tables in
+ * one commit — `artifact` sorts before `stage_artifact_alias`, which is
+ * exactly the ordering Phase 4's `primaryTable` fix (Task 4.1) exists to
+ * override for `CommitReport.revision`.
  */
 const TABLE_ORDER: readonly ProjectionTable[] = [
+  "artifact",
   "codebase",
   "repository",
   "run_projection",
+  "stage_artifact_alias",
   "workspace",
 ];
 
@@ -119,8 +189,41 @@ function workspaceRow(state: WorkspaceState): Record<string, string | number | n
   };
 }
 
+function artifactRow(state: ArtifactState): Record<string, string | number | null> {
+  return {
+    artifact_id: state.artifactId,
+    run_id: state.runId,
+    stage_id: state.stageId,
+    name: state.name,
+    content_hash: state.contentHash,
+    byte_length: state.byteLength,
+    media_type: state.mediaType,
+    content_schema_id: state.contentSchemaId,
+    producer: state.producer,
+    source_lineage: stringifyCanonical(state.sourceLineage),
+    relative_path: state.relativePath,
+    created_at: state.createdAt,
+    revision: state.revision,
+    last_event_sequence: state.lastEventSequence,
+  };
+}
+
+function stageArtifactAliasRow(
+  state: StageArtifactAliasState,
+): Record<string, string | number | null> {
+  return {
+    run_id: state.runId,
+    stage_id: state.stageId,
+    name: state.name,
+    artifact_id: state.artifactId,
+    revision: state.revision,
+    last_event_sequence: state.lastEventSequence,
+    updated_at: state.updatedAt,
+  };
+}
+
 /**
- * One descriptor per table so `diffProjectionState` walks all four
+ * One descriptor per table so `diffProjectionState` walks all six
  * identically instead of repeating the same before/after comparison with
  * different field names — a shape that has historically drifted (one table
  * gaining a check the others lack) exactly the way MIN-11 warns about.
@@ -155,6 +258,26 @@ const WORKSPACE_VIEW: TableView<WorkspaceState> = {
   select: (state) => state.workspaces,
   revisionOf: (row) => row.revision,
   toRow: workspaceRow,
+};
+/**
+ * `revisionOf` always returns the row's own `revision`, which is always `1`
+ * (an artifact row is written once and never diffed against an earlier
+ * revision of itself — `diffTable` only ever takes this view's INSERT
+ * branch). Not special-cased away: keeping the same `TableView<T>` shape
+ * every other table uses is what lets `diffProjectionState` walk all six
+ * tables identically.
+ */
+const ARTIFACT_VIEW: TableView<ArtifactState> = {
+  table: "artifact",
+  select: (state) => state.artifacts,
+  revisionOf: (row) => row.revision,
+  toRow: artifactRow,
+};
+const STAGE_ARTIFACT_ALIAS_VIEW: TableView<StageArtifactAliasState> = {
+  table: "stage_artifact_alias",
+  select: (state) => state.stageArtifactAliases,
+  revisionOf: (row) => row.revision,
+  toRow: stageArtifactAliasRow,
 };
 
 function diffTable<T>(
@@ -212,9 +335,11 @@ export function diffProjectionState(
   after: ProjectionState,
 ): readonly ProjectionWrite[] {
   const byTable = new Map<ProjectionTable, readonly ProjectionWrite[]>([
+    [ARTIFACT_VIEW.table, diffTable(ARTIFACT_VIEW, before, after)],
     [CODEBASE_VIEW.table, diffTable(CODEBASE_VIEW, before, after)],
     [REPOSITORY_VIEW.table, diffTable(REPOSITORY_VIEW, before, after)],
     [RUN_VIEW.table, diffTable(RUN_VIEW, before, after)],
+    [STAGE_ARTIFACT_ALIAS_VIEW.table, diffTable(STAGE_ARTIFACT_ALIAS_VIEW, before, after)],
     [WORKSPACE_VIEW.table, diffTable(WORKSPACE_VIEW, before, after)],
   ]);
   return TABLE_ORDER.flatMap((table) => byTable.get(table) ?? []);
@@ -280,7 +405,44 @@ export function projectionStateToJson(state: ProjectionState): JsonValue {
       };
     }
   }
-  return { codebases, repositories, runs, workspaces };
+  const artifacts: Record<string, JsonValue> = {};
+  for (const key of Object.keys(state.artifacts).sort()) {
+    const row = state.artifacts[key];
+    if (row !== undefined) {
+      artifacts[key] = {
+        artifactId: row.artifactId,
+        runId: row.runId,
+        stageId: row.stageId,
+        name: row.name,
+        contentHash: row.contentHash,
+        byteLength: row.byteLength,
+        mediaType: row.mediaType,
+        contentSchemaId: row.contentSchemaId,
+        producer: row.producer,
+        sourceLineage: [...row.sourceLineage],
+        relativePath: row.relativePath,
+        createdAt: row.createdAt,
+        revision: row.revision,
+        lastEventSequence: row.lastEventSequence,
+      };
+    }
+  }
+  const stageArtifactAliases: Record<string, JsonValue> = {};
+  for (const key of Object.keys(state.stageArtifactAliases).sort()) {
+    const row = state.stageArtifactAliases[key];
+    if (row !== undefined) {
+      stageArtifactAliases[key] = {
+        runId: row.runId,
+        stageId: row.stageId,
+        name: row.name,
+        artifactId: row.artifactId,
+        revision: row.revision,
+        lastEventSequence: row.lastEventSequence,
+        updatedAt: row.updatedAt,
+      };
+    }
+  }
+  return { artifacts, codebases, repositories, runs, stageArtifactAliases, workspaces };
 }
 
 /** sha256 over the canonical JSON — reproducible across hosts and processes. */
@@ -288,6 +450,69 @@ export function projectionDigest(state: ProjectionState): string {
   return createHash("sha256")
     .update(stringifyCanonical(projectionStateToJson(state)), "utf8")
     .digest("hex");
+}
+
+const ARTIFACT_COLUMNS =
+  "artifact_id, run_id, stage_id, name, content_hash, byte_length, media_type," +
+  " content_schema_id, producer, source_lineage, relative_path, created_at, revision," +
+  " last_event_sequence";
+
+const STAGE_ARTIFACT_ALIAS_COLUMNS =
+  "run_id, stage_id, name, artifact_id, revision, last_event_sequence, updated_at";
+
+/**
+ * `source_lineage` narrows via `parseJsonValue` (the one JSON-parsing entry
+ * point every raw payload/column goes through in this package) and then a
+ * shallow element check — the migration's `CHECK (json_valid(source_lineage))`
+ * only proves the column is *some* JSON value, not that every element is a
+ * string.
+ */
+function toArtifactIdArray(raw: unknown, what: string): readonly string[] {
+  const text = toText(raw, what);
+  const parsed = parseJsonValue(text, what);
+  if (!Array.isArray(parsed)) {
+    throw new StateDatabaseCorruptionError(`${what} is not a JSON array`);
+  }
+  return parsed.map((entry, index) => {
+    if (typeof entry !== "string") {
+      throw new StateDatabaseCorruptionError(`${what}[${index}] is not a string`);
+    }
+    return entry;
+  });
+}
+
+function toArtifactRow(raw: Record<string, unknown>): ArtifactState {
+  return {
+    artifactId: toText(raw.artifact_id, "artifact.artifact_id"),
+    runId: toText(raw.run_id, "artifact.run_id"),
+    stageId: toText(raw.stage_id, "artifact.stage_id"),
+    name: toText(raw.name, "artifact.name"),
+    contentHash: toText(raw.content_hash, "artifact.content_hash"),
+    byteLength: toSafeInteger(raw.byte_length, "artifact.byte_length"),
+    mediaType: toText(raw.media_type, "artifact.media_type"),
+    contentSchemaId: toText(raw.content_schema_id, "artifact.content_schema_id"),
+    producer: toText(raw.producer, "artifact.producer"),
+    sourceLineage: toArtifactIdArray(raw.source_lineage, "artifact.source_lineage"),
+    relativePath: toText(raw.relative_path, "artifact.relative_path"),
+    createdAt: toText(raw.created_at, "artifact.created_at"),
+    revision: toSafeInteger(raw.revision, "artifact.revision"),
+    lastEventSequence: toSafeInteger(raw.last_event_sequence, "artifact.last_event_sequence"),
+  };
+}
+
+function toStageArtifactAliasRow(raw: Record<string, unknown>): StageArtifactAliasState {
+  return {
+    runId: toText(raw.run_id, "stage_artifact_alias.run_id"),
+    stageId: toText(raw.stage_id, "stage_artifact_alias.stage_id"),
+    name: toText(raw.name, "stage_artifact_alias.name"),
+    artifactId: toText(raw.artifact_id, "stage_artifact_alias.artifact_id"),
+    revision: toSafeInteger(raw.revision, "stage_artifact_alias.revision"),
+    lastEventSequence: toSafeInteger(
+      raw.last_event_sequence,
+      "stage_artifact_alias.last_event_sequence",
+    ),
+    updatedAt: toText(raw.updated_at, "stage_artifact_alias.updated_at"),
+  };
 }
 
 /**
@@ -335,7 +560,31 @@ export function loadStoredProjectionState(db: StateDatabase): ProjectionState {
     const row = toWorkspaceRow(raw);
     workspaces[row.workspaceId] = row;
   }
-  return { codebases, repositories, runs, workspaces };
+  const artifacts: Record<string, ArtifactState> = {};
+  for (const raw of handle
+    .prepare(`SELECT ${ARTIFACT_COLUMNS} FROM artifact ORDER BY artifact_id`)
+    .all()) {
+    const row = toArtifactRow(raw);
+    artifacts[row.artifactId] = row;
+  }
+  const stageArtifactAliases: Record<string, StageArtifactAliasState> = {};
+  for (const raw of handle
+    .prepare(
+      `SELECT ${STAGE_ARTIFACT_ALIAS_COLUMNS} FROM stage_artifact_alias` +
+        " ORDER BY run_id, stage_id, name",
+    )
+    .all()) {
+    const row = toStageArtifactAliasRow(raw);
+    stageArtifactAliases[stageArtifactAliasKey(row.runId, row.stageId, row.name)] = row;
+  }
+  return { artifacts, codebases, repositories, runs, stageArtifactAliases, workspaces };
+}
+
+/** One `(runId, stageId, name)` triple — `stage_artifact_alias`'s composite primary key. */
+export interface StageArtifactAliasScopeKey {
+  readonly runId: string;
+  readonly stageId: string;
+  readonly name: string;
 }
 
 export interface ProjectionScope {
@@ -343,6 +592,9 @@ export interface ProjectionScope {
   readonly codebases: readonly string[];
   readonly repositories: readonly string[];
   readonly workspaces: readonly string[];
+  /** `artifactId`s. */
+  readonly artifacts: readonly string[];
+  readonly stageArtifactAliases: readonly StageArtifactAliasScopeKey[];
 }
 
 /**
@@ -402,5 +654,27 @@ export function loadScopedProjectionState(
       workspaces[key] = toWorkspaceRow(raw);
     }
   }
-  return { codebases, repositories, runs, workspaces };
+  const artifacts: Record<string, ArtifactState> = {};
+  const artifactStatement = handle.prepare(
+    `SELECT ${ARTIFACT_COLUMNS} FROM artifact WHERE artifact_id = ?`,
+  );
+  for (const key of scope.artifacts) {
+    const raw = artifactStatement.get(key);
+    if (raw !== undefined) {
+      artifacts[key] = toArtifactRow(raw);
+    }
+  }
+  const stageArtifactAliases: Record<string, StageArtifactAliasState> = {};
+  const stageArtifactAliasStatement = handle.prepare(
+    `SELECT ${STAGE_ARTIFACT_ALIAS_COLUMNS} FROM stage_artifact_alias` +
+      " WHERE run_id = ? AND stage_id = ? AND name = ?",
+  );
+  for (const scopeKey of scope.stageArtifactAliases) {
+    const raw = stageArtifactAliasStatement.get(scopeKey.runId, scopeKey.stageId, scopeKey.name);
+    if (raw !== undefined) {
+      const key = stageArtifactAliasKey(scopeKey.runId, scopeKey.stageId, scopeKey.name);
+      stageArtifactAliases[key] = toStageArtifactAliasRow(raw);
+    }
+  }
+  return { artifacts, codebases, repositories, runs, stageArtifactAliases, workspaces };
 }

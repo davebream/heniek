@@ -15,7 +15,13 @@ import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import {
+  commitStateChange,
+  commitStateChangeInternal,
+  type StageArtifactAssertion,
+} from "../src/command/commit.js";
 import { internalHandle, openStateDatabase, type StateDatabase } from "../src/database/open.js";
+import { StageAssertionFailedError } from "../src/errors.js";
 import { runMigrations } from "../src/migrations/migrate.js";
 import { createDeterministicIds, createFakeClock } from "./helpers/determinism.js";
 import { makeTempDbPath } from "./helpers/temp-db.js";
@@ -199,5 +205,141 @@ describe("R-V6 — opening first and chmod-ing afterwards leaves the sidecars ex
     for (const candidate of [path, `${path}-wal`, `${path}-shm`]) {
       expect(statSync(candidate).mode & 0o777).toBe(0o600);
     }
+  });
+});
+
+function registerCodebaseAndRun(): void {
+  commitStateChange(db, { type: "codebase.registered", payload: { codebaseId: "cb-1" } });
+  commitStateChange(db, {
+    runId: "run-1",
+    type: "run.created",
+    payload: { runId: "run-1", codebaseId: "cb-1" },
+  });
+}
+
+function stageArtifactRef(artifactId: string, name: string, hashByte: string) {
+  return {
+    artifactId,
+    name,
+    contentHash: hashByte.repeat(64),
+    byteLength: 1,
+    mediaType: "text/markdown",
+    contentSchemaId: "heniek://contract/Report/v1",
+    producer: "reviewer",
+    sourceLineage: [] as readonly string[],
+    path: `blobs/sha256/${hashByte.repeat(64)}`,
+  };
+}
+
+function noop(relativePath: string): StageArtifactAssertion {
+  return { relativePath, assert: () => {} };
+}
+
+describe("R-Q007-P4a — reported[0] reports whichever table TABLE_ORDER sorts first, not the row the command advanced (design open item, plan Task 4.1)", () => {
+  /*
+   * `stage.completed` is the first (and, in this vocabulary, only) command
+   * that writes two tables in one transaction — a new `artifact` row plus
+   * the `stage_artifact_alias` row that re-points a name at it.
+   * `TABLE_ORDER` (`projection/state.ts`) is alphabetical, so `artifact`
+   * always sorts before `stage_artifact_alias`. A naive `CommitReport.revision
+   * = reported[0]?.revision` therefore reports the *new artifact row's*
+   * revision — always `1` — even when the caller actually wants to know how
+   * far the *alias* has advanced. Both facts are pinned together, exactly as
+   * R-V9 above pins both the defective and the corrected SQL: the
+   * `primaryTable`-omitted call is not itself wrong (it is documented,
+   * unchanged pre-Q007 behaviour), but a caller who mistakes it for "the
+   * alias's revision" would be silently misled.
+   */
+  it("primaryTable omitted: revision is the artifact row's (1), not the alias's (which has since advanced to 2)", () => {
+    registerCodebaseAndRun();
+    const first = stageArtifactRef("art-1", "report.md", "a");
+    commitStateChangeInternal(
+      db,
+      {
+        runId: "run-1",
+        type: "stage.completed",
+        payload: { runId: "run-1", stageId: "stage-1", artifacts: [first] },
+      },
+      { artifactRelativePaths: [first.path], assertions: [noop(first.path)] },
+    );
+    const second = stageArtifactRef("art-2", "report.md", "b");
+    const report = commitStateChangeInternal(
+      db,
+      {
+        runId: "run-1",
+        type: "stage.completed",
+        payload: { runId: "run-1", stageId: "stage-1", artifacts: [second] },
+      },
+      { artifactRelativePaths: [second.path], assertions: [noop(second.path)] },
+    );
+    expect(report.writes.find((write) => write.table === "stage_artifact_alias")?.revision).toBe(2);
+    expect(report.revision).toBe(1); // the (documented) pre-Q007 default, not the alias's real revision
+  });
+
+  it("primaryTable: 'stage_artifact_alias' reports the alias's real revision (2) — this is what completeStage always passes", () => {
+    registerCodebaseAndRun();
+    const first = stageArtifactRef("art-1", "report.md", "a");
+    commitStateChangeInternal(
+      db,
+      {
+        runId: "run-1",
+        type: "stage.completed",
+        payload: { runId: "run-1", stageId: "stage-1", artifacts: [first] },
+      },
+      {
+        primaryTable: "stage_artifact_alias",
+        artifactRelativePaths: [first.path],
+        assertions: [noop(first.path)],
+      },
+    );
+    const second = stageArtifactRef("art-2", "report.md", "b");
+    const report = commitStateChangeInternal(
+      db,
+      {
+        runId: "run-1",
+        type: "stage.completed",
+        payload: { runId: "run-1", stageId: "stage-1", artifacts: [second] },
+      },
+      {
+        primaryTable: "stage_artifact_alias",
+        artifactRelativePaths: [second.path],
+        assertions: [noop(second.path)],
+      },
+    );
+    expect(report.revision).toBe(2);
+  });
+});
+
+describe("R-Q007-P4b — a plain commitStateChange call can mint an artifact row for a blob never written to disk (AC-1)", () => {
+  /*
+   * Before this phase, `StateCommand.type` is an unconstrained `string` and
+   * `artifact`/`stage_artifact_alias` are ordinary projection tables like
+   * any other — nothing stopped a caller from committing an `artifact.
+   * published` or `stage.completed` event whose `relativePath` passes the
+   * migration-4 `CHECK` (`'blobs/sha256/' || content_hash`) while naming a
+   * blob address `publishArtifact` never wrote. The fix
+   * (`assertGuardedWritesAreVerified`, `command/commit.ts`) refuses any
+   * write into either table unless the caller supplies a verified
+   * assertion for its relativePath — keyed on the TABLE a write touches,
+   * never on `event.type`, so the refusal is structural rather than a
+   * blacklist a future seventh event type could reopen. See
+   * `command.test.ts`'s "AC-1" describe block for the full 8-event-type
+   * enumeration; this entry pins the specific minimal repro.
+   */
+  it("commitStateChange refuses to mint an artifact row for a relativePath nothing ever published", () => {
+    registerCodebaseAndRun();
+    const forged = stageArtifactRef("art-forged", "forged.md", "f");
+    let caught: unknown;
+    try {
+      commitStateChange(db, {
+        runId: "run-1",
+        type: "artifact.published",
+        payload: { runId: "run-1", stageId: "stage-1", ...forged },
+      });
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(StageAssertionFailedError);
+    expect(internalHandle(db).prepare("SELECT COUNT(*) AS n FROM artifact").get()?.n).toBe(0);
   });
 });

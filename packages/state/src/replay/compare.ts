@@ -26,13 +26,15 @@
 
 import { type SchemaFingerprint, schemaFingerprint } from "../database/fingerprint.js";
 import type { StateDatabase } from "../database/open.js";
-import type { JsonValue } from "../json.js";
+import { type JsonValue, stringifyCanonical } from "../json.js";
 import type {
+  ArtifactState,
   CodebaseState,
   ProjectionState,
   ProjectionTable,
   RepositoryState,
   RunState,
+  StageArtifactAliasState,
   WorkspaceState,
 } from "../projection/state.js";
 import { loadStoredProjectionState, projectionDigest } from "../projection/state.js";
@@ -126,6 +128,41 @@ const WORKSPACE_VIEW: CompareView<WorkspaceState> = {
   }),
 };
 
+const ARTIFACT_VIEW: CompareView<ArtifactState> = {
+  table: "artifact",
+  select: (state) => state.artifacts,
+  toJson: (row) => ({
+    artifactId: row.artifactId,
+    runId: row.runId,
+    stageId: row.stageId,
+    name: row.name,
+    contentHash: row.contentHash,
+    byteLength: row.byteLength,
+    mediaType: row.mediaType,
+    contentSchemaId: row.contentSchemaId,
+    producer: row.producer,
+    sourceLineage: [...row.sourceLineage],
+    relativePath: row.relativePath,
+    createdAt: row.createdAt,
+    revision: row.revision,
+    lastEventSequence: row.lastEventSequence,
+  }),
+};
+
+const STAGE_ARTIFACT_ALIAS_VIEW: CompareView<StageArtifactAliasState> = {
+  table: "stage_artifact_alias",
+  select: (state) => state.stageArtifactAliases,
+  toJson: (row) => ({
+    runId: row.runId,
+    stageId: row.stageId,
+    name: row.name,
+    artifactId: row.artifactId,
+    revision: row.revision,
+    lastEventSequence: row.lastEventSequence,
+    updatedAt: row.updatedAt,
+  }),
+};
+
 function compareTable<T>(
   view: CompareView<T>,
   stored: ProjectionState,
@@ -156,7 +193,14 @@ function compareTable<T>(
     for (const field of Object.keys(storedJson).sort()) {
       const left = storedJson[field] ?? null;
       const right = replayedJson[field] ?? null;
-      if (left !== right) {
+      // `!==` alone is reference (in)equality — correct for every scalar
+      // field every table carried before Q007, but `artifact.sourceLineage`
+      // is this package's first array-valued projection field: two
+      // freshly-built arrays holding identical elements are never `===`,
+      // which would report a spurious divergence on every converged replay.
+      // The canonical-JSON string comparison is exact for scalars too, so
+      // this subsumes the old check rather than special-casing arrays.
+      if (stringifyCanonical(left) !== stringifyCanonical(right)) {
         divergences.push({ table: view.table, key, field, stored: left, replayed: right });
       }
     }
@@ -187,9 +231,11 @@ export function compareProjectionToReplay(
   const stored = loadStoredProjectionState(db);
 
   const divergences = [
+    ...compareTable(ARTIFACT_VIEW, stored, replay.state),
     ...compareTable(CODEBASE_VIEW, stored, replay.state),
     ...compareTable(REPOSITORY_VIEW, stored, replay.state),
     ...compareTable(RUN_VIEW, stored, replay.state),
+    ...compareTable(STAGE_ARTIFACT_ALIAS_VIEW, stored, replay.state),
     ...compareTable(WORKSPACE_VIEW, stored, replay.state),
   ].sort((left, right) => {
     if (left.table !== right.table) {

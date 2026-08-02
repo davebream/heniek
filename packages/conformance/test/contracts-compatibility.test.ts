@@ -18,6 +18,36 @@ const manifestPath = resolve(packageRoot, "../contracts/generated/manifest.json"
  * act* the gate exists to force; what makes the change compatible rather than
  * breaking is that the other twelve entries below are byte-identical to their
  * previous values, so no existing consumer's payload changed shape.
+ *
+ * General rule: an already-pinned schema digest may change in place —
+ * without bumping to a new version — only while that schema's consumer set
+ * is provably empty, and the proof must be recorded with the change. Bumping
+ * a digest for a schema with even one real consumer would silently change
+ * the shape of a payload someone already depends on; that is exactly the
+ * breaking change this gate exists to catch.
+ *
+ * Q007 updated the `ArtifactRef/v1` sha256 twice (most recently to
+ * `60de8785…`) to add six new REQUIRED properties (`name`, `byteLength`,
+ * `mediaType`, `contentSchemaId`, `producer`, `sourceLineage`) and to
+ * pattern-constrain `contentSchemaId`. Adding required properties to a
+ * closed (`additionalProperties: false`) schema, and further constraining
+ * an existing string field, are both breaking changes under normal semver:
+ * any real payload built against the old shape would now fail validation.
+ * This in-place edit is deliberately chosen over minting `ArtifactRef/v2`
+ * only because there is nothing to migrate: `ArtifactRefV1` is a
+ * pre-release, zero-consumer schema. Evidence: (1) `packages/contracts` is
+ * `"private": true` (`packages/contracts/package.json`) — it is never
+ * published, so there is no external consumer by construction; (2) a
+ * repo-wide grep for the `ArtifactRefV1` symbol
+ * (`grep -rn "ArtifactRefV1" --include="*.ts" packages | grep -v
+ * packages/contracts`) finds zero references outside `packages/contracts`
+ * itself (the only hit is this file's own docblock) — no in-repo production
+ * code constructs or reads an `ArtifactRefV1` payload yet, and no `artifact`
+ * table exists to hold one. The other thirteen entries stay byte-identical
+ * and the schema count stays 14 — this pin update is itself the deliberate,
+ * evidence-backed act of accepting a breaking change against an
+ * unpublished, unconsumed schema, not a "versioning act" in the semver
+ * sense.
  */
 const EXPECTED_SCHEMAS: readonly {
   readonly schemaId: string;
@@ -34,7 +64,7 @@ const EXPECTED_SCHEMAS: readonly {
   {
     schemaId: "heniek://contract/ArtifactRef/v1",
     schemaVersion: 1,
-    sha256: "d0c7906442ee7ffc50a7459ada8c2ed02801850b80bf0f00c264263e3a98d7d2",
+    sha256: "60de8785feb0de6a90fc0de55fcead8dc060ddf5fa46aaa4980ba2d2ad0a2410",
     path: "generated/ArtifactRef.v1.schema.json",
   },
   {

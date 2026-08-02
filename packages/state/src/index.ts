@@ -1,4 +1,25 @@
-export { type CommitReport, commitStateChange, type StateCommand } from "./command/commit.js";
+export {
+  type CompleteStageArtifactInput,
+  type CompleteStageInput,
+  completeStage,
+} from "./artifact/complete-stage.js";
+export { type ArtifactInventoryRow, listArtifacts } from "./artifact/inventory.js";
+export {
+  type ArtifactPublicationReceipt,
+  type PublishArtifactInput,
+  publishArtifact,
+} from "./artifact/publish.js";
+export { type RecoverArtifactsReport, recoverArtifacts } from "./artifact/recover.js";
+export {
+  type ArtifactStore,
+  type ArtifactStoreOptions,
+  createArtifactStore,
+} from "./artifact/store.js";
+export {
+  type CommitReport,
+  commitStateChange,
+  type StateCommand,
+} from "./command/commit.js";
 export { type SchemaFingerprint, schemaFingerprint } from "./database/fingerprint.js";
 export {
   type OpenStateDatabaseOptions,
@@ -7,12 +28,18 @@ export {
 } from "./database/open.js";
 export type { Clock, IdGenerator } from "./determinism.js";
 export {
+  ArtifactCountExceededError,
+  ArtifactDigestMismatchError,
+  ArtifactQuarantinedError,
+  ArtifactRecoveryError,
+  ArtifactValidationError,
   CausalityViolationError,
   InsecureStateDatabaseError,
   MigrationError,
   PayloadTooLargeError,
   ReducerError,
   SchemaVersionError,
+  StageAssertionFailedError,
   StateDatabaseCorruptionError,
   StateStoreError,
 } from "./errors.js";
@@ -48,6 +75,7 @@ export {
   readRunProjection,
 } from "./projection/run.js";
 export {
+  type ArtifactState,
   type CodebaseState,
   EMPTY_PROJECTION_STATE,
   type ProjectionState,
@@ -55,6 +83,8 @@ export {
   projectionDigest,
   type RepositoryState,
   type RunState,
+  type StageArtifactAliasState,
+  stageArtifactAliasKey,
   type WorkspaceState,
 } from "./projection/state.js";
 export {

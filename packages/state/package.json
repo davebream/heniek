@@ -13,6 +13,7 @@
     "@heniek/contracts": "workspace:*"
   },
   "devDependencies": {
+    "@sinclair/typebox": "catalog:",
     "tsx": "catalog:",
     "vitest": "catalog:"
   }

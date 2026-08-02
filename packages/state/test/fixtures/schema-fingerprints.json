@@ -14,5 +14,9 @@
   "3": {
     "structural": "1e4e39af945e0eaf7d5ebf07339b7463f0eb570d4e7289baef6bd154dfde0349",
     "declared": "8be5e2a27ff92c9adca800ec1014d43442fba8995c378989cc5b8a1e3839f062"
+  },
+  "4": {
+    "structural": "53e5f214ab9b4e417a62c50839b2377f067ac9876b0cb243fdfe219edad98800",
+    "declared": "2217ee9dbfda4b68091e323783d26048ef42ef8a4c8bfdbd7a50cb6173f4d2c2"
   }
 }

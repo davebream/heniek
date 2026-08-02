@@ -10,7 +10,7 @@
     {
       "schemaId": "heniek://contract/ArtifactRef/v1",
       "schemaVersion": 1,
-      "sha256": "d0c7906442ee7ffc50a7459ada8c2ed02801850b80bf0f00c264263e3a98d7d2",
+      "sha256": "60de8785feb0de6a90fc0de55fcead8dc060ddf5fa46aaa4980ba2d2ad0a2410",
       "path": "generated/ArtifactRef.v1.schema.json"
     },
     {

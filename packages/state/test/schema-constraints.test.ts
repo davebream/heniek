@@ -37,6 +37,7 @@ function sqliteNodeCode(error: unknown): string | undefined {
 
 const SQLITE_CONSTRAINT_TRIGGER = 1811;
 const SQLITE_CONSTRAINT_FOREIGNKEY = 787;
+const SQLITE_CONSTRAINT_CHECK = 275;
 
 let directory: string;
 let path: string;
@@ -323,6 +324,56 @@ function seedCodebase(sequence: number, id = "cb-parent"): void {
     .run(id, sequence, TIMESTAMP);
 }
 
+const ARTIFACT_CONTENT_HASH = "a".repeat(64);
+
+/**
+ * `artifact.run_id REFERENCES run_projection(run_id)` (issue #8, Phase 2 fix
+ * cycle G1, finding F4): every `seedArtifact` row below cites the same fixed
+ * `'run-fixed'` run id (mirroring `repository`/`workspace`'s `'cb-parent'`
+ * precedent above), so this seeds that one parent row. Idempotent — guarded
+ * by a `SELECT` first — because a single test (the "second INSERT for a new
+ * artifact_id succeeds" case) calls `seedArtifact` twice against the same
+ * fixed run id, and `run_projection_first_revision` would abort a second raw
+ * INSERT for a row that already exists.
+ */
+function seedRun(sequence: number, id = "run-fixed"): void {
+  const handle = internalHandle(db);
+  const existing = handle.prepare("SELECT 1 FROM run_projection WHERE run_id = ?").get(id);
+  if (existing !== undefined) {
+    return;
+  }
+  handle
+    .prepare(
+      "INSERT INTO run_projection (run_id, status, revision, last_event_sequence, codebase_id, updated_at)" +
+        " VALUES (?, 'queued', 1, ?, 'cb-run-parent', ?)",
+    )
+    .run(id, sequence, TIMESTAMP);
+}
+
+/**
+ * `stage_artifact_alias`'s FK parent (Task 2.3): a single, fixed `artifact`
+ * row every alias-table case below points at. `run_id`/`stage_id` here are
+ * deliberately the same fixed literals `PROJECTION_TABLES`'s
+ * `stage_artifact_alias` entry hardcodes into its own SQL (the same pattern
+ * `repository`/`workspace` use for `cb-parent`), so this row is always the
+ * one the alias rows' own FK resolves to. `seedRun` runs first (F4) — the
+ * `artifact.run_id` FK needs that `run_projection` row to exist before this
+ * INSERT.
+ */
+function seedArtifact(sequence: number, id = "artifact-parent"): void {
+  seedRun(sequence);
+  internalHandle(db)
+    .prepare(
+      "INSERT INTO artifact (artifact_id, run_id, stage_id, name, content_hash, byte_length," +
+        " media_type, content_schema_id, producer, source_lineage, relative_path, created_at," +
+        " revision, last_event_sequence)" +
+        ` VALUES (?, 'run-fixed', 'stage-fixed', 'artifact-name', '${ARTIFACT_CONTENT_HASH}', 0,` +
+        " 'text/plain', 'heniek://contract/Example/v1', 'test-producer', '[]'," +
+        ` 'blobs/sha256/${ARTIFACT_CONTENT_HASH}', ?, 1, ?)`,
+    )
+    .run(id, TIMESTAMP, sequence);
+}
+
 const PROJECTION_TABLES: readonly ProjectionTable[] = [
   {
     table: "run_projection",
@@ -428,6 +479,57 @@ const PROJECTION_TABLES: readonly ProjectionTable[] = [
     wrongTypeSql:
       "INSERT INTO workspace (workspace_id, codebase_id, revision, last_event_sequence, updated_at)" +
       " VALUES ('ws-typed', 'cb-parent', 1, ?, '2026-01-01T00:00:00.000Z')",
+  },
+  /**
+   * `stage_artifact_alias` (Task 2.3, migration 4) — carries the ordinary
+   * `*_first_revision`/`*_causal_update` guard pair, so it fits this matrix
+   * exactly like the four tables above. `artifact` does **not** appear in
+   * this matrix: N2's literal DDL gives it a BEFORE UPDATE/DELETE
+   * `RAISE(ABORT)` pair instead (append-only, not causally-updated), so
+   * every case below — which exercises the causal-update guard specifically
+   * — would not apply to it. `artifact`'s own trigger pair is proven
+   * separately, in the "artifact immutability" describe block below,
+   * mirroring `state_event immutability` above it in this file.
+   *
+   * `run_id`/`stage_id` are fixed literals ('run-fixed'/'stage-fixed'),
+   * mirroring how `repository`/`workspace` above hardcode `'cb-parent'` —
+   * `key`/`id` vary only the discriminating `name` column, which is unique
+   * across this describe.each's single-row-per-test fixtures.
+   */
+  {
+    table: "stage_artifact_alias",
+    key: "name",
+    id: "alias-1",
+    seedParents: (sequence) => seedArtifact(sequence),
+    insertSql:
+      "INSERT INTO stage_artifact_alias" +
+      " (run_id, stage_id, name, artifact_id, revision, last_event_sequence, updated_at)" +
+      " VALUES ('run-fixed', 'stage-fixed', ?, 'artifact-parent', ?, ?, '2026-01-01T00:00:00.000Z')",
+    insertValues: (revision, sequence, id = "alias-1") => [id, revision, sequence],
+    updateSql:
+      "UPDATE stage_artifact_alias SET revision = ?, last_event_sequence = ?" +
+      " WHERE run_id = 'run-fixed' AND stage_id = 'stage-fixed' AND name = ?",
+    staleUpdateSql:
+      "UPDATE stage_artifact_alias SET revision = ?, last_event_sequence = ?" +
+      " WHERE run_id = 'run-fixed' AND stage_id = 'stage-fixed' AND name = ? AND revision = ?",
+    upsertVariantASql:
+      "INSERT INTO stage_artifact_alias" +
+      " (run_id, stage_id, name, artifact_id, revision, last_event_sequence, updated_at)" +
+      " VALUES ('run-fixed', 'stage-fixed', ?, 'artifact-parent', 2, ?, '2026-01-01T00:00:00.000Z')" +
+      " ON CONFLICT(run_id, stage_id, name) DO UPDATE SET revision = excluded.revision," +
+      " last_event_sequence = excluded.last_event_sequence, updated_at = excluded.updated_at",
+    upsertVariantBSql:
+      "INSERT INTO stage_artifact_alias" +
+      " (run_id, stage_id, name, artifact_id, revision, last_event_sequence, updated_at)" +
+      " VALUES ('run-fixed', 'stage-fixed', ?, 'artifact-parent', 1, ?, '2026-01-01T00:00:00.000Z')" +
+      " ON CONFLICT(run_id, stage_id, name) DO UPDATE SET" +
+      " revision = stage_artifact_alias.revision + 1," +
+      " last_event_sequence = excluded.last_event_sequence, updated_at = excluded.updated_at",
+    wrongTypeSql:
+      "INSERT INTO stage_artifact_alias" +
+      " (run_id, stage_id, name, artifact_id, revision, last_event_sequence, updated_at)" +
+      " VALUES ('run-fixed', 'stage-fixed', 'alias-typed', 'artifact-parent', 1, ?," +
+      " '2026-01-01T00:00:00.000Z')",
   },
 ];
 
@@ -617,6 +719,108 @@ describe.each(PROJECTION_TABLES.map((entry) => [entry.table, entry] as const))(
   },
 );
 
+/**
+ * `artifact` (Task 2.3, migration 4, design D11a) mirrors `state_event
+ * immutability` above rather than the `PROJECTION_TABLES` matrix: N2's
+ * literal DDL gives it a BEFORE UPDATE/DELETE `RAISE(ABORT)` pair, not the
+ * `*_first_revision`/`*_causal_update` guard pair every `PROJECTION_TABLES`
+ * entry carries — mirroring `state_event`'s append-only posture (D11a), not
+ * the other three projection tables' mutable-with-a-causal-guard posture.
+ */
+describe("artifact immutability (design D11a, migration 4)", () => {
+  it("raises on UPDATE, verbatim message and pinned errcodes", () => {
+    const sequence = seedOneEvent();
+    seedArtifact(sequence);
+    const handle = internalHandle(db);
+    let caught: unknown;
+    try {
+      handle.exec("UPDATE artifact SET media_type = 'application/octet-stream'");
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(Error);
+    expect((caught as Error).message).toBe("artifact is append-only");
+    expect(sqliteErrorCode(caught)).toBe(SQLITE_CONSTRAINT_TRIGGER);
+    expect(sqliteNodeCode(caught)).toBe("ERR_SQLITE_ERROR");
+  });
+
+  it("raises on DELETE, verbatim message and pinned errcodes", () => {
+    const sequence = seedOneEvent();
+    seedArtifact(sequence);
+    const handle = internalHandle(db);
+    let caught: unknown;
+    try {
+      handle.exec("DELETE FROM artifact");
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(Error);
+    expect((caught as Error).message).toBe("artifact is append-only");
+    expect(sqliteErrorCode(caught)).toBe(SQLITE_CONSTRAINT_TRIGGER);
+    expect(sqliteNodeCode(caught)).toBe("ERR_SQLITE_ERROR");
+  });
+
+  it("the named, deliberate escape hatch: DROP TRIGGER then UPDATE succeeds (D5, mirrored) — the layered answer is Phase 5's divergence checker, not the trigger", () => {
+    const sequence = seedOneEvent();
+    seedArtifact(sequence);
+    const handle = internalHandle(db);
+    handle.exec("DROP TRIGGER artifact_immutable_update");
+    expect(() =>
+      handle.exec("UPDATE artifact SET media_type = 'application/octet-stream'"),
+    ).not.toThrow();
+  });
+
+  it("a second INSERT for a new artifact_id succeeds — immutability blocks UPDATE/DELETE, never a later append", () => {
+    const { first, second } = seedTwoEvents();
+    seedArtifact(first, "artifact-parent");
+    seedArtifact(second, "artifact-second");
+    const count = internalHandle(db).prepare("SELECT COUNT(*) AS c FROM artifact").get();
+    expect(count?.c).toBe(2);
+  });
+
+  /**
+   * Phase 2 fix cycle G1: nothing previously enforced `artifact.revision =
+   * 1` — `INSERT ... revision = 7` succeeded, contradicting
+   * `commit.ts`'s docblock claim that the schema's guard triggers enforce
+   * the causal shape "against any writer". `artifact` is not in
+   * `PROJECTION_TABLES` (it carries no `*_causal_update` trigger — an
+   * artifact row is never updated again), so this first-revision guard is a
+   * `CHECK (revision = 1)` on the column, proven here rather than by the
+   * shared matrix above.
+   */
+  it("INSERT with revision other than 1 is blocked (G1 — first-revision guard)", () => {
+    const sequence = seedOneEvent();
+    const handle = internalHandle(db);
+    let caught: unknown;
+    try {
+      handle
+        .prepare(
+          "INSERT INTO artifact (artifact_id, run_id, stage_id, name, content_hash, byte_length," +
+            " media_type, content_schema_id, producer, source_lineage, relative_path, created_at," +
+            " revision, last_event_sequence)" +
+            ` VALUES ('artifact-bad-revision', 'run-fixed', 'stage-fixed', 'artifact-name',` +
+            ` '${ARTIFACT_CONTENT_HASH}', 0, 'text/plain', 'heniek://contract/Example/v1',` +
+            ` 'test-producer', '[]', 'blobs/sha256/${ARTIFACT_CONTENT_HASH}', ?, 7, ?)`,
+        )
+        .run(TIMESTAMP, sequence);
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(Error);
+    expect((caught as Error).message).toMatch(/CHECK constraint failed/i);
+    expect(sqliteErrorCode(caught)).toBe(SQLITE_CONSTRAINT_CHECK);
+  });
+
+  it("INSERT with revision 1 succeeds (G1 — the accepted case)", () => {
+    const sequence = seedOneEvent();
+    seedArtifact(sequence, "artifact-good-revision");
+    const row = internalHandle(db)
+      .prepare("SELECT revision FROM artifact WHERE artifact_id = 'artifact-good-revision'")
+      .get();
+    expect(row?.revision).toBe(1);
+  });
+});
+
 describe("projection relationship foreign keys (design D8, §16.3)", () => {
   it("INSERT INTO repository naming an unregistered codebase_id fails its foreign key", () => {
     const first = seedOneEvent();
@@ -667,5 +871,91 @@ describe("projection relationship foreign keys (design D8, §16.3)", () => {
       .prepare("SELECT workspace_id FROM run_projection WHERE run_id = 'run-nows'")
       .get();
     expect(row?.workspace_id).toBeNull();
+  });
+
+  /**
+   * `artifact.run_id REFERENCES run_projection(run_id)` (issue #8, Phase 2
+   * fix cycle G1, finding F4) — mirrors the `repository`/`workspace` cases
+   * above. The shipped DDL had neither this `REFERENCES` clause nor a
+   * reducer-side check, so an artifact could be committed for a run that
+   * never existed.
+   */
+  it("INSERT INTO artifact naming a non-existent run_id fails its foreign key", () => {
+    const first = seedOneEvent();
+    let caught: unknown;
+    try {
+      internalHandle(db)
+        .prepare(
+          "INSERT INTO artifact (artifact_id, run_id, stage_id, name, content_hash, byte_length," +
+            " media_type, content_schema_id, producer, source_lineage, relative_path, created_at," +
+            " revision, last_event_sequence)" +
+            ` VALUES ('artifact-orphan', 'run-does-not-exist', 'stage-1', 'plan.md',` +
+            ` '${ARTIFACT_CONTENT_HASH}', 0, 'text/plain', 'heniek://contract/Example/v1',` +
+            ` 'test-producer', '[]', 'blobs/sha256/${ARTIFACT_CONTENT_HASH}', ?, 1, ?)`,
+        )
+        .run(TIMESTAMP, first);
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeDefined();
+    expect((caught as Error).message).toContain("FOREIGN KEY constraint failed");
+    expect(sqliteErrorCode(caught)).toBe(SQLITE_CONSTRAINT_FOREIGNKEY);
+  });
+});
+
+/**
+ * `CHECK (length(content_hash) = 64 AND content_hash NOT GLOB '*[^0-9a-f]*')`
+ * (issue #8, Phase 2 fix cycle G1, finding F1) — the path-traversal hole the
+ * shipped CHECK left open. The shipped constraint was `content_hash =
+ * lower(content_hash)`, which only rejects uppercase letters: `lower(X) = X`
+ * is also true for a 64-character string containing `.` and `/`, so nothing
+ * stopped `relative_path = 'blobs/sha256/' || content_hash` from denoting a
+ * path outside the blob root. This test is the regression proof — it fails
+ * (accepts the traversal payload) against the old `= lower(content_hash)`
+ * CHECK and passes only with the GLOB alphabet restriction in place.
+ */
+describe("artifact content_hash CHECK — path-traversal closure (issue #8, F1)", () => {
+  it("rejects a 64-character, already-lowercase content_hash that encodes a path-traversal sequence", () => {
+    const first = seedOneEvent();
+    // Seeds the 'run-fixed' FK parent first (F4) so the only constraint this
+    // INSERT can trip is the content_hash CHECK under test — otherwise a
+    // regression back to the old, permissive CHECK would surface as a
+    // FOREIGN KEY failure instead of no error at all, masking the hole this
+    // test exists to catch.
+    seedRun(first);
+    // 64 characters, all lowercase, satisfies the old `= lower(content_hash)`
+    // CHECK — but resolves `'blobs/sha256/' || content_hash` to a path
+    // outside the blob root once `../` segments are walked.
+    const traversalHash = `${"../".repeat(18)}etc/passwd`;
+    expect(traversalHash.length).toBe(64);
+    expect(traversalHash).toBe(traversalHash.toLowerCase());
+
+    let caught: unknown;
+    try {
+      internalHandle(db)
+        .prepare(
+          "INSERT INTO artifact (artifact_id, run_id, stage_id, name, content_hash, byte_length," +
+            " media_type, content_schema_id, producer, source_lineage, relative_path, created_at," +
+            " revision, last_event_sequence)" +
+            ` VALUES ('artifact-traversal', 'run-fixed', 'stage-fixed', 'artifact-name',` +
+            ` '${traversalHash}', 0, 'text/plain', 'heniek://contract/Example/v1',` +
+            ` 'test-producer', '[]', 'blobs/sha256/${traversalHash}', ?, 1, ?)`,
+        )
+        .run(TIMESTAMP, first);
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(Error);
+    expect((caught as Error).message).toMatch(/CHECK constraint failed/i);
+    expect(sqliteErrorCode(caught)).toBe(SQLITE_CONSTRAINT_CHECK);
+  });
+
+  it("accepts a 64-character lowercase hex content_hash", () => {
+    const sequence = seedOneEvent();
+    seedArtifact(sequence, "artifact-valid-hash");
+    const row = internalHandle(db)
+      .prepare("SELECT content_hash FROM artifact WHERE artifact_id = 'artifact-valid-hash'")
+      .get();
+    expect(row?.content_hash).toBe(ARTIFACT_CONTENT_HASH);
   });
 });

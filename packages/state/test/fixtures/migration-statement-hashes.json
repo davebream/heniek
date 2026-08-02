@@ -10,5 +10,9 @@
   "3": {
     "name": "identity",
     "statementHash": "4bf29f695b4aa90fde4de732d08275eff2d27f1b93376c2c8e3756bc906c8ef6"
+  },
+  "4": {
+    "name": "artifact",
+    "statementHash": "573581176191fc391411988c1cc035693348494c768bb2f57bd346dc47b388d4"
   }
 }

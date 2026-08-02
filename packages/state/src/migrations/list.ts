@@ -176,9 +176,135 @@ const MIGRATION_0003_IDENTITY: Migration = {
 Object.freeze(MIGRATION_0003_IDENTITY.statements);
 Object.freeze(MIGRATION_0003_IDENTITY);
 
+/**
+ * Migration 4 — immutable artifacts and the active artifact alias (design
+ * D11, D11a; plan Task 2.1, Normative Reference N2). Two tables:
+ *
+ * `artifact` — content-addressed, immutable once written. It carries the
+ * same `revision`/`last_event_sequence` columns every projection table
+ * does, but deliberately **not** the `*_first_revision`/`*_causal_update`
+ * guard pair: an artifact row is written exactly once and never updated
+ * again, so there is no "causal update" to guard. Instead it carries a
+ * BEFORE UPDATE / BEFORE DELETE `RAISE(ABORT)` pair, mirroring
+ * `state_event`'s append-only posture (D11a) — `artifact` is append-only
+ * like the journal, not mutably-projected like the other three tables.
+ * `CHECK (relative_path = 'blobs/sha256/' || content_hash)` is what lets the
+ * Phase 5 recovery sweep trust, by schema construction, that a committed row
+ * can never point into `incoming/` — `relative_path` is pinned to the
+ * `blobs/sha256/` prefix by equality, so no row can ever equal an
+ * `incoming/…` path. A separate `CHECK (relative_path NOT LIKE
+ * 'incoming/%')` shipped alongside it but was dead on arrival: it is fully
+ * subsumed by the equality CHECK above and can never fire, so it was removed
+ * (issue #8, Phase 2 fix cycle G1, finding F6).
+ *
+ * **`CHECK (length(content_hash) = 64 AND content_hash NOT GLOB
+ * '*[^0-9a-f]*')` (issue #8, Phase 2 fix cycle G1, finding F1):** the
+ * original shipped CHECK was `content_hash = lower(content_hash)`, which
+ * only rejects uppercase letters — `lower(X) = X` is also true for a
+ * 64-character string containing `.` and `/`, so a `content_hash` of
+ * `../../../../../../../../../../../../../../../../../etc/passwd_aaaa`
+ * (64 chars, already lowercase) passed the CHECK while making
+ * `relative_path = 'blobs/sha256/' || content_hash` denote a path outside
+ * the blob root. The GLOB pattern closes the alphabet to exactly
+ * `[0-9a-f]`, so `relative_path` can no longer escape `blobs/sha256/`
+ * regardless of what a caller passes as `contentHash`. `reducer.ts`
+ * (`requireContentHash`) also validates `contentHash` against the same hex
+ * alphabet before this CHECK is ever reached, so a malformed hash raises a
+ * typed `ReducerError` at the public API boundary instead of surfacing as a
+ * raw `SQLITE_CONSTRAINT_CHECK`.
+ *
+ * **`REFERENCES run_projection(run_id)` on `artifact.run_id` (issue #8,
+ * Phase 2 fix cycle G1, finding F4):** `repository.codebase_id` and
+ * `workspace.codebase_id` each carry both a `REFERENCES` clause and a
+ * reducer-side existence check (the `repository.registered` precedent);
+ * `artifact.run_id` shipped with neither, so an artifact could be committed
+ * for a run that never existed. `PRAGMA foreign_keys = ON` is set in
+ * `database/open.ts`, so this FK is genuinely enforced at the database
+ * layer; `reducer.ts` adds the matching existence check for
+ * `artifact.published` and `stage.completed` ahead of it, and both events'
+ * `eventScope` load the referenced `run_projection` row so the check has
+ * data to compare against.
+ *
+ * **`CHECK (revision = 1)` (issue #8, Phase 2 fix cycle G1):** the original
+ * shipped DDL left `revision` an unconstrained `INTEGER NOT NULL`, so
+ * `INSERT ... revision = 7` silently succeeded, contradicting
+ * `command/commit.ts`'s docblock claim that the schema's guard triggers
+ * enforce the causal shape "against any writer". `artifact` deliberately
+ * does **not** get the ordinary `*_first_revision` trigger the other three
+ * projection tables carry — that trigger's message and shape exist to pair
+ * with a `*_causal_update` trigger this table cannot have (adding one would
+ * be unreachable dead code behind the unconditional `BEFORE UPDATE
+ * RAISE(ABORT)` above). A plain `CHECK` is simpler for a value that is
+ * always `1` and never revised, sits declaratively alongside this table's
+ * other value `CHECK`s instead of introducing a second enforcement
+ * mechanism (SQL trigger) for one column, and needs no new trigger name to
+ * track. `stage_artifact_alias` is unaffected — it keeps its own
+ * `*_first_revision`/`*_causal_update` guard pair unchanged (design D11a);
+ * it is the deliberately mutable §16.2 active-artifact alias, not an
+ * append-only row.
+ *
+ * `stage_artifact_alias` — the §16.2 "active artifact alias": keyed
+ * `(run_id, stage_id, name)`, pointing at whichever `artifact_id` is
+ * currently active for that name. This is the one deliberately **mutable**
+ * row in the design, so it carries the ordinary `*_first_revision`/
+ * `*_causal_update` guard pair every other projection table carries — a
+ * retry re-points this row to a new, still-immutable artifact rather than
+ * mutating the artifact itself.
+ */
+const MIGRATION_0004_ARTIFACT: Migration = {
+  version: 4,
+  name: "artifact",
+  statements: [
+    `CREATE TABLE artifact (
+      artifact_id          TEXT    NOT NULL PRIMARY KEY,
+      run_id               TEXT    NOT NULL REFERENCES run_projection(run_id),
+      stage_id             TEXT    NOT NULL,
+      name                 TEXT    NOT NULL,
+      content_hash         TEXT    NOT NULL,
+      byte_length          INTEGER NOT NULL,
+      media_type           TEXT    NOT NULL,
+      content_schema_id    TEXT    NOT NULL,
+      producer              TEXT    NOT NULL,
+      source_lineage       TEXT    NOT NULL CHECK (json_valid(source_lineage)),
+      relative_path        TEXT    NOT NULL,
+      created_at           TEXT    NOT NULL,
+      revision             INTEGER NOT NULL,
+      last_event_sequence  INTEGER NOT NULL REFERENCES state_event(sequence),
+      CHECK (length(content_hash) = 64 AND content_hash NOT GLOB '*[^0-9a-f]*'),
+      CHECK (byte_length >= 0),
+      CHECK (relative_path = 'blobs/sha256/' || content_hash),
+      CHECK (revision = 1)
+    ) STRICT`,
+    "CREATE INDEX artifact_run_id_stage_id ON artifact (run_id, stage_id)",
+    `CREATE TRIGGER artifact_immutable_update BEFORE UPDATE ON artifact
+      BEGIN SELECT RAISE(ABORT, 'artifact is append-only'); END`,
+    `CREATE TRIGGER artifact_immutable_delete BEFORE DELETE ON artifact
+      BEGIN SELECT RAISE(ABORT, 'artifact is append-only'); END`,
+    `CREATE TABLE stage_artifact_alias (
+      run_id               TEXT    NOT NULL,
+      stage_id             TEXT    NOT NULL,
+      name                 TEXT    NOT NULL,
+      artifact_id          TEXT    NOT NULL REFERENCES artifact(artifact_id),
+      revision             INTEGER NOT NULL,
+      last_event_sequence  INTEGER NOT NULL REFERENCES state_event(sequence),
+      updated_at           TEXT    NOT NULL,
+      PRIMARY KEY (run_id, stage_id, name)
+    ) STRICT`,
+    `CREATE TRIGGER stage_artifact_alias_first_revision BEFORE INSERT ON stage_artifact_alias
+      WHEN NEW.revision <> 1
+      BEGIN SELECT RAISE(ABORT, 'first projection revision must be 1'); END`,
+    `CREATE TRIGGER stage_artifact_alias_causal_update BEFORE UPDATE ON stage_artifact_alias
+      WHEN NEW.last_event_sequence <= OLD.last_event_sequence OR NEW.revision <> OLD.revision + 1
+      BEGIN SELECT RAISE(ABORT, 'projection update must advance revision by 1 and cite a newer event'); END`,
+  ],
+};
+Object.freeze(MIGRATION_0004_ARTIFACT.statements);
+Object.freeze(MIGRATION_0004_ARTIFACT);
+
 export const MIGRATIONS: readonly Migration[] = Object.freeze([
   MIGRATION_0001_JOURNAL,
   MIGRATION_0002_RUN_PROJECTION,
   MIGRATION_0003_IDENTITY,
+  MIGRATION_0004_ARTIFACT,
 ]);
 assertAppendOnly(MIGRATIONS);
