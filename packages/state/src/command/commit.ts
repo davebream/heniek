@@ -297,8 +297,8 @@ const TABLE_SQL: Readonly<Record<ProjectionTable, TableSql>> = {
   run_projection: {
     insert:
       "INSERT INTO run_projection" +
-      " (run_id, status, revision, last_event_sequence, codebase_id, updated_at, workspace_id)" +
-      " VALUES (?, ?, ?, ?, ?, ?, ?)",
+      " (run_id, status, revision, last_event_sequence, codebase_id, updated_at, workspace_id," +
+      " instruction_snapshot_sha256, instruction_snapshot_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
     insertColumns: [
       "run_id",
       "status",
@@ -307,10 +307,13 @@ const TABLE_SQL: Readonly<Record<ProjectionTable, TableSql>> = {
       "codebase_id",
       "updated_at",
       "workspace_id",
+      "instruction_snapshot_sha256",
+      "instruction_snapshot_json",
     ],
     update:
       "UPDATE run_projection SET status = ?, revision = ?, last_event_sequence = ?," +
-      " codebase_id = ?, updated_at = ?, workspace_id = ? WHERE run_id = ? AND revision = ?",
+      " codebase_id = ?, updated_at = ?, workspace_id = ?, instruction_snapshot_sha256 = ?," +
+      " instruction_snapshot_json = ? WHERE run_id = ? AND revision = ?",
     updateColumns: [
       "status",
       "revision",
@@ -318,35 +321,81 @@ const TABLE_SQL: Readonly<Record<ProjectionTable, TableSql>> = {
       "codebase_id",
       "updated_at",
       "workspace_id",
+      "instruction_snapshot_sha256",
+      "instruction_snapshot_json",
     ],
     updateKeyColumns: ["run_id"],
   },
   codebase: {
     insert:
-      "INSERT INTO codebase (codebase_id, revision, last_event_sequence, updated_at)" +
-      " VALUES (?, ?, ?, ?)",
-    insertColumns: ["codebase_id", "revision", "last_event_sequence", "updated_at"],
+      "INSERT INTO codebase (codebase_id, revision, last_event_sequence, updated_at, name, root_path," +
+      " topology_sha256, configuration_sha256, registration_json, instruction_snapshot_json)" +
+      " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    insertColumns: [
+      "codebase_id",
+      "revision",
+      "last_event_sequence",
+      "updated_at",
+      "name",
+      "root_path",
+      "topology_sha256",
+      "configuration_sha256",
+      "registration_json",
+      "instruction_snapshot_json",
+    ],
     update:
-      "UPDATE codebase SET revision = ?, last_event_sequence = ?, updated_at = ?" +
+      "UPDATE codebase SET revision = ?, last_event_sequence = ?, updated_at = ?, name = ?," +
+      " root_path = ?, topology_sha256 = ?, configuration_sha256 = ?, registration_json = ?," +
+      " instruction_snapshot_json = ?" +
       " WHERE codebase_id = ? AND revision = ?",
-    updateColumns: ["revision", "last_event_sequence", "updated_at"],
+    updateColumns: [
+      "revision",
+      "last_event_sequence",
+      "updated_at",
+      "name",
+      "root_path",
+      "topology_sha256",
+      "configuration_sha256",
+      "registration_json",
+      "instruction_snapshot_json",
+    ],
     updateKeyColumns: ["codebase_id"],
   },
   repository: {
     insert:
-      "INSERT INTO repository (repository_id, codebase_id, revision, last_event_sequence, updated_at)" +
-      " VALUES (?, ?, ?, ?, ?)",
+      "INSERT INTO repository (repository_id, codebase_id, revision, last_event_sequence, updated_at," +
+      " name, repository_path, git_common_directory, remotes_json, default_remote, default_branch)" +
+      " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     insertColumns: [
       "repository_id",
       "codebase_id",
       "revision",
       "last_event_sequence",
       "updated_at",
+      "name",
+      "repository_path",
+      "git_common_directory",
+      "remotes_json",
+      "default_remote",
+      "default_branch",
     ],
     update:
-      "UPDATE repository SET codebase_id = ?, revision = ?, last_event_sequence = ?, updated_at = ?" +
+      "UPDATE repository SET codebase_id = ?, revision = ?, last_event_sequence = ?, updated_at = ?," +
+      " name = ?, repository_path = ?, git_common_directory = ?, remotes_json = ?," +
+      " default_remote = ?, default_branch = ?" +
       " WHERE repository_id = ? AND revision = ?",
-    updateColumns: ["codebase_id", "revision", "last_event_sequence", "updated_at"],
+    updateColumns: [
+      "codebase_id",
+      "revision",
+      "last_event_sequence",
+      "updated_at",
+      "name",
+      "repository_path",
+      "git_common_directory",
+      "remotes_json",
+      "default_remote",
+      "default_branch",
+    ],
     updateKeyColumns: ["repository_id"],
   },
   workspace: {

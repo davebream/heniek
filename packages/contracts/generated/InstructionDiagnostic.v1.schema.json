@@ -1,0 +1,74 @@
+{
+  "$id": "heniek://contract/InstructionDiagnostic/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "code",
+    "classification",
+    "message",
+    "topic",
+    "anchors"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "code": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "classification": {
+      "anyOf": [
+        {
+          "const": "additive",
+          "type": "string"
+        },
+        {
+          "const": "incompatible",
+          "type": "string"
+        },
+        {
+          "const": "indeterminate",
+          "type": "string"
+        }
+      ]
+    },
+    "message": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "topic": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "anchors": {
+      "minItems": 2,
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "sourceId",
+          "startLine",
+          "endLine"
+        ],
+        "properties": {
+          "sourceId": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "startLine": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "endLine": {
+            "minimum": 1,
+            "type": "integer"
+          }
+        }
+      }
+    }
+  }
+}

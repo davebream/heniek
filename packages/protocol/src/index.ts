@@ -10,6 +10,10 @@ export const DAEMON_STATUS_METHOD = "daemon.status";
 export const DAEMON_STATUS_V1_METHOD = "daemon.status.v1";
 export const DAEMON_RECOVERY_METHOD = "daemon.recovery";
 export const DAEMON_RECOVERY_V1_METHOD = "daemon.recovery.v1";
+export const CODEBASE_DETECT_METHOD = "codebase.detect";
+export const CODEBASE_DETECT_V1_METHOD = "codebase.detect.v1";
+export const CODEBASE_REGISTER_METHOD = "codebase.register";
+export const CODEBASE_REGISTER_V1_METHOD = "codebase.register.v1";
 export const RPC_CANCEL_METHOD = "rpc.cancel";
 
 export const ERROR_CODES = {
@@ -39,9 +43,13 @@ export interface DaemonCredential {
 }
 
 export interface NegotiatedMethodV1 {
-  readonly name: "daemon.status" | "daemon.recovery";
+  readonly name: "daemon.status" | "daemon.recovery" | "codebase.detect" | "codebase.register";
   readonly methodVersion: 1;
-  readonly wireMethod: "daemon.status.v1" | "daemon.recovery.v1";
+  readonly wireMethod:
+    | "daemon.status.v1"
+    | "daemon.recovery.v1"
+    | "codebase.detect.v1"
+    | "codebase.register.v1";
   readonly resultSchemaId: string;
   readonly resultSchemaSha256: string;
 }
@@ -52,6 +60,12 @@ export const DAEMON_STATUS_SCHEMA_SHA256 =
 export const DAEMON_RECOVERY_SCHEMA_ID = "heniek://contract/DaemonRecoveryResult/v1";
 export const DAEMON_RECOVERY_SCHEMA_SHA256 =
   "8c4099c58b018a809e8708451e33ccdc4e24fa74fb65865d35953af9f3672e9a";
+export const CODEBASE_DETECTION_SCHEMA_ID = "heniek://contract/CodebaseDetectionResult/v1";
+export const CODEBASE_DETECTION_SCHEMA_SHA256 =
+  "0ff6101822ed1ba516ea106ace09d8a6f15fd5c8c8a605bf6b788cb43355b210";
+export const REGISTERED_CODEBASE_SCHEMA_ID = "heniek://contract/RegisteredCodebase/v1";
+export const REGISTERED_CODEBASE_SCHEMA_SHA256 =
+  "46aaf927a7b496d3da5b4c438c2f49ab7c6638363384cb0d6aca61fa0258b10f";
 
 function hex(bytes: Uint8Array): string {
   return Buffer.from(bytes).toString("hex");

@@ -157,6 +157,8 @@ function runRow(state: RunState): Record<string, string | number | null> {
     codebase_id: state.codebaseId,
     updated_at: state.updatedAt,
     workspace_id: state.workspaceId,
+    instruction_snapshot_sha256: state.instructionSnapshotSha256,
+    instruction_snapshot_json: state.instructionSnapshotJson,
   };
 }
 
@@ -166,6 +168,12 @@ function codebaseRow(state: CodebaseState): Record<string, string | number | nul
     revision: state.revision,
     last_event_sequence: state.lastEventSequence,
     updated_at: state.updatedAt,
+    name: state.name,
+    root_path: state.rootPath,
+    topology_sha256: state.topologySha256,
+    configuration_sha256: state.configurationSha256,
+    registration_json: state.registrationJson,
+    instruction_snapshot_json: state.instructionSnapshotJson,
   };
 }
 
@@ -176,6 +184,12 @@ function repositoryRow(state: RepositoryState): Record<string, string | number |
     revision: state.revision,
     last_event_sequence: state.lastEventSequence,
     updated_at: state.updatedAt,
+    name: state.name,
+    repository_path: state.repositoryPath,
+    git_common_directory: state.gitCommonDirectory,
+    remotes_json: state.remotesJson,
+    default_remote: state.defaultRemote,
+    default_branch: state.defaultBranch,
   };
 }
 
@@ -364,6 +378,8 @@ export function projectionStateToJson(state: ProjectionState): JsonValue {
         workspaceId: row.workspaceId,
         codebaseId: row.codebaseId,
         updatedAt: row.updatedAt,
+        instructionSnapshotSha256: row.instructionSnapshotSha256,
+        instructionSnapshotJson: row.instructionSnapshotJson,
       };
     }
   }
@@ -376,6 +392,12 @@ export function projectionStateToJson(state: ProjectionState): JsonValue {
         revision: row.revision,
         lastEventSequence: row.lastEventSequence,
         updatedAt: row.updatedAt,
+        name: row.name,
+        rootPath: row.rootPath,
+        topologySha256: row.topologySha256,
+        configurationSha256: row.configurationSha256,
+        registrationJson: row.registrationJson,
+        instructionSnapshotJson: row.instructionSnapshotJson,
       };
     }
   }
@@ -389,6 +411,12 @@ export function projectionStateToJson(state: ProjectionState): JsonValue {
         revision: row.revision,
         lastEventSequence: row.lastEventSequence,
         updatedAt: row.updatedAt,
+        name: row.name,
+        repositoryPath: row.repositoryPath,
+        gitCommonDirectory: row.gitCommonDirectory,
+        remotesJson: row.remotesJson,
+        defaultRemote: row.defaultRemote,
+        defaultBranch: row.defaultBranch,
       };
     }
   }
@@ -524,7 +552,8 @@ export function loadStoredProjectionState(db: StateDatabase): ProjectionState {
   const runs: Record<string, RunState> = {};
   for (const raw of handle
     .prepare(
-      "SELECT run_id, status, revision, last_event_sequence, workspace_id, codebase_id, updated_at" +
+      "SELECT run_id, status, revision, last_event_sequence, workspace_id, codebase_id, updated_at," +
+        " instruction_snapshot_sha256, instruction_snapshot_json" +
         " FROM run_projection ORDER BY run_id",
     )
     .all()) {
@@ -534,7 +563,9 @@ export function loadStoredProjectionState(db: StateDatabase): ProjectionState {
   const codebases: Record<string, CodebaseState> = {};
   for (const raw of handle
     .prepare(
-      "SELECT codebase_id, revision, last_event_sequence, updated_at FROM codebase ORDER BY codebase_id",
+      "SELECT codebase_id, revision, last_event_sequence, updated_at, name, root_path," +
+        " topology_sha256, configuration_sha256, registration_json, instruction_snapshot_json" +
+        " FROM codebase ORDER BY codebase_id",
     )
     .all()) {
     const row = toCodebaseRow(raw);
@@ -543,7 +574,8 @@ export function loadStoredProjectionState(db: StateDatabase): ProjectionState {
   const repositories: Record<string, RepositoryState> = {};
   for (const raw of handle
     .prepare(
-      "SELECT repository_id, codebase_id, revision, last_event_sequence, updated_at" +
+      "SELECT repository_id, codebase_id, revision, last_event_sequence, updated_at, name," +
+        " repository_path, git_common_directory, remotes_json, default_remote, default_branch" +
         " FROM repository ORDER BY repository_id",
     )
     .all()) {
@@ -613,7 +645,8 @@ export function loadScopedProjectionState(
   const handle = internalHandle(db);
   const runs: Record<string, RunState> = {};
   const runStatement = handle.prepare(
-    "SELECT run_id, status, revision, last_event_sequence, workspace_id, codebase_id, updated_at" +
+    "SELECT run_id, status, revision, last_event_sequence, workspace_id, codebase_id, updated_at," +
+      " instruction_snapshot_sha256, instruction_snapshot_json" +
       " FROM run_projection WHERE run_id = ?",
   );
   for (const key of scope.runs) {
@@ -624,7 +657,9 @@ export function loadScopedProjectionState(
   }
   const codebases: Record<string, CodebaseState> = {};
   const codebaseStatement = handle.prepare(
-    "SELECT codebase_id, revision, last_event_sequence, updated_at FROM codebase WHERE codebase_id = ?",
+    "SELECT codebase_id, revision, last_event_sequence, updated_at, name, root_path," +
+      " topology_sha256, configuration_sha256, registration_json, instruction_snapshot_json" +
+      " FROM codebase WHERE codebase_id = ?",
   );
   for (const key of scope.codebases) {
     const raw = codebaseStatement.get(key);
@@ -634,7 +669,8 @@ export function loadScopedProjectionState(
   }
   const repositories: Record<string, RepositoryState> = {};
   const repositoryStatement = handle.prepare(
-    "SELECT repository_id, codebase_id, revision, last_event_sequence, updated_at" +
+    "SELECT repository_id, codebase_id, revision, last_event_sequence, updated_at, name," +
+      " repository_path, git_common_directory, remotes_json, default_remote, default_branch" +
       " FROM repository WHERE repository_id = ?",
   );
   for (const key of scope.repositories) {

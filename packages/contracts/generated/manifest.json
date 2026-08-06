@@ -44,6 +44,24 @@
       "path": "generated/CliStatusSuccess.v1.schema.json"
     },
     {
+      "schemaId": "heniek://contract/CodebaseDetectionResult/v1",
+      "schemaVersion": 1,
+      "sha256": "0ff6101822ed1ba516ea106ace09d8a6f15fd5c8c8a605bf6b788cb43355b210",
+      "path": "generated/CodebaseDetectionResult.v1.schema.json"
+    },
+    {
+      "schemaId": "heniek://contract/CodebaseDetectRequest/v1",
+      "schemaVersion": 1,
+      "sha256": "7d9f6123957478c9d22b7379c9863d410aaa43d93a2840fd2e5f488db158672a",
+      "path": "generated/CodebaseDetectRequest.v1.schema.json"
+    },
+    {
+      "schemaId": "heniek://contract/CodebaseRegisterRequest/v1",
+      "schemaVersion": 1,
+      "sha256": "51d590a381a19ee162a13ccdd55b47b3baf37d3372ebd2a6e7c14fa19780bf2e",
+      "path": "generated/CodebaseRegisterRequest.v1.schema.json"
+    },
+    {
       "schemaId": "heniek://contract/CreatePullRequestInput/v1",
       "schemaVersion": 1,
       "sha256": "55873424bc47a8bd87d409ef294271c8fd81d1b7a6111b92bb8501f782dba79c",
@@ -98,6 +116,18 @@
       "path": "generated/ExecutionResult.v1.schema.json"
     },
     {
+      "schemaId": "heniek://contract/InstructionDiagnostic/v1",
+      "schemaVersion": 1,
+      "sha256": "8ec3850c705343e34ddb27a7eff133fc68d1ef249f358e5b63cb43db967768e6",
+      "path": "generated/InstructionDiagnostic.v1.schema.json"
+    },
+    {
+      "schemaId": "heniek://contract/InstructionSnapshot/v1",
+      "schemaVersion": 1,
+      "sha256": "4b2a91b69795c4878b770670cff4cbff166617107ecefc57a6dc83881fd2ad42",
+      "path": "generated/InstructionSnapshot.v1.schema.json"
+    },
+    {
       "schemaId": "heniek://contract/Interaction/v1",
       "schemaVersion": 1,
       "sha256": "3f1ceff9662dac675b46bb362e61068934b845ca650957698b3c2c577f3c171a",
@@ -122,6 +152,12 @@
       "path": "generated/PullRequest.v1.schema.json"
     },
     {
+      "schemaId": "heniek://contract/RegisteredCodebase/v1",
+      "schemaVersion": 1,
+      "sha256": "46aaf927a7b496d3da5b4c438c2f49ab7c6638363384cb0d6aca61fa0258b10f",
+      "path": "generated/RegisteredCodebase.v1.schema.json"
+    },
+    {
       "schemaId": "heniek://contract/ResolvedConfiguration/v1",
       "schemaVersion": 1,
       "sha256": "ab0ae9b99bb0e98c56e93665a92f049d86c3f43949f02764b0501b45e563fbd1",
@@ -144,6 +180,12 @@
       "schemaVersion": 1,
       "sha256": "be0a661b93dee4b9f8a0c9b4e642864ebf99e94cbc4d06b3790b0a01bf2dc601",
       "path": "generated/Run.v1.schema.json"
+    },
+    {
+      "schemaId": "heniek://contract/Run/v2",
+      "schemaVersion": 2,
+      "sha256": "d25ab256d3f066f6f6c98c8484b748522ce297e7fea3892c4510728e7cca1732",
+      "path": "generated/Run.v2.schema.json"
     },
     {
       "schemaId": "heniek://contract/RunRecoveryClassification/v1",

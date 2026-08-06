@@ -29,9 +29,19 @@
  */
 
 import { dirname } from "node:path";
+import {
+  createNodeFileSystem as createCodebaseFileSystem,
+  createNodeGitPort,
+  createNodeHashPort,
+  createRegistrationStatePort,
+  detectCodebase,
+  loadRegistrations,
+  registerCodebase,
+} from "@heniek/codebase";
 import type { ApplicationHome } from "@heniek/config";
 import type { ExecutionBackend } from "@heniek/contracts";
 import { createFileSecretStore } from "@heniek/secrets";
+import { openStateDatabase, runMigrations } from "@heniek/state";
 import { mintConnectionAuthState } from "../auth/challenge.js";
 import {
   type DaemonCredential,
@@ -50,6 +60,8 @@ import { createCodec, type Frame } from "../rpc/codec.js";
 import type { DispatchDeps } from "../rpc/dispatch.js";
 import { dispatchFrame } from "../rpc/dispatch.js";
 import {
+  CODEBASE_DETECT_V1_METHOD,
+  CODEBASE_REGISTER_V1_METHOD,
   createMethodRegistry,
   DAEMON_RECOVERY_METHOD,
   DAEMON_RECOVERY_V1_METHOD,
@@ -474,11 +486,76 @@ export async function startDaemon(deps: StartDaemonDeps): Promise<StartDaemonOut
     },
   });
   const recoveryHandler = () => ({ schemaVersion: 1, classifications });
+  const codebaseFileSystem = createCodebaseFileSystem();
+  const codebaseGit = createNodeGitPort();
+  const codebaseHash = createNodeHashPort();
+  const codebaseDeps = {
+    fs: codebaseFileSystem,
+    git: codebaseGit,
+    hash: codebaseHash,
+    clock,
+  };
+  const codebaseParams = (params: unknown) => {
+    if (
+      typeof params !== "object" ||
+      params === null ||
+      !Array.isArray(Reflect.get(params, "roots"))
+    ) {
+      throw new Error("invalid codebase params");
+    }
+    const roots = Reflect.get(params, "roots");
+    if (!roots.every((root: unknown) => typeof root === "string" && root.length > 0)) {
+      throw new Error("invalid codebase roots");
+    }
+    const source = Reflect.get(params, "sourceRepositoryPath");
+    return {
+      roots: roots as string[],
+      sourceRepositoryPath: typeof source === "string" ? source : null,
+    };
+  };
+  const detectHandler = async (params: unknown) => {
+    const input = codebaseParams(params);
+    const registrations = await loadRegistrations({
+      fs: codebaseFileSystem,
+      hash: codebaseHash,
+      codebasesDirectory: home.paths.codebasesDirectory,
+    });
+    return detectCodebase({ ...codebaseDeps, registrations }, input);
+  };
+  const registerHandler = async (params: unknown) => {
+    const input = codebaseParams(params);
+    const expectedTopologySha256 =
+      typeof params === "object" && params !== null
+        ? Reflect.get(params, "expectedTopologySha256")
+        : undefined;
+    const confirmed =
+      typeof params === "object" && params !== null ? Reflect.get(params, "confirmed") : undefined;
+    if (typeof expectedTopologySha256 !== "string" || confirmed !== true) {
+      throw new Error("invalid registration confirmation");
+    }
+    const database = openStateDatabase({ path: home.paths.stateDatabaseFile, clock, ids });
+    try {
+      runMigrations(database);
+      return await registerCodebase(
+        {
+          ...codebaseDeps,
+          codebasesDirectory: home.paths.codebasesDirectory,
+          ids,
+          state: createRegistrationStatePort(database),
+        },
+        { ...input, expectedTopologySha256, confirmed: true },
+      );
+    } finally {
+      database.close();
+    }
+  };
   const registry: MethodRegistry = createMethodRegistry([
     [DAEMON_STATUS_METHOD, statusHandler],
     [DAEMON_STATUS_V1_METHOD, statusHandler],
     [DAEMON_RECOVERY_METHOD, recoveryHandler],
     [DAEMON_RECOVERY_V1_METHOD, recoveryHandler],
+    [CODEBASE_DETECT_V1_METHOD, detectHandler],
+    [CODEBASE_REGISTER_V1_METHOD, registerHandler],
   ]);
 
   // Attached last (design's non-negotiable ordering) — no client can

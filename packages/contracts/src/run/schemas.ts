@@ -1,4 +1,5 @@
 import { Type } from "@sinclair/typebox";
+import { InstructionSnapshotSchema } from "../codebase/index.js";
 import { versioned } from "../kernel/index.js";
 import { SourceWorkItemId } from "../task-source/index.js";
 import { CodebaseId, RepositoryId, RunId, WorkspaceId } from "./ids.js";
@@ -23,6 +24,18 @@ export const RunV1 = versioned("Run", 1, {
   repositoryIds: Type.Array(RepositoryId),
   workspaceId: WorkspaceId,
   status: RunStatus.schema,
+  createdAt: Type.String({ format: "date-time" }),
+  updatedAt: Type.String({ format: "date-time" }),
+});
+
+export const RunV2 = versioned("Run", 2, {
+  runId: RunId,
+  sourceWorkItemId: SourceWorkItemId,
+  codebaseId: CodebaseId,
+  repositoryIds: Type.Array(RepositoryId),
+  workspaceId: WorkspaceId,
+  status: RunStatus.schema,
+  instructionSnapshot: InstructionSnapshotSchema,
   createdAt: Type.String({ format: "date-time" }),
   updatedAt: Type.String({ format: "date-time" }),
 });

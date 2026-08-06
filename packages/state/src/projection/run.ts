@@ -30,10 +30,13 @@ export interface RunProjectionRow {
   readonly workspaceId: string | null;
   readonly codebaseId: string;
   readonly updatedAt: string;
+  readonly instructionSnapshotSha256: string | null;
+  readonly instructionSnapshotJson: string | null;
 }
 
 const RUN_PROJECTION_COLUMNS =
-  "run_id, status, revision, last_event_sequence, workspace_id, codebase_id, updated_at";
+  "run_id, status, revision, last_event_sequence, workspace_id, codebase_id, updated_at," +
+  " instruction_snapshot_sha256, instruction_snapshot_json";
 
 /**
  * `RunStatus.values` is a `readonly string[]` at the type level, so
@@ -71,6 +74,14 @@ export function toRunProjectionRow(raw: Record<string, unknown>): RunProjectionR
     workspaceId: toNullableText(raw.workspace_id, "run_projection.workspace_id"),
     codebaseId: toText(raw.codebase_id, "run_projection.codebase_id"),
     updatedAt: toText(raw.updated_at, "run_projection.updated_at"),
+    instructionSnapshotSha256: toNullableText(
+      raw.instruction_snapshot_sha256,
+      "run_projection.instruction_snapshot_sha256",
+    ),
+    instructionSnapshotJson: toNullableText(
+      raw.instruction_snapshot_json,
+      "run_projection.instruction_snapshot_json",
+    ),
   };
 }
 

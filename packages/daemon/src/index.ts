@@ -84,6 +84,8 @@ export { DRAINING_MESSAGE } from "./rpc/errors.js";
 export type { MethodContext, MethodHandler, MethodRegistry } from "./rpc/methods.js";
 export {
   AUTHENTICATED_METHODS,
+  CODEBASE_DETECT_V1_METHOD,
+  CODEBASE_REGISTER_V1_METHOD,
   createMethodRegistry,
   DAEMON_HELLO_METHOD,
   DAEMON_NEGOTIATE_METHOD,

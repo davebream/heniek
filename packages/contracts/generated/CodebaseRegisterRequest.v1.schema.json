@@ -1,0 +1,45 @@
+{
+  "$id": "heniek://contract/CodebaseRegisterRequest/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "roots",
+    "sourceRepositoryPath",
+    "expectedTopologySha256",
+    "confirmed"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "roots": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      }
+    },
+    "sourceRepositoryPath": {
+      "anyOf": [
+        {
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "expectedTopologySha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "confirmed": {
+      "const": true,
+      "type": "boolean"
+    }
+  }
+}

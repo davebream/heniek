@@ -14,6 +14,7 @@ export const DAEMON_RECOVERY_METHOD = "daemon.recovery";
 export const DAEMON_NEGOTIATE_METHOD = "daemon.negotiate";
 export const DAEMON_STATUS_V1_METHOD = "daemon.status.v1";
 export const DAEMON_RECOVERY_V1_METHOD = "daemon.recovery.v1";
+export { CODEBASE_DETECT_V1_METHOD, CODEBASE_REGISTER_V1_METHOD } from "@heniek/protocol";
 export const RPC_CANCEL_METHOD = "rpc.cancel";
 
 /**
@@ -23,7 +24,12 @@ export const RPC_CANCEL_METHOD = "rpc.cancel";
  * `daemon.shutdown` was never added — SIGTERM already covers graceful
  * drain and an RPC equivalent has no consumer (YAGNI).
  */
-export const AUTHENTICATED_METHODS = [DAEMON_STATUS_METHOD, DAEMON_RECOVERY_METHOD] as const;
+export const AUTHENTICATED_METHODS = [
+  DAEMON_STATUS_METHOD,
+  DAEMON_RECOVERY_METHOD,
+  "codebase.detect",
+  "codebase.register",
+] as const;
 
 export interface MethodContext {
   readonly signal: AbortSignal;

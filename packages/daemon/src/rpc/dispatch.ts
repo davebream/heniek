@@ -14,6 +14,12 @@
  * could let a byte-identical invariant erode.
  */
 
+import {
+  CODEBASE_DETECTION_SCHEMA_ID,
+  CODEBASE_DETECTION_SCHEMA_SHA256,
+  REGISTERED_CODEBASE_SCHEMA_ID,
+  REGISTERED_CODEBASE_SCHEMA_SHA256,
+} from "@heniek/protocol";
 import type { ConnectionAuthState } from "../auth/challenge.js";
 import { UNAUTHORIZED_MESSAGE } from "../auth/errors.js";
 import type { AuthenticatedCredential } from "../auth/verify.js";
@@ -28,6 +34,8 @@ import {
 } from "./codec.js";
 import { DRAINING_MESSAGE } from "./errors.js";
 import {
+  CODEBASE_DETECT_V1_METHOD,
+  CODEBASE_REGISTER_V1_METHOD,
   DAEMON_HELLO_METHOD,
   DAEMON_NEGOTIATE_METHOD,
   DAEMON_RECOVERY_V1_METHOD,
@@ -151,13 +159,34 @@ function negotiateResult(params: Record<string, unknown>) {
     const name = required.name as string;
     const versions = required.methodVersions as readonly number[];
     const schemas = required.resultSchemas as readonly Record<string, unknown>[];
-    if ((name !== "daemon.status" && name !== "daemon.recovery") || !versions.includes(1)) {
+    const available = {
+      "daemon.status": {
+        schemaId: STATUS_SCHEMA_ID,
+        sha256: STATUS_SCHEMA_SHA256,
+        wireMethod: DAEMON_STATUS_V1_METHOD,
+      },
+      "daemon.recovery": {
+        schemaId: RECOVERY_SCHEMA_ID,
+        sha256: RECOVERY_SCHEMA_SHA256,
+        wireMethod: DAEMON_RECOVERY_V1_METHOD,
+      },
+      "codebase.detect": {
+        schemaId: CODEBASE_DETECTION_SCHEMA_ID,
+        sha256: CODEBASE_DETECTION_SCHEMA_SHA256,
+        wireMethod: CODEBASE_DETECT_V1_METHOD,
+      },
+      "codebase.register": {
+        schemaId: REGISTERED_CODEBASE_SCHEMA_ID,
+        sha256: REGISTERED_CODEBASE_SCHEMA_SHA256,
+        wireMethod: CODEBASE_REGISTER_V1_METHOD,
+      },
+    }[name];
+    if (available === undefined || !versions.includes(1)) {
       reasons.push("METHOD_UNAVAILABLE");
       continue;
     }
-    const resultSchemaId = name === "daemon.status" ? STATUS_SCHEMA_ID : RECOVERY_SCHEMA_ID;
-    const resultSchemaSha256 =
-      name === "daemon.status" ? STATUS_SCHEMA_SHA256 : RECOVERY_SCHEMA_SHA256;
+    const resultSchemaId = available.schemaId;
+    const resultSchemaSha256 = available.sha256;
     const schema = schemas.find(
       (candidate) =>
         candidate.schemaId === resultSchemaId && candidate.sha256 === resultSchemaSha256,
@@ -169,7 +198,7 @@ function negotiateResult(params: Record<string, unknown>) {
     methods.push({
       name,
       methodVersion: 1,
-      wireMethod: name === "daemon.status" ? DAEMON_STATUS_V1_METHOD : DAEMON_RECOVERY_V1_METHOD,
+      wireMethod: available.wireMethod,
       resultSchemaId,
       resultSchemaSha256,
     });
@@ -224,7 +253,14 @@ async function dispatchRequest(
 
   const handler = deps.registry.get(frame.method);
   if (
-    (frame.method === DAEMON_STATUS_V1_METHOD || frame.method === DAEMON_RECOVERY_V1_METHOD) &&
+    (
+      [
+        DAEMON_STATUS_V1_METHOD,
+        DAEMON_RECOVERY_V1_METHOD,
+        CODEBASE_DETECT_V1_METHOD,
+        CODEBASE_REGISTER_V1_METHOD,
+      ] as readonly string[]
+    ).includes(frame.method) &&
     !connection.negotiated
   ) {
     return encodeError(frame.id, ERROR_CODES.protocolNotNegotiated, "protocol not negotiated");
