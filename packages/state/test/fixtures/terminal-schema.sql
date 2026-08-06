@@ -6,9 +6,9 @@
 -- the migration DDL in both formatting and statement ordering (round-1
 -- minor revision) rather than merely echoing the migration text verbatim.
 --
--- Terminal version in this phase: 4 (plan Task 2.4/B6 — migration 4 adds
--- the immutable `artifact` table and the mutable `stage_artifact_alias`
--- alias, design D11/D11a). `workspace_id` is inline in `run_projection`'s
+-- Terminal version in this phase: 5. Migration 5 adds Codebase registration
+-- metadata and immutable run instruction snapshots. `workspace_id` and the
+-- instruction snapshot columns are inline in `run_projection`'s
 -- column list here and positioned **last** (finding C2): `pragma_table_xinfo`
 -- orders by `cid`, and an `ALTER`-appended column always receives the
 -- highest `cid`, so placing it anywhere else in this fixture would make the
@@ -73,7 +73,13 @@ CREATE TABLE codebase
     codebase_id          TEXT NOT NULL PRIMARY KEY,
     revision             INTEGER NOT NULL,
     last_event_sequence  INTEGER NOT NULL REFERENCES state_event(sequence),
-    updated_at           TEXT NOT NULL
+    updated_at           TEXT NOT NULL,
+    name                 TEXT,
+    root_path            TEXT,
+    topology_sha256      TEXT,
+    configuration_sha256 TEXT,
+    registration_json    TEXT CHECK (registration_json IS NULL OR json_valid(registration_json)),
+    instruction_snapshot_json TEXT CHECK (instruction_snapshot_json IS NULL OR json_valid(instruction_snapshot_json))
 ) STRICT;
 
 CREATE TRIGGER codebase_first_revision
@@ -96,7 +102,13 @@ CREATE TABLE repository
     codebase_id           TEXT NOT NULL REFERENCES codebase(codebase_id),
     revision              INTEGER NOT NULL,
     last_event_sequence   INTEGER NOT NULL REFERENCES state_event(sequence),
-    updated_at            TEXT NOT NULL
+    updated_at            TEXT NOT NULL,
+    name                  TEXT,
+    repository_path       TEXT,
+    git_common_directory  TEXT,
+    remotes_json          TEXT CHECK (remotes_json IS NULL OR json_valid(remotes_json)),
+    default_remote        TEXT,
+    default_branch        TEXT
 ) STRICT;
 
 CREATE TRIGGER repository_first_revision
@@ -144,7 +156,9 @@ CREATE TABLE run_projection
     last_event_sequence  INTEGER NOT NULL REFERENCES state_event(sequence),
     codebase_id          TEXT NOT NULL,
     updated_at           TEXT NOT NULL,
-    workspace_id         TEXT
+    workspace_id         TEXT,
+    instruction_snapshot_sha256 TEXT,
+    instruction_snapshot_json TEXT CHECK (instruction_snapshot_json IS NULL OR json_valid(instruction_snapshot_json))
 ) STRICT;
 
 CREATE TRIGGER run_projection_first_revision
@@ -223,4 +237,4 @@ BEGIN
     SELECT RAISE(ABORT, 'first projection revision must be 1');
 END;
 
-PRAGMA user_version = 4;
+PRAGMA user_version = 5;

@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "snapshotSha256": "42d7aab5d418e11b15bf957c2770acafe1924a86076fd11965711ce7a12c2bc0",
+  "capturedAt": "2026-08-06T10:00:00.000Z",
+  "readiness": "blocked",
+  "sources": [
+    {
+      "sourceId": "ins-agents",
+      "kind": "provider-native",
+      "provider": "codex",
+      "location": {
+        "kind": "repository",
+        "repositoryId": "repo-fixture-0001",
+        "path": "AGENTS.md"
+      },
+      "scope": "",
+      "precedence": 2,
+      "contentSha256": "9961a8762ec51c5394cfc8b1893531d66daf4ba838157495045e087e040bcdbc"
+    },
+    {
+      "sourceId": "ins-claude",
+      "kind": "provider-native",
+      "provider": "claude",
+      "location": {
+        "kind": "repository",
+        "repositoryId": "repo-fixture-0001",
+        "path": "CLAUDE.md"
+      },
+      "scope": "",
+      "precedence": 2,
+      "contentSha256": "f101f0501fc1344bac32b8ef2ef026b10a707d2be007939f452ce96183aedc1a"
+    }
+  ],
+  "diagnostics": [
+    {
+      "schemaVersion": 1,
+      "code": "INSTRUCTION_VALUE_CONFLICT",
+      "classification": "incompatible",
+      "message": "Instruction requirements for package manager are incompatible.",
+      "topic": "package manager",
+      "anchors": [
+        {
+          "sourceId": "ins-agents",
+          "startLine": 1,
+          "endLine": 1
+        },
+        {
+          "sourceId": "ins-claude",
+          "startLine": 1,
+          "endLine": 1
+        }
+      ]
+    }
+  ]
+}

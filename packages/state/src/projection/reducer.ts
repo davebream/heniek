@@ -125,6 +125,120 @@ function requireString(
   return value;
 }
 
+interface RegistrationRepositoryPayload {
+  readonly repositoryId: string;
+  readonly name: string;
+  readonly path: string;
+  readonly gitCommonDirectory: string;
+  readonly remotesJson: string;
+  readonly defaultRemote: string | null;
+  readonly defaultBranch: string | null;
+}
+
+interface RegistrationPayload {
+  readonly codebaseId: string;
+  readonly name: string;
+  readonly rootPath: string;
+  readonly topologySha256: string;
+  readonly configurationSha256: string;
+  readonly instructionSnapshotJson: string;
+  readonly registrationJson: string;
+  readonly repositories: readonly RegistrationRepositoryPayload[];
+}
+
+function nullableString(value: JsonValue | undefined): string | null {
+  return typeof value === "string" ? value : null;
+}
+
+function requireRegistration(
+  event: StateEvent,
+  payload: Readonly<Record<string, JsonValue>>,
+): RegistrationPayload {
+  const value = payload.registration;
+  if (
+    value === undefined ||
+    !isJsonObject(value) ||
+    !Array.isArray(value.repositories) ||
+    value.instructionSnapshot === undefined ||
+    !isJsonObject(value.instructionSnapshot)
+  ) {
+    throw new ReducerError(event.eventId, event.type, "registration must be a complete object");
+  }
+  const repositories = value.repositories.map((repository) => {
+    if (!isJsonObject(repository) || !Array.isArray(repository.remotes)) {
+      throw new ReducerError(
+        event.eventId,
+        event.type,
+        "registration repository must be an object",
+      );
+    }
+    const repositoryId = repository.repositoryId;
+    const name = repository.name;
+    const path = repository.path;
+    const gitCommonDirectory = repository.gitCommonDirectory;
+    if (
+      typeof repositoryId !== "string" ||
+      typeof name !== "string" ||
+      typeof path !== "string" ||
+      typeof gitCommonDirectory !== "string"
+    ) {
+      throw new ReducerError(
+        event.eventId,
+        event.type,
+        "registration repository identity is invalid",
+      );
+    }
+    return {
+      repositoryId,
+      name,
+      path,
+      gitCommonDirectory,
+      remotesJson: JSON.stringify(repository.remotes),
+      defaultRemote: nullableString(repository.defaultRemote),
+      defaultBranch: nullableString(repository.defaultBranch),
+    };
+  });
+  const codebaseId = value.codebaseId;
+  const name = value.name;
+  const rootPath = value.rootPath;
+  const topologySha256 = value.topologySha256;
+  const configurationSha256 = value.configurationSha256;
+  if (
+    typeof codebaseId !== "string" ||
+    typeof name !== "string" ||
+    typeof rootPath !== "string" ||
+    typeof topologySha256 !== "string" ||
+    typeof configurationSha256 !== "string"
+  ) {
+    throw new ReducerError(event.eventId, event.type, "registration identity is invalid");
+  }
+  return {
+    codebaseId,
+    name,
+    rootPath,
+    topologySha256,
+    configurationSha256,
+    instructionSnapshotJson: JSON.stringify(value.instructionSnapshot),
+    registrationJson: JSON.stringify(value),
+    repositories,
+  };
+}
+
+function requireInstructionSnapshot(
+  event: StateEvent,
+  payload: Readonly<Record<string, JsonValue>>,
+): { readonly sha256: string; readonly json: string } {
+  const value = payload.instructionSnapshot;
+  if (value === undefined || !isJsonObject(value) || typeof value.snapshotSha256 !== "string") {
+    throw new ReducerError(
+      event.eventId,
+      event.type,
+      "instructionSnapshot must be a versioned snapshot",
+    );
+  }
+  return { sha256: value.snapshotSha256, json: JSON.stringify(value) };
+}
+
 function optionalWorkspaceId(
   event: StateEvent,
   payload: Readonly<Record<string, JsonValue>>,
@@ -444,6 +558,26 @@ export function eventScope(event: StateEvent): ProjectionScope {
         artifacts: [],
         stageArtifactAliases: [],
       };
+    case "run.instructions_snapshotted":
+      return {
+        runs: [requireRunId(event, payload)],
+        codebases: [],
+        repositories: [],
+        workspaces: [],
+        artifacts: [],
+        stageArtifactAliases: [],
+      };
+    case "codebase.registration_committed": {
+      const registration = requireRegistration(event, payload);
+      return {
+        runs: [],
+        codebases: [registration.codebaseId],
+        repositories: registration.repositories.map((repository) => repository.repositoryId),
+        workspaces: [],
+        artifacts: [],
+        stageArtifactAliases: [],
+      };
+    }
     case "codebase.registered":
       return {
         runs: [],
@@ -541,6 +675,8 @@ export const applyEvent: Reducer = (state, event) => {
             workspaceId: optionalWorkspaceId(event, payload),
             codebaseId: requireString(event, payload, "codebaseId"),
             updatedAt: event.recordedAt,
+            instructionSnapshotSha256: null,
+            instructionSnapshotJson: null,
           },
         },
       };
@@ -611,6 +747,12 @@ export const applyEvent: Reducer = (state, event) => {
             revision: 1,
             lastEventSequence: event.sequence,
             updatedAt: event.recordedAt,
+            name: null,
+            rootPath: null,
+            topologySha256: null,
+            configurationSha256: null,
+            registrationJson: null,
+            instructionSnapshotJson: null,
           },
         },
       };
@@ -642,6 +784,96 @@ export const applyEvent: Reducer = (state, event) => {
             revision: 1,
             lastEventSequence: event.sequence,
             updatedAt: event.recordedAt,
+            name: null,
+            repositoryPath: null,
+            gitCommonDirectory: null,
+            remotesJson: null,
+            defaultRemote: null,
+            defaultBranch: null,
+          },
+        },
+      };
+    }
+    case "codebase.registration_committed": {
+      const registration = requireRegistration(event, payload);
+      if (state.codebases[registration.codebaseId] !== undefined) {
+        const existing = state.codebases[registration.codebaseId];
+        if (existing?.configurationSha256 === registration.configurationSha256) return state;
+        throw new ReducerError(
+          event.eventId,
+          event.type,
+          `codebase already exists: ${registration.codebaseId}`,
+        );
+      }
+      for (const repository of registration.repositories) {
+        if (state.repositories[repository.repositoryId] !== undefined) {
+          throw new ReducerError(
+            event.eventId,
+            event.type,
+            `repository already exists: ${repository.repositoryId}`,
+          );
+        }
+      }
+      const repositories = { ...state.repositories };
+      for (const repository of registration.repositories) {
+        repositories[repository.repositoryId] = {
+          repositoryId: repository.repositoryId,
+          codebaseId: registration.codebaseId,
+          revision: 1,
+          lastEventSequence: event.sequence,
+          updatedAt: event.recordedAt,
+          name: repository.name,
+          repositoryPath: repository.path,
+          gitCommonDirectory: repository.gitCommonDirectory,
+          remotesJson: repository.remotesJson,
+          defaultRemote: repository.defaultRemote,
+          defaultBranch: repository.defaultBranch,
+        };
+      }
+      return {
+        ...state,
+        codebases: {
+          ...state.codebases,
+          [registration.codebaseId]: {
+            codebaseId: registration.codebaseId,
+            revision: 1,
+            lastEventSequence: event.sequence,
+            updatedAt: event.recordedAt,
+            name: registration.name,
+            rootPath: registration.rootPath,
+            topologySha256: registration.topologySha256,
+            configurationSha256: registration.configurationSha256,
+            registrationJson: registration.registrationJson,
+            instructionSnapshotJson: registration.instructionSnapshotJson,
+          },
+        },
+        repositories,
+      };
+    }
+    case "run.instructions_snapshotted": {
+      const runId = requireRunId(event, payload);
+      const previous = state.runs[runId];
+      if (previous === undefined)
+        throw new ReducerError(event.eventId, event.type, `run does not exist: ${runId}`);
+      if (previous.instructionSnapshotJson !== null) {
+        throw new ReducerError(
+          event.eventId,
+          event.type,
+          `run instruction snapshot is immutable: ${runId}`,
+        );
+      }
+      const snapshot = requireInstructionSnapshot(event, payload);
+      return {
+        ...state,
+        runs: {
+          ...state.runs,
+          [runId]: {
+            ...previous,
+            revision: previous.revision + 1,
+            lastEventSequence: event.sequence,
+            updatedAt: event.recordedAt,
+            instructionSnapshotSha256: snapshot.sha256,
+            instructionSnapshotJson: snapshot.json,
           },
         },
       };

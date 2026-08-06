@@ -90,6 +90,8 @@ const RUN_VIEW: CompareView<RunState> = {
     workspaceId: row.workspaceId,
     codebaseId: row.codebaseId,
     updatedAt: row.updatedAt,
+    instructionSnapshotSha256: row.instructionSnapshotSha256,
+    instructionSnapshotJson: row.instructionSnapshotJson,
   }),
 };
 
@@ -101,6 +103,12 @@ const CODEBASE_VIEW: CompareView<CodebaseState> = {
     revision: row.revision,
     lastEventSequence: row.lastEventSequence,
     updatedAt: row.updatedAt,
+    name: row.name,
+    rootPath: row.rootPath,
+    topologySha256: row.topologySha256,
+    configurationSha256: row.configurationSha256,
+    registrationJson: row.registrationJson,
+    instructionSnapshotJson: row.instructionSnapshotJson,
   }),
 };
 
@@ -113,6 +121,12 @@ const REPOSITORY_VIEW: CompareView<RepositoryState> = {
     revision: row.revision,
     lastEventSequence: row.lastEventSequence,
     updatedAt: row.updatedAt,
+    name: row.name,
+    repositoryPath: row.repositoryPath,
+    gitCommonDirectory: row.gitCommonDirectory,
+    remotesJson: row.remotesJson,
+    defaultRemote: row.defaultRemote,
+    defaultBranch: row.defaultBranch,
   }),
 };
 

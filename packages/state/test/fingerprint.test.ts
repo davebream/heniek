@@ -331,8 +331,8 @@ describe("terminal-schema.sql — the independent, hand-written witness", () => 
     // Pin the *reason* rather than just the inequality: the migrated text
     // carries SQLite's spliced-in ALTER fragment, the hand-written one has
     // `workspace_id` as an ordinary inline column.
-    expect(migratedSql).toContain(", workspace_id TEXT)");
-    expect(handWrittenSql).not.toContain(", workspace_id TEXT)");
+    expect(migratedSql).toContain(", workspace_id TEXT, instruction_snapshot_sha256 TEXT");
+    expect(handWrittenSql).not.toContain(", workspace_id TEXT, instruction_snapshot_sha256 TEXT");
   });
 });
 

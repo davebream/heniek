@@ -14,5 +14,9 @@
   "4": {
     "name": "artifact",
     "statementHash": "573581176191fc391411988c1cc035693348494c768bb2f57bd346dc47b388d4"
+  },
+  "5": {
+    "name": "codebase-registration",
+    "statementHash": "715303be5d6b6f455f88c23705cd7e2686c5624249e07d9fd5ce01689c37d3aa"
   }
 }

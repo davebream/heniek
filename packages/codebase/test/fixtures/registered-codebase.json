@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "codebaseId": "cb-fixture-0001",
+  "name": "fixture",
+  "rootPath": "/workspace/fixture",
+  "sourceRepositoryPath": null,
+  "topologySha256": "021d89320c5585c575c9a9967bcbd62d4ac1a571cc2326b853b7fee2df2e2025",
+  "repositories": [
+    {
+      "repositoryId": "repo-fixture-0001",
+      "name": "fixture",
+      "path": "/workspace/fixture",
+      "gitCommonDirectory": "/workspace/fixture/.git",
+      "remotes": [],
+      "defaultRemote": null,
+      "defaultBranch": null
+    }
+  ],
+  "instructionSnapshot": {
+    "schemaVersion": 1,
+    "snapshotSha256": "33d5c27454b293aaa4c62a11a2872f7182529b8df8560b89e28f89be35977b5f",
+    "capturedAt": "2026-08-06T10:00:00.000Z",
+    "readiness": "ready",
+    "sources": [],
+    "diagnostics": []
+  },
+  "diagnostics": [
+    {
+      "code": "REMOTE_MISSING",
+      "severity": "blocker",
+      "message": "Repository has no configured remote.",
+      "repositoryPath": "/workspace/fixture"
+    },
+    {
+      "code": "DEFAULT_BRANCH_UNKNOWN",
+      "severity": "blocker",
+      "message": "Repository default branch could not be resolved locally.",
+      "repositoryPath": "/workspace/fixture"
+    }
+  ],
+  "readiness": "blocked",
+  "registeredAt": "2026-08-06T10:00:00.000Z",
+  "configurationSha256": "b58f3237c65d9f3dca27970c4244682368d1b1dbb418877c37dbafb56c03cf67"
+}

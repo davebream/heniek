@@ -13,13 +13,19 @@
  */
 
 import { internalHandle, type StateDatabase } from "../database/open.js";
-import { toSafeInteger, toText } from "../database/pragma.js";
+import { toNullableText, toSafeInteger, toText } from "../database/pragma.js";
 
 export interface CodebaseRow {
   readonly codebaseId: string;
   readonly revision: number;
   readonly lastEventSequence: number;
   readonly updatedAt: string;
+  readonly name: string | null;
+  readonly rootPath: string | null;
+  readonly topologySha256: string | null;
+  readonly configurationSha256: string | null;
+  readonly registrationJson: string | null;
+  readonly instructionSnapshotJson: string | null;
 }
 
 export interface RepositoryRow {
@@ -28,6 +34,12 @@ export interface RepositoryRow {
   readonly revision: number;
   readonly lastEventSequence: number;
   readonly updatedAt: string;
+  readonly name: string | null;
+  readonly repositoryPath: string | null;
+  readonly gitCommonDirectory: string | null;
+  readonly remotesJson: string | null;
+  readonly defaultRemote: string | null;
+  readonly defaultBranch: string | null;
 }
 
 export interface WorkspaceRow {
@@ -38,8 +50,12 @@ export interface WorkspaceRow {
   readonly updatedAt: string;
 }
 
-const CODEBASE_COLUMNS = "codebase_id, revision, last_event_sequence, updated_at";
-const REPOSITORY_COLUMNS = "repository_id, codebase_id, revision, last_event_sequence, updated_at";
+const CODEBASE_COLUMNS =
+  "codebase_id, revision, last_event_sequence, updated_at, name, root_path, topology_sha256," +
+  " configuration_sha256, registration_json, instruction_snapshot_json";
+const REPOSITORY_COLUMNS =
+  "repository_id, codebase_id, revision, last_event_sequence, updated_at, name, repository_path," +
+  " git_common_directory, remotes_json, default_remote, default_branch";
 const WORKSPACE_COLUMNS = "workspace_id, codebase_id, revision, last_event_sequence, updated_at";
 
 /**
@@ -55,6 +71,15 @@ export function toCodebaseRow(raw: Record<string, unknown>): CodebaseRow {
     revision: toSafeInteger(raw.revision, "codebase.revision"),
     lastEventSequence: toSafeInteger(raw.last_event_sequence, "codebase.last_event_sequence"),
     updatedAt: toText(raw.updated_at, "codebase.updated_at"),
+    name: toNullableText(raw.name, "codebase.name"),
+    rootPath: toNullableText(raw.root_path, "codebase.root_path"),
+    topologySha256: toNullableText(raw.topology_sha256, "codebase.topology_sha256"),
+    configurationSha256: toNullableText(raw.configuration_sha256, "codebase.configuration_sha256"),
+    registrationJson: toNullableText(raw.registration_json, "codebase.registration_json"),
+    instructionSnapshotJson: toNullableText(
+      raw.instruction_snapshot_json,
+      "codebase.instruction_snapshot_json",
+    ),
   };
 }
 
@@ -65,6 +90,12 @@ export function toRepositoryRow(raw: Record<string, unknown>): RepositoryRow {
     revision: toSafeInteger(raw.revision, "repository.revision"),
     lastEventSequence: toSafeInteger(raw.last_event_sequence, "repository.last_event_sequence"),
     updatedAt: toText(raw.updated_at, "repository.updated_at"),
+    name: toNullableText(raw.name, "repository.name"),
+    repositoryPath: toNullableText(raw.repository_path, "repository.repository_path"),
+    gitCommonDirectory: toNullableText(raw.git_common_directory, "repository.git_common_directory"),
+    remotesJson: toNullableText(raw.remotes_json, "repository.remotes_json"),
+    defaultRemote: toNullableText(raw.default_remote, "repository.default_remote"),
+    defaultBranch: toNullableText(raw.default_branch, "repository.default_branch"),
   };
 }
 

@@ -749,6 +749,8 @@ describe("a row present on one side only", () => {
           workspaceId: null,
           codebaseId: "cb-1",
           updatedAt: "2026-01-01T00:00:00.000Z",
+          instructionSnapshotSha256: null,
+          instructionSnapshotJson: null,
         },
         replayed: null,
       },

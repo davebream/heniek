@@ -1,7 +1,14 @@
 import { createConnection, type Socket } from "node:net";
 import type { ApplicationHome } from "@heniek/config";
+import type { CodebaseDetectionResult, RegisteredCodebase } from "@heniek/contracts";
 import {
   buildSignedRequest,
+  CODEBASE_DETECT_METHOD,
+  CODEBASE_DETECT_V1_METHOD,
+  CODEBASE_DETECTION_SCHEMA_ID,
+  CODEBASE_DETECTION_SCHEMA_SHA256,
+  CODEBASE_REGISTER_METHOD,
+  CODEBASE_REGISTER_V1_METHOD,
   credentialFromPersisted,
   DAEMON_HELLO_METHOD,
   DAEMON_NEGOTIATE_METHOD,
@@ -11,6 +18,8 @@ import {
   type DaemonCredential,
   JSON_RPC_VERSION,
   MAX_LINE_BYTES,
+  REGISTERED_CODEBASE_SCHEMA_ID,
+  REGISTERED_CODEBASE_SCHEMA_SHA256,
   RPC_CANCEL_METHOD,
   TRANSPORT_VERSION,
   zeroCredential,
@@ -54,6 +63,15 @@ export interface StatusSnapshot {
   readonly daemonVersion: number;
   readonly daemonManifestVersion: string;
   readonly schemaCompatibility: "exact" | "incompatible";
+}
+
+export type { CodebaseDetectionResult, RegisteredCodebase } from "@heniek/contracts";
+
+interface RpcRequirement {
+  readonly name: "daemon.status" | "codebase.detect" | "codebase.register";
+  readonly wireMethod: "daemon.status.v1" | "codebase.detect.v1" | "codebase.register.v1";
+  readonly schemaId: string;
+  readonly sha256: string;
 }
 
 interface HelloResult {
@@ -113,9 +131,18 @@ function responseResult(response: Response): unknown {
 function parseHello(value: unknown): HelloResult {
   if (
     !isRecord(value) ||
-    !hasExactKeys(value, ["challenge", "keyId", "protocolVersion", "schemaVersion"]) ||
+    !hasExactKeys(value, [
+      "challenge",
+      "instanceId",
+      "keyId",
+      "macAlgorithm",
+      "protocolVersion",
+      "schemaVersion",
+    ]) ||
     value.schemaVersion !== 1 ||
-    typeof value.protocolVersion !== "number"
+    typeof value.protocolVersion !== "number" ||
+    typeof value.instanceId !== "string" ||
+    value.macAlgorithm !== "hmac-sha256"
   ) {
     throw new HeniekClientError(
       "RPC_FAILURE",
@@ -140,7 +167,10 @@ function parseHello(value: unknown): HelloResult {
   return { protocolVersion: value.protocolVersion, challenge: value.challenge, keyId: value.keyId };
 }
 
-function parseNegotiation(value: unknown): { readonly manifestVersion: string } {
+function parseNegotiation(
+  value: unknown,
+  requirement: RpcRequirement,
+): { readonly manifestVersion: string } {
   if (
     !isRecord(value) ||
     !hasExactKeys(value, [
@@ -165,7 +195,7 @@ function parseNegotiation(value: unknown): { readonly manifestVersion: string } 
       { schemaCompatibility: "incompatible" },
     );
   }
-  const status = value.methods.find(
+  const negotiated = value.methods.find(
     (method) =>
       isRecord(method) &&
       hasExactKeys(method, [
@@ -175,13 +205,13 @@ function parseNegotiation(value: unknown): { readonly manifestVersion: string } 
         "resultSchemaSha256",
         "wireMethod",
       ]) &&
-      method.name === "daemon.status" &&
+      method.name === requirement.name &&
       method.methodVersion === 1 &&
-      method.wireMethod === DAEMON_STATUS_V1_METHOD &&
-      method.resultSchemaId === DAEMON_STATUS_SCHEMA_ID &&
-      method.resultSchemaSha256 === DAEMON_STATUS_SCHEMA_SHA256,
+      method.wireMethod === requirement.wireMethod &&
+      method.resultSchemaId === requirement.schemaId &&
+      method.resultSchemaSha256 === requirement.sha256,
   );
-  if (status === undefined) {
+  if (negotiated === undefined) {
     throw new HeniekClientError(
       "INCOMPATIBLE_PROTOCOL",
       "Heniek daemon protocol is incompatible.",
@@ -238,6 +268,92 @@ function parseStatus(value: unknown): DaemonStatus {
     );
   }
   return value as unknown as DaemonStatus;
+}
+
+const STATUS_REQUIREMENT: RpcRequirement = {
+  name: "daemon.status",
+  wireMethod: DAEMON_STATUS_V1_METHOD,
+  schemaId: DAEMON_STATUS_SCHEMA_ID,
+  sha256: DAEMON_STATUS_SCHEMA_SHA256,
+};
+
+const DETECT_REQUIREMENT: RpcRequirement = {
+  name: CODEBASE_DETECT_METHOD,
+  wireMethod: CODEBASE_DETECT_V1_METHOD,
+  schemaId: CODEBASE_DETECTION_SCHEMA_ID,
+  sha256: CODEBASE_DETECTION_SCHEMA_SHA256,
+};
+
+const REGISTER_REQUIREMENT: RpcRequirement = {
+  name: CODEBASE_REGISTER_METHOD,
+  wireMethod: CODEBASE_REGISTER_V1_METHOD,
+  schemaId: REGISTERED_CODEBASE_SCHEMA_ID,
+  sha256: REGISTERED_CODEBASE_SCHEMA_SHA256,
+};
+
+function parseDetection(value: unknown): CodebaseDetectionResult {
+  if (
+    !isRecord(value) ||
+    !hasExactKeys(value, [
+      "codebaseId",
+      "diagnostics",
+      "instructionSnapshot",
+      "name",
+      "registrationState",
+      "repositories",
+      "rootPath",
+      "schemaVersion",
+      "sourceRepositoryPath",
+      "topologySha256",
+    ]) ||
+    value.schemaVersion !== 1 ||
+    !Array.isArray(value.repositories) ||
+    !Array.isArray(value.diagnostics) ||
+    !isRecord(value.instructionSnapshot) ||
+    typeof value.name !== "string" ||
+    typeof value.rootPath !== "string" ||
+    typeof value.topologySha256 !== "string"
+  ) {
+    throw new HeniekClientError(
+      "RPC_FAILURE",
+      "The Heniek daemon returned an invalid Codebase detection response.",
+      false,
+    );
+  }
+  return value as unknown as CodebaseDetectionResult;
+}
+
+function parseRegistration(value: unknown): RegisteredCodebase {
+  if (
+    !isRecord(value) ||
+    !hasExactKeys(value, [
+      "codebaseId",
+      "configurationSha256",
+      "diagnostics",
+      "instructionSnapshot",
+      "name",
+      "readiness",
+      "registeredAt",
+      "repositories",
+      "rootPath",
+      "schemaVersion",
+      "sourceRepositoryPath",
+      "topologySha256",
+    ]) ||
+    value.schemaVersion !== 1 ||
+    typeof value.codebaseId !== "string" ||
+    !Array.isArray(value.repositories) ||
+    !Array.isArray(value.diagnostics) ||
+    !isRecord(value.instructionSnapshot) ||
+    typeof value.configurationSha256 !== "string"
+  ) {
+    throw new HeniekClientError(
+      "RPC_FAILURE",
+      "The Heniek daemon returned an invalid Codebase registration response.",
+      false,
+    );
+  }
+  return value as unknown as RegisteredCodebase;
 }
 
 class LineClient {
@@ -414,7 +530,17 @@ async function readCredential(home: ApplicationHome): Promise<DaemonCredential> 
   return credential;
 }
 
-async function once(home: ApplicationHome, signal?: AbortSignal): Promise<StatusSnapshot> {
+async function authenticatedOnce<T>(
+  home: ApplicationHome,
+  requirement: RpcRequirement,
+  params: Record<string, unknown>,
+  parse: (value: unknown) => T,
+  signal?: AbortSignal,
+): Promise<{
+  readonly result: T;
+  readonly daemonVersion: number;
+  readonly daemonManifestVersion: string;
+}> {
   const client = await LineClient.connect(home.paths.daemonSocketFile);
   let credential: DaemonCredential | undefined;
   try {
@@ -424,9 +550,7 @@ async function once(home: ApplicationHome, signal?: AbortSignal): Promise<Status
         "INCOMPATIBLE_PROTOCOL",
         "Heniek daemon protocol is incompatible.",
         false,
-        {
-          daemonVersion: hello.protocolVersion,
-        },
+        { daemonVersion: hello.protocolVersion },
       );
     }
     credential = await readCredential(home);
@@ -446,26 +570,23 @@ async function once(home: ApplicationHome, signal?: AbortSignal): Promise<Status
           transportVersions: [TRANSPORT_VERSION],
           requiredMethods: [
             {
-              name: "daemon.status",
+              name: requirement.name,
               methodVersions: [1],
-              resultSchemas: [
-                { schemaId: DAEMON_STATUS_SCHEMA_ID, sha256: DAEMON_STATUS_SCHEMA_SHA256 },
-              ],
+              resultSchemas: [{ schemaId: requirement.schemaId, sha256: requirement.sha256 }],
             },
           ],
         },
         credential,
         challenge,
       ),
-    );
-    const status = parseStatus(
-      await client.request(DAEMON_STATUS_V1_METHOD, {}, credential, challenge, signal),
+      requirement,
     );
     return {
-      status,
+      result: parse(
+        await client.request(requirement.wireMethod, params, credential, challenge, signal),
+      ),
       daemonVersion: hello.protocolVersion,
       daemonManifestVersion: negotiation.manifestVersion,
-      schemaCompatibility: "exact",
     };
   } finally {
     if (credential !== undefined) {
@@ -473,6 +594,16 @@ async function once(home: ApplicationHome, signal?: AbortSignal): Promise<Status
     }
     client.close();
   }
+}
+
+async function once(home: ApplicationHome, signal?: AbortSignal): Promise<StatusSnapshot> {
+  const snapshot = await authenticatedOnce(home, STATUS_REQUIREMENT, {}, parseStatus, signal);
+  return {
+    status: snapshot.result,
+    daemonVersion: snapshot.daemonVersion,
+    daemonManifestVersion: snapshot.daemonManifestVersion,
+    schemaCompatibility: "exact",
+  };
 }
 
 export async function fetchDaemonStatus(
@@ -491,4 +622,70 @@ export async function fetchDaemonStatus(
     }
     throw error;
   }
+}
+
+async function retryAuthentication<T>(operation: () => Promise<T>): Promise<T> {
+  try {
+    return await operation();
+  } catch (error) {
+    if (
+      error instanceof HeniekClientError &&
+      error.code === "AUTHENTICATION_FAILED" &&
+      error.retryable
+    ) {
+      return operation();
+    }
+    throw error;
+  }
+}
+
+export async function detectCodebaseViaDaemon(
+  home: ApplicationHome,
+  roots: readonly string[],
+  options: {
+    readonly sourceRepositoryPath?: string | null;
+    readonly signal?: AbortSignal;
+  } = {},
+): Promise<CodebaseDetectionResult> {
+  return retryAuthentication(async () => {
+    const response = await authenticatedOnce(
+      home,
+      DETECT_REQUIREMENT,
+      {
+        schemaVersion: 1,
+        roots: [...roots],
+        sourceRepositoryPath: options.sourceRepositoryPath ?? null,
+      },
+      parseDetection,
+      options.signal,
+    );
+    return response.result;
+  });
+}
+
+export async function registerCodebaseViaDaemon(
+  home: ApplicationHome,
+  input: {
+    readonly roots: readonly string[];
+    readonly expectedTopologySha256: string;
+    readonly sourceRepositoryPath?: string | null;
+  },
+  options: { readonly signal?: AbortSignal } = {},
+): Promise<RegisteredCodebase> {
+  return retryAuthentication(async () => {
+    const response = await authenticatedOnce(
+      home,
+      REGISTER_REQUIREMENT,
+      {
+        schemaVersion: 1,
+        roots: [...input.roots],
+        sourceRepositoryPath: input.sourceRepositoryPath ?? null,
+        expectedTopologySha256: input.expectedTopologySha256,
+        confirmed: true,
+      },
+      parseRegistration,
+      options.signal,
+    );
+    return response.result;
+  });
 }

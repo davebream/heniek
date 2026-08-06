@@ -67,6 +67,11 @@ const manifestPath = resolve(packageRoot, "../contracts/generated/manifest.json"
  * is `"private": true` and never published, and a repo-wide grep for
  * `DaemonCredentialRotationV1` finds no reference outside the file that
  * declared it. Nothing ever constructed or read one.
+ *
+ * Q010 raised the count 26 → 33 by pure addition: Codebase detection and
+ * registration request/result contracts, immutable instruction diagnostics
+ * and snapshots, and `Run/v2`. `Run/v1` remains byte-identical for legacy
+ * readers; execution readiness rejects legacy rows at the domain guard.
  */
 const EXPECTED_SCHEMAS: readonly {
   readonly schemaId: string;
@@ -115,6 +120,24 @@ const EXPECTED_SCHEMAS: readonly {
     schemaVersion: 1,
     sha256: "5ddce29b0da219c88a64965c0c5f1131a0b4cdc7d482b46dda069f6d95144327",
     path: "generated/CliStatusSuccess.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/CodebaseDetectionResult/v1",
+    schemaVersion: 1,
+    sha256: "0ff6101822ed1ba516ea106ace09d8a6f15fd5c8c8a605bf6b788cb43355b210",
+    path: "generated/CodebaseDetectionResult.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/CodebaseDetectRequest/v1",
+    schemaVersion: 1,
+    sha256: "7d9f6123957478c9d22b7379c9863d410aaa43d93a2840fd2e5f488db158672a",
+    path: "generated/CodebaseDetectRequest.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/CodebaseRegisterRequest/v1",
+    schemaVersion: 1,
+    sha256: "51d590a381a19ee162a13ccdd55b47b3baf37d3372ebd2a6e7c14fa19780bf2e",
+    path: "generated/CodebaseRegisterRequest.v1.schema.json",
   },
   {
     schemaId: "heniek://contract/CreatePullRequestInput/v1",
@@ -171,6 +194,18 @@ const EXPECTED_SCHEMAS: readonly {
     path: "generated/ExecutionResult.v1.schema.json",
   },
   {
+    schemaId: "heniek://contract/InstructionDiagnostic/v1",
+    schemaVersion: 1,
+    sha256: "8ec3850c705343e34ddb27a7eff133fc68d1ef249f358e5b63cb43db967768e6",
+    path: "generated/InstructionDiagnostic.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/InstructionSnapshot/v1",
+    schemaVersion: 1,
+    sha256: "4b2a91b69795c4878b770670cff4cbff166617107ecefc57a6dc83881fd2ad42",
+    path: "generated/InstructionSnapshot.v1.schema.json",
+  },
+  {
     schemaId: "heniek://contract/Interaction/v1",
     schemaVersion: 1,
     sha256: "3f1ceff9662dac675b46bb362e61068934b845ca650957698b3c2c577f3c171a",
@@ -193,6 +228,12 @@ const EXPECTED_SCHEMAS: readonly {
     schemaVersion: 1,
     sha256: "07c6c0fead0ade0271932b7f60262d84644c3097fed4462ca374f9a22496c0ef",
     path: "generated/PullRequest.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/RegisteredCodebase/v1",
+    schemaVersion: 1,
+    sha256: "46aaf927a7b496d3da5b4c438c2f49ab7c6638363384cb0d6aca61fa0258b10f",
+    path: "generated/RegisteredCodebase.v1.schema.json",
   },
   {
     schemaId: "heniek://contract/ResolvedConfiguration/v1",
@@ -219,6 +260,12 @@ const EXPECTED_SCHEMAS: readonly {
     path: "generated/Run.v1.schema.json",
   },
   {
+    schemaId: "heniek://contract/Run/v2",
+    schemaVersion: 2,
+    sha256: "d25ab256d3f066f6f6c98c8484b748522ce297e7fea3892c4510728e7cca1732",
+    path: "generated/Run.v2.schema.json",
+  },
+  {
     schemaId: "heniek://contract/RunRecoveryClassification/v1",
     schemaVersion: 1,
     sha256: "bd4fe19884b2fcf1f6377f202def77a6cf7fce170349ee186bfdc7bf504b077c",
@@ -233,7 +280,7 @@ const EXPECTED_SCHEMAS: readonly {
 ];
 
 describe("packages/contracts generated manifest is unchanged (AC4)", () => {
-  it("manifest.json lists exactly the 26 known schemas with their recorded sha256", async () => {
+  it("manifest.json lists exactly the 33 known schemas with their recorded sha256", async () => {
     const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
     expect(manifest).toEqual({
       schemaVersion: "heniek.contracts-manifest.v1",

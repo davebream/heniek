@@ -298,6 +298,28 @@ const MIGRATION_0004_ARTIFACT: Migration = {
       BEGIN SELECT RAISE(ABORT, 'projection update must advance revision by 1 and cite a newer event'); END`,
   ],
 };
+
+/** Q010: durable Codebase discovery attributes and immutable per-run instruction provenance. */
+const MIGRATION_0005_CODEBASE_REGISTRATION: Migration = {
+  version: 5,
+  name: "codebase-registration",
+  statements: [
+    "ALTER TABLE codebase ADD COLUMN name TEXT",
+    "ALTER TABLE codebase ADD COLUMN root_path TEXT",
+    "ALTER TABLE codebase ADD COLUMN topology_sha256 TEXT",
+    "ALTER TABLE codebase ADD COLUMN configuration_sha256 TEXT",
+    "ALTER TABLE codebase ADD COLUMN registration_json TEXT CHECK (registration_json IS NULL OR json_valid(registration_json))",
+    "ALTER TABLE codebase ADD COLUMN instruction_snapshot_json TEXT CHECK (instruction_snapshot_json IS NULL OR json_valid(instruction_snapshot_json))",
+    "ALTER TABLE repository ADD COLUMN name TEXT",
+    "ALTER TABLE repository ADD COLUMN repository_path TEXT",
+    "ALTER TABLE repository ADD COLUMN git_common_directory TEXT",
+    "ALTER TABLE repository ADD COLUMN remotes_json TEXT CHECK (remotes_json IS NULL OR json_valid(remotes_json))",
+    "ALTER TABLE repository ADD COLUMN default_remote TEXT",
+    "ALTER TABLE repository ADD COLUMN default_branch TEXT",
+    "ALTER TABLE run_projection ADD COLUMN instruction_snapshot_sha256 TEXT",
+    "ALTER TABLE run_projection ADD COLUMN instruction_snapshot_json TEXT CHECK (instruction_snapshot_json IS NULL OR json_valid(instruction_snapshot_json))",
+  ],
+};
 Object.freeze(MIGRATION_0004_ARTIFACT.statements);
 Object.freeze(MIGRATION_0004_ARTIFACT);
 
@@ -306,5 +328,6 @@ export const MIGRATIONS: readonly Migration[] = Object.freeze([
   MIGRATION_0002_RUN_PROJECTION,
   MIGRATION_0003_IDENTITY,
   MIGRATION_0004_ARTIFACT,
+  MIGRATION_0005_CODEBASE_REGISTRATION,
 ]);
 assertAppendOnly(MIGRATIONS);
