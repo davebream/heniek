@@ -1,4 +1,5 @@
 import {
+  CODEBASE_DETECT_V1_METHOD,
   createHmacSha256MacProvider,
   createMethodRegistry,
   dispatchFrame,
@@ -6,7 +7,11 @@ import {
   type MethodContext,
   mintConnectionAuthState,
 } from "@heniek/daemon";
-import { buildSignedRequest } from "@heniek/protocol";
+import {
+  buildSignedRequest,
+  CODEBASE_DETECTION_SCHEMA_ID,
+  CODEBASE_DETECTION_SCHEMA_SHA256,
+} from "@heniek/protocol";
 import { describe, expect, it } from "vitest";
 
 const credential = { keyId: "a".repeat(32), secret: new Uint8Array(32).fill(7) };
@@ -21,6 +26,55 @@ function connection() {
 }
 
 describe("Q009 negotiation and cancellation", () => {
+  it("negotiates and authenticates the versioned Codebase detection method", async () => {
+    const auth = connection();
+    const deps = {
+      registry: createMethodRegistry([
+        [CODEBASE_DETECT_V1_METHOD, () => ({ schemaVersion: 1, topologySha256: "a".repeat(64) })],
+      ]),
+      credential,
+      macProvider: createHmacSha256MacProvider(),
+      instanceId: "daemon-1",
+      protocolVersion: 1,
+      isDraining: () => false,
+    };
+    await dispatchFrame(deps, auth, request('{"jsonrpc":"2.0","id":1,"method":"daemon.hello"}'));
+    const negotiation = buildSignedRequest(credential, auth.challenge, 2, "daemon.negotiate", 1, {
+      schemaVersion: 1,
+      transportVersions: [1],
+      requiredMethods: [
+        {
+          name: "codebase.detect",
+          methodVersions: [1],
+          resultSchemas: [
+            {
+              schemaId: CODEBASE_DETECTION_SCHEMA_ID,
+              sha256: CODEBASE_DETECTION_SCHEMA_SHA256,
+            },
+          ],
+        },
+      ],
+    });
+    expect(JSON.parse(await dispatchFrame(deps, auth, request(negotiation))).result).toMatchObject({
+      compatibility: "compatible",
+      methods: [
+        {
+          name: "codebase.detect",
+          wireMethod: CODEBASE_DETECT_V1_METHOD,
+          resultSchemaSha256: CODEBASE_DETECTION_SCHEMA_SHA256,
+        },
+      ],
+    });
+    const detect = buildSignedRequest(credential, auth.challenge, 3, CODEBASE_DETECT_V1_METHOD, 2, {
+      schemaVersion: 1,
+      roots: ["/repo"],
+      sourceRepositoryPath: null,
+    });
+    expect(JSON.parse(await dispatchFrame(deps, auth, request(detect))).result).toMatchObject({
+      topologySha256: "a".repeat(64),
+    });
+  });
+
   it("negotiates before a canonical status method", async () => {
     const auth = connection();
     const deps = {
