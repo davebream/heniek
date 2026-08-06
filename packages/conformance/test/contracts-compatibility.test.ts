@@ -277,10 +277,34 @@ const EXPECTED_SCHEMAS: readonly {
     sha256: "bba19a9bb7a0647c6e80babe821b020650f4fb702fcffb629a1ac57ff56eaa6a",
     path: "generated/TaskContext.v1.schema.json",
   },
+  {
+    schemaId: "heniek://contract/WorkspaceConfiguration/v1",
+    schemaVersion: 1,
+    sha256: "53f2eef07832e93707729cd0ee79be2a9e9b17ee9fc85a4bf1e95c2da1bf3710",
+    path: "generated/WorkspaceConfiguration.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/WorkspaceProvisioningManifest/v1",
+    schemaVersion: 1,
+    sha256: "0d69e2a405e4c7b65cb9da6da833c502fdb83b21f102e212b86abcb43e742b54",
+    path: "generated/WorkspaceProvisioningManifest.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/WorkspaceSynchronizationResult/v1",
+    schemaVersion: 1,
+    sha256: "2fe27587400747272e5acf288c4ab05d0495bf216c7e3fdf1d97e0ef1278abbf",
+    path: "generated/WorkspaceSynchronizationResult.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/WorkspaceWriterLease/v1",
+    schemaVersion: 1,
+    sha256: "75b0e5e7d04c02d73266ce663bd691d3a9d26d017e459faaee50a7d31e05c18d",
+    path: "generated/WorkspaceWriterLease.v1.schema.json",
+  },
 ];
 
 describe("packages/contracts generated manifest is unchanged (AC4)", () => {
-  it("manifest.json lists exactly the 33 known schemas with their recorded sha256", async () => {
+  it("manifest.json lists exactly the 37 known schemas with their recorded sha256", async () => {
     const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
     expect(manifest).toEqual({
       schemaVersion: "heniek.contracts-manifest.v1",

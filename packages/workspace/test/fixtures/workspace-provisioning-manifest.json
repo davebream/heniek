@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "workspaceId": "ws_fixture",
+  "codebaseId": "cb_fixture",
+  "repositoryId": "repo_fixture",
+  "configurationSha256": "1111111111111111111111111111111111111111111111111111111111111111",
+  "strategy": "managed-worktree",
+  "lifecycle": "ready",
+  "phase": "completed",
+  "workspaceRoot": "/var/lib/heniek/workspaces/ws_fixture",
+  "checkoutPath": "/var/lib/heniek/workspaces/ws_fixture/checkouts/example",
+  "integrationBranch": "heniek/ws_fixture",
+  "remoteBase": {
+    "remote": "origin",
+    "branch": "main",
+    "sha": "2222222222222222222222222222222222222222",
+    "observedSha": "2222222222222222222222222222222222222222",
+    "fetchedAt": "2026-08-06T12:00:00.000Z"
+  },
+  "checkoutHeadSha": "2222222222222222222222222222222222222222",
+  "cleanliness": {
+    "state": "dirty",
+    "sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+    "entries": [
+      {
+        "status": "??",
+        "path": ".env"
+      }
+    ]
+  },
+  "copiedFiles": [
+    {
+      "path": ".env",
+      "sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+      "byteLength": 18
+    }
+  ],
+  "setup": {
+    "state": "succeeded",
+    "commandSha256": "5555555555555555555555555555555555555555555555555555555555555555",
+    "startedAt": "2026-08-06T12:00:01.000Z",
+    "finishedAt": "2026-08-06T12:00:02.000Z",
+    "exitCode": 0,
+    "logPath": "/var/lib/heniek/logs/workspaces/ws_fixture-setup.log",
+    "logSha256": "6666666666666666666666666666666666666666666666666666666666666666"
+  },
+  "createdAt": "2026-08-06T12:00:00.000Z",
+  "updatedAt": "2026-08-06T12:00:02.000Z"
+}

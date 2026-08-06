@@ -6,10 +6,10 @@
 -- the migration DDL in both formatting and statement ordering (round-1
 -- minor revision) rather than merely echoing the migration text verbatim.
 --
--- Terminal version in this phase: 5. Migration 5 adds Codebase registration
--- metadata and immutable run instruction snapshots. `workspace_id` and the
--- instruction snapshot columns are inline in `run_projection`'s
--- column list here and positioned **last** (finding C2): `pragma_table_xinfo`
+-- Terminal version in this phase: 6. Migration 6 adds managed-workspace
+-- lifecycle metadata and durable writer leases. ALTER-appended columns are
+-- positioned **last** in their fresh CREATE declarations (finding C2):
+-- `pragma_table_xinfo`
 -- orders by `cid`, and an `ALTER`-appended column always receives the
 -- highest `cid`, so placing it anywhere else in this fixture would make the
 -- structural digest disagree with the migrated lineages for a reason
@@ -131,8 +131,17 @@ CREATE TABLE workspace
     codebase_id           TEXT NOT NULL REFERENCES codebase(codebase_id),
     revision              INTEGER NOT NULL,
     last_event_sequence   INTEGER NOT NULL REFERENCES state_event(sequence),
-    updated_at            TEXT NOT NULL
+    updated_at            TEXT NOT NULL,
+    repository_id         TEXT REFERENCES repository(repository_id),
+    lifecycle_status      TEXT,
+    checkout_path         TEXT,
+    configuration_sha256  TEXT,
+    manifest_json         TEXT CHECK (manifest_json IS NULL OR json_valid(manifest_json))
 ) STRICT;
+
+CREATE UNIQUE INDEX workspace_checkout_path_unique
+ON workspace (checkout_path)
+WHERE checkout_path IS NOT NULL;
 
 CREATE TRIGGER workspace_first_revision
 BEFORE INSERT ON workspace
@@ -146,6 +155,41 @@ BEFORE UPDATE ON workspace
 WHEN NEW.last_event_sequence <= OLD.last_event_sequence OR NEW.revision <> OLD.revision + 1
 BEGIN
     SELECT RAISE(ABORT, 'projection update must advance revision by 1 and cite a newer event');
+END;
+
+CREATE TABLE workspace_lease
+(
+    checkout_path          TEXT NOT NULL PRIMARY KEY,
+    workspace_id           TEXT NOT NULL REFERENCES workspace(workspace_id),
+    repository_id          TEXT NOT NULL REFERENCES repository(repository_id),
+    lease_id               TEXT NOT NULL,
+    owner_id               TEXT NOT NULL,
+    boot_witness           TEXT,
+    process_witnesses_json TEXT NOT NULL CHECK (json_valid(process_witnesses_json)),
+    expected_sha           TEXT NOT NULL,
+    fencing_revision       INTEGER NOT NULL,
+    lease_state            TEXT NOT NULL,
+    acquired_at            TEXT NOT NULL,
+    renewed_at             TEXT NOT NULL,
+    expires_at             TEXT NOT NULL,
+    released_at            TEXT,
+    revision               INTEGER NOT NULL,
+    last_event_sequence    INTEGER NOT NULL REFERENCES state_event(sequence),
+    updated_at             TEXT NOT NULL
+) STRICT;
+
+CREATE TRIGGER workspace_lease_causal_update
+BEFORE UPDATE ON workspace_lease
+WHEN NEW.last_event_sequence <= OLD.last_event_sequence OR NEW.revision <> OLD.revision + 1
+BEGIN
+    SELECT RAISE(ABORT, 'projection update must advance revision by 1 and cite a newer event');
+END;
+
+CREATE TRIGGER workspace_lease_first_revision
+BEFORE INSERT ON workspace_lease
+WHEN NEW.revision <> 1 OR NEW.fencing_revision <> 1
+BEGIN
+    SELECT RAISE(ABORT, 'first workspace lease revision and fence must be 1');
 END;
 
 CREATE TABLE run_projection
@@ -237,4 +281,4 @@ BEGIN
     SELECT RAISE(ABORT, 'first projection revision must be 1');
 END;
 
-PRAGMA user_version = 5;
+PRAGMA user_version = 6;
