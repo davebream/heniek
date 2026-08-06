@@ -42,6 +42,12 @@ import type { ApplicationHome } from "@heniek/config";
 import type { ExecutionBackend } from "@heniek/contracts";
 import { createFileSecretStore } from "@heniek/secrets";
 import { openStateDatabase, runMigrations } from "@heniek/state";
+import {
+  createNodeOwnerLiveness,
+  createWorkspaceService,
+  createWorkspaceStateStore,
+  type WorkspaceService,
+} from "@heniek/workspace";
 import { mintConnectionAuthState } from "../auth/challenge.js";
 import {
   type DaemonCredential,
@@ -265,6 +271,8 @@ export type StartDaemonOutcome =
   | {
       readonly kind: "serving";
       readonly instanceId: string;
+      /** In-process workspace capability; Q011 deliberately adds no wire method. */
+      readonly workspaceService: WorkspaceService;
       /**
        * Resolves once a graceful drain (a SIGTERM/SIGINT the caller wires
        * through `requestDrain`, or a direct `requestDrain()` call) has fully
@@ -402,6 +410,28 @@ export async function startDaemon(deps: StartDaemonDeps): Promise<StartDaemonOut
   }
 
   const { handle: guard, socket, instanceId } = outcome;
+  let workspaceDatabase: ReturnType<typeof openStateDatabase>;
+  try {
+    workspaceDatabase = openStateDatabase({ path: home.paths.stateDatabaseFile, clock, ids });
+    runMigrations(workspaceDatabase);
+  } catch (error) {
+    guard.release();
+    await socket.close();
+    await removeCredential(secretStore);
+    return {
+      kind: "exited",
+      exitCode: 12,
+      error: error instanceof Error ? error : new Error(String(error)),
+    };
+  }
+  const workspaceService = createWorkspaceService({
+    state: createWorkspaceStateStore(workspaceDatabase),
+    workspacesDirectory: home.paths.workspacesDirectory,
+    logsDirectory: home.paths.logsDirectory,
+    clock,
+    ids,
+    liveness: createNodeOwnerLiveness(),
+  });
   const startedAt = clock.nowIso();
   const reconciliation = reconcileResult?.reconciliation ?? EMPTY_RECONCILIATION;
   const artifactRecovery = reconcileResult?.artifactRecovery ?? EMPTY_ARTIFACT_RECOVERY;
@@ -438,6 +468,7 @@ export async function startDaemon(deps: StartDaemonDeps): Promise<StartDaemonOut
     // this process created (STD-3) — safe here, unlike on claim loss, since
     // this process still legitimately owns both.
     await socket.close();
+    workspaceDatabase.close();
     // Inode-verified: only unlinks if the path still carries this guard's
     // identity.
     guard.release();
@@ -572,5 +603,5 @@ export async function startDaemon(deps: StartDaemonDeps): Promise<StartDaemonOut
     guard,
   });
 
-  return { kind: "serving", instanceId, stopped, requestDrain };
+  return { kind: "serving", instanceId, workspaceService, stopped, requestDrain };
 }

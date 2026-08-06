@@ -400,14 +400,89 @@ const TABLE_SQL: Readonly<Record<ProjectionTable, TableSql>> = {
   },
   workspace: {
     insert:
-      "INSERT INTO workspace (workspace_id, codebase_id, revision, last_event_sequence, updated_at)" +
-      " VALUES (?, ?, ?, ?, ?)",
-    insertColumns: ["workspace_id", "codebase_id", "revision", "last_event_sequence", "updated_at"],
+      "INSERT INTO workspace (workspace_id, codebase_id, repository_id, lifecycle_status," +
+      " checkout_path, configuration_sha256, manifest_json, revision, last_event_sequence," +
+      " updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    insertColumns: [
+      "workspace_id",
+      "codebase_id",
+      "repository_id",
+      "lifecycle_status",
+      "checkout_path",
+      "configuration_sha256",
+      "manifest_json",
+      "revision",
+      "last_event_sequence",
+      "updated_at",
+    ],
     update:
-      "UPDATE workspace SET codebase_id = ?, revision = ?, last_event_sequence = ?, updated_at = ?" +
+      "UPDATE workspace SET codebase_id = ?, repository_id = ?, lifecycle_status = ?," +
+      " checkout_path = ?, configuration_sha256 = ?, manifest_json = ?, revision = ?," +
+      " last_event_sequence = ?, updated_at = ?" +
       " WHERE workspace_id = ? AND revision = ?",
-    updateColumns: ["codebase_id", "revision", "last_event_sequence", "updated_at"],
+    updateColumns: [
+      "codebase_id",
+      "repository_id",
+      "lifecycle_status",
+      "checkout_path",
+      "configuration_sha256",
+      "manifest_json",
+      "revision",
+      "last_event_sequence",
+      "updated_at",
+    ],
     updateKeyColumns: ["workspace_id"],
+  },
+  workspace_lease: {
+    insert:
+      "INSERT INTO workspace_lease (checkout_path, workspace_id, repository_id, lease_id," +
+      " owner_id, boot_witness, process_witnesses_json, expected_sha, fencing_revision," +
+      " lease_state, acquired_at, renewed_at, expires_at, released_at, revision," +
+      " last_event_sequence, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    insertColumns: [
+      "checkout_path",
+      "workspace_id",
+      "repository_id",
+      "lease_id",
+      "owner_id",
+      "boot_witness",
+      "process_witnesses_json",
+      "expected_sha",
+      "fencing_revision",
+      "lease_state",
+      "acquired_at",
+      "renewed_at",
+      "expires_at",
+      "released_at",
+      "revision",
+      "last_event_sequence",
+      "updated_at",
+    ],
+    update:
+      "UPDATE workspace_lease SET workspace_id = ?, repository_id = ?, lease_id = ?, owner_id = ?," +
+      " boot_witness = ?, process_witnesses_json = ?, expected_sha = ?, fencing_revision = ?," +
+      " lease_state = ?, acquired_at = ?, renewed_at = ?, expires_at = ?, released_at = ?," +
+      " revision = ?, last_event_sequence = ?, updated_at = ?" +
+      " WHERE checkout_path = ? AND revision = ?",
+    updateColumns: [
+      "workspace_id",
+      "repository_id",
+      "lease_id",
+      "owner_id",
+      "boot_witness",
+      "process_witnesses_json",
+      "expected_sha",
+      "fencing_revision",
+      "lease_state",
+      "acquired_at",
+      "renewed_at",
+      "expires_at",
+      "released_at",
+      "revision",
+      "last_event_sequence",
+      "updated_at",
+    ],
+    updateKeyColumns: ["checkout_path"],
   },
   artifact: {
     insert:

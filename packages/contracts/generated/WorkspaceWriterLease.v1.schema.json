@@ -1,0 +1,138 @@
+{
+  "$id": "heniek://contract/WorkspaceWriterLease/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "workspaceId",
+    "repositoryId",
+    "checkoutPath",
+    "leaseId",
+    "ownerId",
+    "bootWitness",
+    "processWitnesses",
+    "expectedSha",
+    "fencingRevision",
+    "state",
+    "acquiredAt",
+    "renewedAt",
+    "expiresAt",
+    "releasedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "workspaceId": {
+      "minLength": 1,
+      "description": "Opaque WorkspaceId.",
+      "type": "string"
+    },
+    "repositoryId": {
+      "minLength": 1,
+      "description": "Opaque RepositoryId.",
+      "type": "string"
+    },
+    "checkoutPath": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "leaseId": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "ownerId": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "bootWitness": {
+      "anyOf": [
+        {
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "processWitnesses": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind",
+          "value"
+        ],
+        "properties": {
+          "kind": {
+            "anyOf": [
+              {
+                "const": "process",
+                "type": "string"
+              },
+              {
+                "const": "process-group",
+                "type": "string"
+              }
+            ]
+          },
+          "value": {
+            "minimum": 1,
+            "type": "integer"
+          }
+        }
+      }
+    },
+    "expectedSha": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "fencingRevision": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "state": {
+      "anyOf": [
+        {
+          "const": "active",
+          "type": "string"
+        },
+        {
+          "const": "released",
+          "type": "string"
+        },
+        {
+          "const": "recovery-required",
+          "type": "string"
+        }
+      ]
+    },
+    "acquiredAt": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "renewedAt": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "expiresAt": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "releasedAt": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  }
+}

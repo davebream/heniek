@@ -602,9 +602,37 @@ export function eventScope(event: StateEvent): ProjectionScope {
         codebases: [requireString(event, payload, "codebaseId")],
         repositories: [],
         workspaces: [requireString(event, payload, "workspaceId")],
+        workspaceLeases: [],
         artifacts: [],
         stageArtifactAliases: [],
       };
+    case "workspace.provisioning_recorded":
+      return {
+        runs: [],
+        codebases: [requireString(event, payload, "codebaseId")],
+        repositories: [requireString(event, payload, "repositoryId")],
+        workspaces: [requireString(event, payload, "workspaceId")],
+        workspaceLeases: [],
+        artifacts: [],
+        stageArtifactAliases: [],
+      };
+    case "workspace.lease_acquired":
+    case "workspace.lease_recovered":
+    case "workspace.lease_renewed":
+    case "workspace.lease_expected_sha_advanced":
+    case "workspace.lease_released":
+    case "workspace.lease_recovery_required": {
+      const checkoutPath = requireString(event, payload, "checkoutPath");
+      return {
+        runs: [],
+        codebases: [],
+        repositories: [requireString(event, payload, "repositoryId")],
+        workspaces: [requireString(event, payload, "workspaceId")],
+        workspaceLeases: [checkoutPath],
+        artifacts: [],
+        stageArtifactAliases: [],
+      };
+    }
     case "artifact.published": {
       const runId = requireRunId(event, payload);
       requireStageId(event, payload);
@@ -902,7 +930,170 @@ export const applyEvent: Reducer = (state, event) => {
           [workspaceId]: {
             workspaceId,
             codebaseId,
+            repositoryId: null,
+            lifecycleStatus: null,
+            checkoutPath: null,
+            configurationSha256: null,
+            manifestJson: null,
             revision: 1,
+            lastEventSequence: event.sequence,
+            updatedAt: event.recordedAt,
+          },
+        },
+      };
+    }
+    case "workspace.provisioning_recorded": {
+      const workspaceId = requireString(event, payload, "workspaceId");
+      const codebaseId = requireString(event, payload, "codebaseId");
+      const repositoryId = requireString(event, payload, "repositoryId");
+      const lifecycleStatus = requireString(event, payload, "lifecycleStatus");
+      const checkoutPath = requireString(event, payload, "checkoutPath");
+      const configurationSha256 = requireString(event, payload, "configurationSha256");
+      const manifestJson = requireString(event, payload, "manifestJson");
+      if (state.codebases[codebaseId] === undefined) {
+        throw new ReducerError(
+          event.eventId,
+          event.type,
+          `codebase is not registered: ${codebaseId}`,
+        );
+      }
+      const repository = state.repositories[repositoryId];
+      if (repository === undefined || repository.codebaseId !== codebaseId) {
+        throw new ReducerError(
+          event.eventId,
+          event.type,
+          `repository is not registered to codebase: ${repositoryId}`,
+        );
+      }
+      const previous = state.workspaces[workspaceId];
+      if (previous !== undefined && previous.codebaseId !== codebaseId) {
+        throw new ReducerError(
+          event.eventId,
+          event.type,
+          `workspace belongs to another codebase: ${workspaceId}`,
+        );
+      }
+      return {
+        ...state,
+        workspaces: {
+          ...state.workspaces,
+          [workspaceId]: {
+            workspaceId,
+            codebaseId,
+            repositoryId,
+            lifecycleStatus,
+            checkoutPath,
+            configurationSha256,
+            manifestJson,
+            revision: (previous?.revision ?? 0) + 1,
+            lastEventSequence: event.sequence,
+            updatedAt: event.recordedAt,
+          },
+        },
+      };
+    }
+    case "workspace.lease_acquired":
+    case "workspace.lease_recovered":
+    case "workspace.lease_renewed":
+    case "workspace.lease_expected_sha_advanced":
+    case "workspace.lease_released":
+    case "workspace.lease_recovery_required": {
+      const checkoutPath = requireString(event, payload, "checkoutPath");
+      const workspaceId = requireString(event, payload, "workspaceId");
+      const repositoryId = requireString(event, payload, "repositoryId");
+      if (state.workspaces[workspaceId] === undefined) {
+        throw new ReducerError(
+          event.eventId,
+          event.type,
+          `workspace is not registered: ${workspaceId}`,
+        );
+      }
+      if (state.repositories[repositoryId] === undefined) {
+        throw new ReducerError(
+          event.eventId,
+          event.type,
+          `repository is not registered: ${repositoryId}`,
+        );
+      }
+      const previous = state.workspaceLeases[checkoutPath];
+      const fencingRevision = requireNonNegativeInteger(event, payload, "fencingRevision");
+      const leaseId = requireString(event, payload, "leaseId");
+      const leaseState = requireString(event, payload, "leaseState");
+      if (fencingRevision < 1) {
+        throw new ReducerError(
+          event.eventId,
+          event.type,
+          "payload.fencingRevision must be positive",
+        );
+      }
+      if (event.type === "workspace.lease_acquired") {
+        if (previous !== undefined || fencingRevision !== 1 || leaseState !== "active") {
+          throw new ReducerError(
+            event.eventId,
+            event.type,
+            "initial lease must create fence 1 in active state",
+          );
+        }
+      } else if (event.type === "workspace.lease_recovered") {
+        if (
+          previous === undefined ||
+          fencingRevision !== previous.fencingRevision + 1 ||
+          leaseId === previous.leaseId ||
+          leaseState !== "active"
+        ) {
+          throw new ReducerError(
+            event.eventId,
+            event.type,
+            "lease recovery must replace the lease and advance its fence by 1",
+          );
+        }
+      } else if (
+        previous === undefined ||
+        fencingRevision !== previous.fencingRevision ||
+        leaseId !== previous.leaseId ||
+        workspaceId !== previous.workspaceId ||
+        repositoryId !== previous.repositoryId ||
+        previous.leaseState !== "active"
+      ) {
+        throw new ReducerError(
+          event.eventId,
+          event.type,
+          "lease mutation must target the current active identity and fence",
+        );
+      }
+      const expectedState =
+        event.type === "workspace.lease_released"
+          ? "released"
+          : event.type === "workspace.lease_recovery_required"
+            ? "recovery-required"
+            : "active";
+      if (leaseState !== expectedState) {
+        throw new ReducerError(
+          event.eventId,
+          event.type,
+          `lease event must produce ${expectedState} state`,
+        );
+      }
+      return {
+        ...state,
+        workspaceLeases: {
+          ...state.workspaceLeases,
+          [checkoutPath]: {
+            checkoutPath,
+            workspaceId,
+            repositoryId,
+            leaseId,
+            ownerId: requireString(event, payload, "ownerId"),
+            bootWitness: nullableString(payload.bootWitness),
+            processWitnessesJson: requireString(event, payload, "processWitnessesJson"),
+            expectedSha: requireString(event, payload, "expectedSha"),
+            fencingRevision,
+            leaseState,
+            acquiredAt: requireString(event, payload, "acquiredAt"),
+            renewedAt: requireString(event, payload, "renewedAt"),
+            expiresAt: requireString(event, payload, "expiresAt"),
+            releasedAt: nullableString(payload.releasedAt),
+            revision: (previous?.revision ?? 0) + 1,
             lastEventSequence: event.sequence,
             updatedAt: event.recordedAt,
           },

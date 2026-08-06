@@ -45,6 +45,11 @@ export interface RepositoryRow {
 export interface WorkspaceRow {
   readonly workspaceId: string;
   readonly codebaseId: string;
+  readonly repositoryId: string | null;
+  readonly lifecycleStatus: string | null;
+  readonly checkoutPath: string | null;
+  readonly configurationSha256: string | null;
+  readonly manifestJson: string | null;
   readonly revision: number;
   readonly lastEventSequence: number;
   readonly updatedAt: string;
@@ -56,7 +61,9 @@ const CODEBASE_COLUMNS =
 const REPOSITORY_COLUMNS =
   "repository_id, codebase_id, revision, last_event_sequence, updated_at, name, repository_path," +
   " git_common_directory, remotes_json, default_remote, default_branch";
-const WORKSPACE_COLUMNS = "workspace_id, codebase_id, revision, last_event_sequence, updated_at";
+const WORKSPACE_COLUMNS =
+  "workspace_id, codebase_id, repository_id, lifecycle_status, checkout_path," +
+  " configuration_sha256, manifest_json, revision, last_event_sequence, updated_at";
 
 /**
  * Explicit per-table narrowing functions, one per row shape — deliberately
@@ -103,6 +110,11 @@ export function toWorkspaceRow(raw: Record<string, unknown>): WorkspaceRow {
   return {
     workspaceId: toText(raw.workspace_id, "workspace.workspace_id"),
     codebaseId: toText(raw.codebase_id, "workspace.codebase_id"),
+    repositoryId: toNullableText(raw.repository_id, "workspace.repository_id"),
+    lifecycleStatus: toNullableText(raw.lifecycle_status, "workspace.lifecycle_status"),
+    checkoutPath: toNullableText(raw.checkout_path, "workspace.checkout_path"),
+    configurationSha256: toNullableText(raw.configuration_sha256, "workspace.configuration_sha256"),
+    manifestJson: toNullableText(raw.manifest_json, "workspace.manifest_json"),
     revision: toSafeInteger(raw.revision, "workspace.revision"),
     lastEventSequence: toSafeInteger(raw.last_event_sequence, "workspace.last_event_sequence"),
     updatedAt: toText(raw.updated_at, "workspace.updated_at"),

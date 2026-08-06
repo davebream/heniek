@@ -35,6 +35,7 @@ import type {
   RepositoryState,
   RunState,
   StageArtifactAliasState,
+  WorkspaceLeaseState,
   WorkspaceState,
 } from "../projection/state.js";
 import { loadStoredProjectionState, projectionDigest } from "../projection/state.js";
@@ -136,6 +137,35 @@ const WORKSPACE_VIEW: CompareView<WorkspaceState> = {
   toJson: (row) => ({
     workspaceId: row.workspaceId,
     codebaseId: row.codebaseId,
+    repositoryId: row.repositoryId,
+    lifecycleStatus: row.lifecycleStatus,
+    checkoutPath: row.checkoutPath,
+    configurationSha256: row.configurationSha256,
+    manifestJson: row.manifestJson,
+    revision: row.revision,
+    lastEventSequence: row.lastEventSequence,
+    updatedAt: row.updatedAt,
+  }),
+};
+
+const WORKSPACE_LEASE_VIEW: CompareView<WorkspaceLeaseState> = {
+  table: "workspace_lease",
+  select: (state) => state.workspaceLeases,
+  toJson: (row) => ({
+    checkoutPath: row.checkoutPath,
+    workspaceId: row.workspaceId,
+    repositoryId: row.repositoryId,
+    leaseId: row.leaseId,
+    ownerId: row.ownerId,
+    bootWitness: row.bootWitness,
+    processWitnessesJson: row.processWitnessesJson,
+    expectedSha: row.expectedSha,
+    fencingRevision: row.fencingRevision,
+    leaseState: row.leaseState,
+    acquiredAt: row.acquiredAt,
+    renewedAt: row.renewedAt,
+    expiresAt: row.expiresAt,
+    releasedAt: row.releasedAt,
     revision: row.revision,
     lastEventSequence: row.lastEventSequence,
     updatedAt: row.updatedAt,
@@ -251,6 +281,7 @@ export function compareProjectionToReplay(
     ...compareTable(RUN_VIEW, stored, replay.state),
     ...compareTable(STAGE_ARTIFACT_ALIAS_VIEW, stored, replay.state),
     ...compareTable(WORKSPACE_VIEW, stored, replay.state),
+    ...compareTable(WORKSPACE_LEASE_VIEW, stored, replay.state),
   ].sort((left, right) => {
     if (left.table !== right.table) {
       return left.table < right.table ? -1 : 1;

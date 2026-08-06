@@ -18,5 +18,9 @@
   "5": {
     "name": "codebase-registration",
     "statementHash": "715303be5d6b6f455f88c23705cd7e2686c5624249e07d9fd5ce01689c37d3aa"
+  },
+  "6": {
+    "name": "workspace-lifecycle-and-writer-leases",
+    "statementHash": "692283717b79398e57345dd5ef69a6484543111e1a3e28c666619776e3f19aaf"
   }
 }

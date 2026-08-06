@@ -23,6 +23,11 @@ import {
   type WorkspaceRow,
 } from "./identity.js";
 import { type RunProjectionRow, toRunProjectionRow } from "./run.js";
+import {
+  toWorkspaceLeaseRow,
+  WORKSPACE_LEASE_COLUMNS,
+  type WorkspaceLeaseRow,
+} from "./workspace-lease.js";
 
 /**
  * Aliased, not re-declared (finding MIN-11): the reads in Task 3.4 produce a
@@ -39,6 +44,7 @@ export type RunState = RunProjectionRow;
 export type CodebaseState = CodebaseRow;
 export type RepositoryState = RepositoryRow;
 export type WorkspaceState = WorkspaceRow;
+export type WorkspaceLeaseState = WorkspaceLeaseRow;
 
 /**
  * The `artifact` row (design D11, D11a; plan Task 2.2). Immutable once
@@ -98,6 +104,8 @@ export interface ProjectionState {
   readonly codebases: Readonly<Record<string, CodebaseState>>;
   readonly repositories: Readonly<Record<string, RepositoryState>>;
   readonly workspaces: Readonly<Record<string, WorkspaceState>>;
+  /** Keyed by canonical checkout path. */
+  readonly workspaceLeases: Readonly<Record<string, WorkspaceLeaseState>>;
   readonly artifacts: Readonly<Record<string, ArtifactState>>;
   /** Keyed by `stageArtifactAliasKey`. */
   readonly stageArtifactAliases: Readonly<Record<string, StageArtifactAliasState>>;
@@ -108,6 +116,7 @@ export const EMPTY_PROJECTION_STATE: ProjectionState = Object.freeze({
   codebases: Object.freeze({}),
   repositories: Object.freeze({}),
   workspaces: Object.freeze({}),
+  workspaceLeases: Object.freeze({}),
   artifacts: Object.freeze({}),
   stageArtifactAliases: Object.freeze({}),
 });
@@ -118,7 +127,8 @@ export type ProjectionTable =
   | "repository"
   | "run_projection"
   | "stage_artifact_alias"
-  | "workspace";
+  | "workspace"
+  | "workspace_lease";
 
 export interface ProjectionWrite {
   readonly table: ProjectionTable;
@@ -146,6 +156,7 @@ const TABLE_ORDER: readonly ProjectionTable[] = [
   "run_projection",
   "stage_artifact_alias",
   "workspace",
+  "workspace_lease",
 ];
 
 function runRow(state: RunState): Record<string, string | number | null> {
@@ -197,6 +208,33 @@ function workspaceRow(state: WorkspaceState): Record<string, string | number | n
   return {
     workspace_id: state.workspaceId,
     codebase_id: state.codebaseId,
+    repository_id: state.repositoryId,
+    lifecycle_status: state.lifecycleStatus,
+    checkout_path: state.checkoutPath,
+    configuration_sha256: state.configurationSha256,
+    manifest_json: state.manifestJson,
+    revision: state.revision,
+    last_event_sequence: state.lastEventSequence,
+    updated_at: state.updatedAt,
+  };
+}
+
+function workspaceLeaseRow(state: WorkspaceLeaseState): Record<string, string | number | null> {
+  return {
+    checkout_path: state.checkoutPath,
+    workspace_id: state.workspaceId,
+    repository_id: state.repositoryId,
+    lease_id: state.leaseId,
+    owner_id: state.ownerId,
+    boot_witness: state.bootWitness,
+    process_witnesses_json: state.processWitnessesJson,
+    expected_sha: state.expectedSha,
+    fencing_revision: state.fencingRevision,
+    lease_state: state.leaseState,
+    acquired_at: state.acquiredAt,
+    renewed_at: state.renewedAt,
+    expires_at: state.expiresAt,
+    released_at: state.releasedAt,
     revision: state.revision,
     last_event_sequence: state.lastEventSequence,
     updated_at: state.updatedAt,
@@ -272,6 +310,13 @@ const WORKSPACE_VIEW: TableView<WorkspaceState> = {
   select: (state) => state.workspaces,
   revisionOf: (row) => row.revision,
   toRow: workspaceRow,
+};
+
+const WORKSPACE_LEASE_VIEW: TableView<WorkspaceLeaseState> = {
+  table: "workspace_lease",
+  select: (state) => state.workspaceLeases,
+  revisionOf: (row) => row.revision,
+  toRow: workspaceLeaseRow,
 };
 /**
  * `revisionOf` always returns the row's own `revision`, which is always `1`
@@ -355,6 +400,7 @@ export function diffProjectionState(
     [RUN_VIEW.table, diffTable(RUN_VIEW, before, after)],
     [STAGE_ARTIFACT_ALIAS_VIEW.table, diffTable(STAGE_ARTIFACT_ALIAS_VIEW, before, after)],
     [WORKSPACE_VIEW.table, diffTable(WORKSPACE_VIEW, before, after)],
+    [WORKSPACE_LEASE_VIEW.table, diffTable(WORKSPACE_LEASE_VIEW, before, after)],
   ]);
   return TABLE_ORDER.flatMap((table) => byTable.get(table) ?? []);
 }
@@ -427,6 +473,36 @@ export function projectionStateToJson(state: ProjectionState): JsonValue {
       workspaces[key] = {
         workspaceId: row.workspaceId,
         codebaseId: row.codebaseId,
+        repositoryId: row.repositoryId,
+        lifecycleStatus: row.lifecycleStatus,
+        checkoutPath: row.checkoutPath,
+        configurationSha256: row.configurationSha256,
+        manifestJson: row.manifestJson,
+        revision: row.revision,
+        lastEventSequence: row.lastEventSequence,
+        updatedAt: row.updatedAt,
+      };
+    }
+  }
+  const workspaceLeases: Record<string, JsonValue> = {};
+  for (const key of Object.keys(state.workspaceLeases).sort()) {
+    const row = state.workspaceLeases[key];
+    if (row !== undefined) {
+      workspaceLeases[key] = {
+        checkoutPath: row.checkoutPath,
+        workspaceId: row.workspaceId,
+        repositoryId: row.repositoryId,
+        leaseId: row.leaseId,
+        ownerId: row.ownerId,
+        bootWitness: row.bootWitness,
+        processWitnessesJson: row.processWitnessesJson,
+        expectedSha: row.expectedSha,
+        fencingRevision: row.fencingRevision,
+        leaseState: row.leaseState,
+        acquiredAt: row.acquiredAt,
+        renewedAt: row.renewedAt,
+        expiresAt: row.expiresAt,
+        releasedAt: row.releasedAt,
         revision: row.revision,
         lastEventSequence: row.lastEventSequence,
         updatedAt: row.updatedAt,
@@ -470,7 +546,15 @@ export function projectionStateToJson(state: ProjectionState): JsonValue {
       };
     }
   }
-  return { artifacts, codebases, repositories, runs, stageArtifactAliases, workspaces };
+  return {
+    artifacts,
+    codebases,
+    repositories,
+    runs,
+    stageArtifactAliases,
+    workspaces,
+    workspaceLeases,
+  };
 }
 
 /** sha256 over the canonical JSON — reproducible across hosts and processes. */
@@ -585,12 +669,20 @@ export function loadStoredProjectionState(db: StateDatabase): ProjectionState {
   const workspaces: Record<string, WorkspaceState> = {};
   for (const raw of handle
     .prepare(
-      "SELECT workspace_id, codebase_id, revision, last_event_sequence, updated_at" +
+      "SELECT workspace_id, codebase_id, repository_id, lifecycle_status, checkout_path," +
+        " configuration_sha256, manifest_json, revision, last_event_sequence, updated_at" +
         " FROM workspace ORDER BY workspace_id",
     )
     .all()) {
     const row = toWorkspaceRow(raw);
     workspaces[row.workspaceId] = row;
+  }
+  const workspaceLeases: Record<string, WorkspaceLeaseState> = {};
+  for (const raw of handle
+    .prepare(`SELECT ${WORKSPACE_LEASE_COLUMNS} FROM workspace_lease ORDER BY checkout_path`)
+    .all()) {
+    const row = toWorkspaceLeaseRow(raw);
+    workspaceLeases[row.checkoutPath] = row;
   }
   const artifacts: Record<string, ArtifactState> = {};
   for (const raw of handle
@@ -609,7 +701,15 @@ export function loadStoredProjectionState(db: StateDatabase): ProjectionState {
     const row = toStageArtifactAliasRow(raw);
     stageArtifactAliases[stageArtifactAliasKey(row.runId, row.stageId, row.name)] = row;
   }
-  return { artifacts, codebases, repositories, runs, stageArtifactAliases, workspaces };
+  return {
+    artifacts,
+    codebases,
+    repositories,
+    runs,
+    stageArtifactAliases,
+    workspaces,
+    workspaceLeases,
+  };
 }
 
 /** One `(runId, stageId, name)` triple — `stage_artifact_alias`'s composite primary key. */
@@ -624,6 +724,7 @@ export interface ProjectionScope {
   readonly codebases: readonly string[];
   readonly repositories: readonly string[];
   readonly workspaces: readonly string[];
+  readonly workspaceLeases?: readonly string[];
   /** `artifactId`s. */
   readonly artifacts: readonly string[];
   readonly stageArtifactAliases: readonly StageArtifactAliasScopeKey[];
@@ -681,13 +782,24 @@ export function loadScopedProjectionState(
   }
   const workspaces: Record<string, WorkspaceState> = {};
   const workspaceStatement = handle.prepare(
-    "SELECT workspace_id, codebase_id, revision, last_event_sequence, updated_at" +
+    "SELECT workspace_id, codebase_id, repository_id, lifecycle_status, checkout_path," +
+      " configuration_sha256, manifest_json, revision, last_event_sequence, updated_at" +
       " FROM workspace WHERE workspace_id = ?",
   );
   for (const key of scope.workspaces) {
     const raw = workspaceStatement.get(key);
     if (raw !== undefined) {
       workspaces[key] = toWorkspaceRow(raw);
+    }
+  }
+  const workspaceLeases: Record<string, WorkspaceLeaseState> = {};
+  const workspaceLeaseStatement = handle.prepare(
+    `SELECT ${WORKSPACE_LEASE_COLUMNS} FROM workspace_lease WHERE checkout_path = ?`,
+  );
+  for (const key of scope.workspaceLeases ?? []) {
+    const raw = workspaceLeaseStatement.get(key);
+    if (raw !== undefined) {
+      workspaceLeases[key] = toWorkspaceLeaseRow(raw);
     }
   }
   const artifacts: Record<string, ArtifactState> = {};
@@ -712,5 +824,13 @@ export function loadScopedProjectionState(
       stageArtifactAliases[key] = toStageArtifactAliasRow(raw);
     }
   }
-  return { artifacts, codebases, repositories, runs, stageArtifactAliases, workspaces };
+  return {
+    artifacts,
+    codebases,
+    repositories,
+    runs,
+    stageArtifactAliases,
+    workspaces,
+    workspaceLeases,
+  };
 }

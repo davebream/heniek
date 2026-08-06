@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "checkoutPath": "/var/lib/heniek/workspaces/ws_fixture/checkouts/example",
+  "events": [
+    {
+      "sequence": 1,
+      "type": "workspace.lease_acquired",
+      "leaseId": "lease_1",
+      "ownerId": "owner_a",
+      "fencingRevision": 1,
+      "state": "active"
+    },
+    {
+      "sequence": 2,
+      "type": "acquisition_blocked",
+      "leaseId": "lease_1",
+      "ownerId": "owner_b",
+      "fencingRevision": 1,
+      "reason": "owner-alive"
+    },
+    {
+      "sequence": 3,
+      "type": "workspace.lease_recovered",
+      "leaseId": "lease_2",
+      "ownerId": "owner_b",
+      "fencingRevision": 2,
+      "state": "active"
+    },
+    {
+      "sequence": 4,
+      "type": "stale-mutation-refused",
+      "leaseId": "lease_1",
+      "ownerId": "owner_a",
+      "fencingRevision": 1,
+      "reason": "fenced"
+    },
+    {
+      "sequence": 5,
+      "type": "workspace.lease_released",
+      "leaseId": "lease_2",
+      "ownerId": "owner_b",
+      "fencingRevision": 2,
+      "state": "released"
+    }
+  ]
+}
