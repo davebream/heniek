@@ -465,13 +465,21 @@ describe.skipIf(!realClaudeEnabled)("Q012 real Claude vertical [opt-in]", () => 
   }, async () => {
     const runtimeRoot = process.env.HENIEK_CONFORMANCE_SMOKE_CLAUDEXOR_ROOT;
     const oauthToken = process.env.CLAUDE_CODE_OAUTH_TOKEN;
-    if (runtimeRoot === undefined || oauthToken === undefined || oauthToken.length === 0) {
+    const claudeBinary = process.env.CLAUDEXOR_CLAUDE_BIN;
+    if (
+      runtimeRoot === undefined ||
+      oauthToken === undefined ||
+      oauthToken.length === 0 ||
+      claudeBinary === undefined ||
+      !claudeBinary.startsWith("/")
+    ) {
       throw new Error(
-        "HENIEK_Q012_REAL_CLAUDE=1 requires a prebuilt HENIEK_CONFORMANCE_SMOKE_CLAUDEXOR_ROOT and CLAUDE_CODE_OAUTH_TOKEN; API-key fallback is forbidden.",
+        "HENIEK_Q012_REAL_CLAUDE=1 requires a prebuilt HENIEK_CONFORMANCE_SMOKE_CLAUDEXOR_ROOT, an absolute CLAUDEXOR_CLAUDE_BIN, and CLAUDE_CODE_OAUTH_TOKEN; API-key fallback is forbidden.",
       );
     }
     const isolatedEnvironment: NodeJS.ProcessEnv = {
       PATH: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+      CLAUDEXOR_CLAUDE_BIN: claudeBinary,
       CLAUDE_CODE_OAUTH_TOKEN: oauthToken,
       ...(process.env.LANG === undefined ? {} : { LANG: process.env.LANG }),
       ...(process.env.LC_ALL === undefined ? {} : { LC_ALL: process.env.LC_ALL }),
@@ -503,7 +511,8 @@ describe.skipIf(!realClaudeEnabled)("Q012 real Claude vertical [opt-in]", () => 
         currentDirectory: setup.source,
         prompt:
           "Before doing any work, use AskUserQuestion to ask one free-text question titled Q012. " +
-          "After the answer, write artifacts/q012-real.txt containing the answer and the marker Q012_REAL_OK.",
+          "After the answer, use a tool to write artifacts/q012-real.txt containing the answer and the marker Q012_REAL_OK. " +
+          "Verify that exact file exists before completing; do not finish until it does.",
         artifactPath: "artifacts/q012-real.txt",
         limits: { maxDurationMs: 360_000, maxTurns: 12 },
       });
@@ -514,7 +523,10 @@ describe.skipIf(!realClaudeEnabled)("Q012 real Claude vertical [opt-in]", () => 
         await sleep(2_000);
         waiting = await service.status(started.runId);
       }
-      expect(waiting.status).toBe("waiting_on_user");
+      expect(
+        waiting.status,
+        waiting.error ?? waiting.summary ?? "the external stage did not request a question",
+      ).toBe("waiting_on_user");
       const originalHandle = waiting.backendExecutionId;
       service.stop();
       db.close();
@@ -553,7 +565,10 @@ describe.skipIf(!realClaudeEnabled)("Q012 real Claude vertical [opt-in]", () => 
         await sleep(2_000);
         completed = await service.result(started.runId);
       }
-      expect(completed).toMatchObject({
+      expect(
+        completed,
+        completed.error ?? completed.summary ?? "the external stage did not complete successfully",
+      ).toMatchObject({
         status: "succeeded",
         backendExecutionId: originalHandle,
         finalized: true,

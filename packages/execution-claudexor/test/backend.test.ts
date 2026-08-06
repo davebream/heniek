@@ -118,12 +118,10 @@ describe("Claudexor ExecutionBackendV2", () => {
       if (parsed.pathname === "/v2/runs/run-upstream-1/produced") {
         return json({
           runId: "run-upstream-1",
-          artifacts: [
-            { path: "artifacts/report.md", kind: "file", bytes: 6, mime: "text/markdown" },
-          ],
+          artifacts: [{ path: "report.md", kind: "file", bytes: 6, mime: "text/markdown" }],
         });
       }
-      if (parsed.pathname === "/v2/runs/run-upstream-1/produced/artifacts/report.md") {
+      if (parsed.pathname === "/v2/runs/run-upstream-1/produced/report.md") {
         return new Response("report");
       }
       throw new Error(`unexpected route: ${method} ${parsed.pathname}`);
@@ -161,7 +159,7 @@ describe("Claudexor ExecutionBackendV2", () => {
       sessionId: "session-native-1",
       artifacts: [{ path: "artifacts/report.md", byteLength: 6 }],
     });
-    await expect(backend.readArtifact(handle.executionId, "artifacts/report.md")).resolves.toEqual(
+    await expect(backend.readArtifact(handle.executionId, "report.md")).resolves.toEqual(
       new TextEncoder().encode("report"),
     );
 
