@@ -60,6 +60,9 @@ export function createWorkspaceLeaseService(
   }
 
   return {
+    current(checkoutPath) {
+      return deps.state.lease(checkoutPath);
+    },
     acquire(input) {
       if (input.ttlMilliseconds < 1) {
         throw new WorkspaceError("INVALID_CONFIGURATION", "Lease TTL must be positive.");

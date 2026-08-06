@@ -1,7 +1,23 @@
+import { createHash } from "node:crypto";
 import { createConnection, type Socket } from "node:net";
 import type { ApplicationHome } from "@heniek/config";
-import type { CodebaseDetectionResult, RegisteredCodebase } from "@heniek/contracts";
+import type {
+  ArtifactGetResultV1,
+  ArtifactId,
+  CodebaseDetectionResult,
+  DoctorReportV1,
+  InteractionAnswerSetV1,
+  RegisteredCodebase,
+  StageRunMutationResultV1,
+  StageRunResultV1,
+  StageRunStatusResultV1,
+  StageStartResultV1,
+} from "@heniek/contracts";
 import {
+  ARTIFACT_GET_METHOD,
+  ARTIFACT_GET_SCHEMA_ID,
+  ARTIFACT_GET_SCHEMA_SHA256,
+  ARTIFACT_GET_V1_METHOD,
   buildSignedRequest,
   CODEBASE_DETECT_METHOD,
   CODEBASE_DETECT_V1_METHOD,
@@ -16,15 +32,40 @@ import {
   DAEMON_STATUS_SCHEMA_SHA256,
   DAEMON_STATUS_V1_METHOD,
   type DaemonCredential,
+  DOCTOR_METHOD,
+  DOCTOR_SCHEMA_ID,
+  DOCTOR_SCHEMA_SHA256,
+  DOCTOR_V1_METHOD,
   JSON_RPC_VERSION,
   MAX_LINE_BYTES,
   REGISTERED_CODEBASE_SCHEMA_ID,
   REGISTERED_CODEBASE_SCHEMA_SHA256,
   RPC_CANCEL_METHOD,
+  RUN_ANSWER_METHOD,
+  RUN_ANSWER_V1_METHOD,
+  RUN_CANCEL_METHOD,
+  RUN_CANCEL_V1_METHOD,
+  RUN_MUTATION_SCHEMA_ID,
+  RUN_MUTATION_SCHEMA_SHA256,
+  RUN_RESULT_METHOD,
+  RUN_RESULT_SCHEMA_ID,
+  RUN_RESULT_SCHEMA_SHA256,
+  RUN_RESULT_V1_METHOD,
+  RUN_RESUME_METHOD,
+  RUN_RESUME_V1_METHOD,
+  RUN_STATUS_METHOD,
+  RUN_STATUS_SCHEMA_ID,
+  RUN_STATUS_SCHEMA_SHA256,
+  RUN_STATUS_V1_METHOD,
+  STAGE_START_METHOD,
+  STAGE_START_SCHEMA_ID,
+  STAGE_START_SCHEMA_SHA256,
+  STAGE_START_V1_METHOD,
   TRANSPORT_VERSION,
   zeroCredential,
 } from "@heniek/protocol";
 import { createFileSecretStore } from "@heniek/secrets";
+import type { Static } from "@sinclair/typebox";
 
 export type ClientFailureCode =
   | "DAEMON_UNAVAILABLE"
@@ -68,8 +109,8 @@ export interface StatusSnapshot {
 export type { CodebaseDetectionResult, RegisteredCodebase } from "@heniek/contracts";
 
 interface RpcRequirement {
-  readonly name: "daemon.status" | "codebase.detect" | "codebase.register";
-  readonly wireMethod: "daemon.status.v1" | "codebase.detect.v1" | "codebase.register.v1";
+  readonly name: string;
+  readonly wireMethod: string;
   readonly schemaId: string;
   readonly sha256: string;
 }
@@ -290,6 +331,61 @@ const REGISTER_REQUIREMENT: RpcRequirement = {
   schemaId: REGISTERED_CODEBASE_SCHEMA_ID,
   sha256: REGISTERED_CODEBASE_SCHEMA_SHA256,
 };
+
+const STAGE_START_REQUIREMENT: RpcRequirement = {
+  name: STAGE_START_METHOD,
+  wireMethod: STAGE_START_V1_METHOD,
+  schemaId: STAGE_START_SCHEMA_ID,
+  sha256: STAGE_START_SCHEMA_SHA256,
+};
+
+const RUN_STATUS_REQUIREMENT: RpcRequirement = {
+  name: RUN_STATUS_METHOD,
+  wireMethod: RUN_STATUS_V1_METHOD,
+  schemaId: RUN_STATUS_SCHEMA_ID,
+  sha256: RUN_STATUS_SCHEMA_SHA256,
+};
+
+function mutationRequirement(name: string, wireMethod: string): RpcRequirement {
+  return {
+    name,
+    wireMethod,
+    schemaId: RUN_MUTATION_SCHEMA_ID,
+    sha256: RUN_MUTATION_SCHEMA_SHA256,
+  };
+}
+
+const RUN_RESULT_REQUIREMENT: RpcRequirement = {
+  name: RUN_RESULT_METHOD,
+  wireMethod: RUN_RESULT_V1_METHOD,
+  schemaId: RUN_RESULT_SCHEMA_ID,
+  sha256: RUN_RESULT_SCHEMA_SHA256,
+};
+
+const ARTIFACT_GET_REQUIREMENT: RpcRequirement = {
+  name: ARTIFACT_GET_METHOD,
+  wireMethod: ARTIFACT_GET_V1_METHOD,
+  schemaId: ARTIFACT_GET_SCHEMA_ID,
+  sha256: ARTIFACT_GET_SCHEMA_SHA256,
+};
+
+const DOCTOR_REQUIREMENT: RpcRequirement = {
+  name: DOCTOR_METHOD,
+  wireMethod: DOCTOR_V1_METHOD,
+  schemaId: DOCTOR_SCHEMA_ID,
+  sha256: DOCTOR_SCHEMA_SHA256,
+};
+
+function parseVersioned<T>(value: unknown, description: string): T {
+  if (!isRecord(value) || value.schemaVersion !== 1) {
+    throw new HeniekClientError(
+      "RPC_FAILURE",
+      `The Heniek daemon returned an invalid ${description} response.`,
+      false,
+    );
+  }
+  return value as T;
+}
 
 function parseDetection(value: unknown): CodebaseDetectionResult {
   if (
@@ -688,4 +784,159 @@ export async function registerCodebaseViaDaemon(
     );
     return response.result;
   });
+}
+
+async function domainCall<T>(
+  home: ApplicationHome,
+  requirement: RpcRequirement,
+  params: Record<string, unknown>,
+  description: string,
+  signal?: AbortSignal,
+): Promise<T> {
+  return retryAuthentication(async () => {
+    const response = await authenticatedOnce(
+      home,
+      requirement,
+      params,
+      (value) => parseVersioned<T>(value, description),
+      signal,
+    );
+    return response.result;
+  });
+}
+
+export function startStageViaDaemon(
+  home: ApplicationHome,
+  input: {
+    readonly currentDirectory: string;
+    readonly prompt: string;
+    readonly artifactPath: string;
+    readonly limits?: { readonly maxDurationMs?: number; readonly maxTurns?: number };
+    readonly signal?: AbortSignal;
+  },
+): Promise<Static<typeof StageStartResultV1>> {
+  return domainCall(
+    home,
+    STAGE_START_REQUIREMENT,
+    {
+      currentDirectory: input.currentDirectory,
+      prompt: input.prompt,
+      artifactPath: input.artifactPath,
+      ...(input.limits === undefined ? {} : { limits: input.limits }),
+    },
+    "stage start",
+    input.signal,
+  );
+}
+
+export function fetchRunStatusViaDaemon(
+  home: ApplicationHome,
+  runId: string,
+  signal?: AbortSignal,
+): Promise<Static<typeof StageRunStatusResultV1>> {
+  return domainCall(home, RUN_STATUS_REQUIREMENT, { runId }, "run status", signal);
+}
+
+export function answerRunViaDaemon(
+  home: ApplicationHome,
+  runId: string,
+  answer: Static<typeof InteractionAnswerSetV1>,
+): Promise<Static<typeof StageRunMutationResultV1>> {
+  return domainCall(
+    home,
+    mutationRequirement(RUN_ANSWER_METHOD, RUN_ANSWER_V1_METHOD),
+    { runId, answer },
+    "run answer",
+  );
+}
+
+export function resumeRunViaDaemon(
+  home: ApplicationHome,
+  runId: string,
+  inputArtifactRefs: ArtifactId[],
+): Promise<Static<typeof StageRunMutationResultV1>> {
+  return domainCall(
+    home,
+    mutationRequirement(RUN_RESUME_METHOD, RUN_RESUME_V1_METHOD),
+    { runId, inputArtifactRefs },
+    "run resume",
+  );
+}
+
+export function cancelRunViaDaemon(
+  home: ApplicationHome,
+  runId: string,
+): Promise<Static<typeof StageRunMutationResultV1>> {
+  return domainCall(
+    home,
+    mutationRequirement(RUN_CANCEL_METHOD, RUN_CANCEL_V1_METHOD),
+    { runId },
+    "run cancel",
+  );
+}
+
+export function fetchRunResultViaDaemon(
+  home: ApplicationHome,
+  runId: string,
+): Promise<Static<typeof StageRunResultV1>> {
+  return domainCall(home, RUN_RESULT_REQUIREMENT, { runId }, "run result");
+}
+
+export async function fetchArtifactViaDaemon(
+  home: ApplicationHome,
+  artifactId: string,
+): Promise<Static<typeof ArtifactGetResultV1>> {
+  const chunks: Uint8Array[] = [];
+  let offset = 0;
+  let first: Static<typeof ArtifactGetResultV1> | undefined;
+  for (;;) {
+    const result = await domainCall<Static<typeof ArtifactGetResultV1>>(
+      home,
+      ARTIFACT_GET_REQUIREMENT,
+      { artifactId, offset },
+      "artifact retrieval",
+    );
+    if (result.offset !== offset) {
+      throw new HeniekClientError("RPC_FAILURE", "Artifact chunk offset is invalid.", false);
+    }
+    if (
+      first !== undefined &&
+      (result.artifactId !== first.artifactId ||
+        result.byteLength !== first.byteLength ||
+        result.sha256 !== first.sha256 ||
+        result.name !== first.name ||
+        result.mediaType !== first.mediaType)
+    ) {
+      throw new HeniekClientError(
+        "RPC_FAILURE",
+        "Artifact metadata changed during retrieval.",
+        false,
+      );
+    }
+    first ??= result;
+    const chunk = Buffer.from(result.contentBase64, "base64");
+    if (chunk.byteLength === 0 && !result.eof) {
+      throw new HeniekClientError("RPC_FAILURE", "Artifact retrieval made no progress.", false);
+    }
+    chunks.push(chunk);
+    offset += chunk.byteLength;
+    if (result.eof) break;
+  }
+  if (first === undefined) {
+    throw new HeniekClientError("RPC_FAILURE", "Artifact retrieval returned no data.", false);
+  }
+  const bytes = Buffer.concat(chunks);
+  if (
+    bytes.byteLength !== first.byteLength ||
+    createHash("sha256").update(bytes).digest("hex") !== first.sha256
+  ) {
+    throw new HeniekClientError("RPC_FAILURE", "Artifact response integrity is invalid.", false);
+  }
+  return { ...first, offset: 0, eof: true, contentBase64: bytes.toString("base64") };
+}
+
+export function fetchDoctorReportViaDaemon(
+  home: ApplicationHome,
+): Promise<Static<typeof DoctorReportV1>> {
+  return domainCall(home, DOCTOR_REQUIREMENT, {}, "doctor");
 }

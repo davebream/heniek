@@ -14,7 +14,18 @@ export const DAEMON_RECOVERY_METHOD = "daemon.recovery";
 export const DAEMON_NEGOTIATE_METHOD = "daemon.negotiate";
 export const DAEMON_STATUS_V1_METHOD = "daemon.status.v1";
 export const DAEMON_RECOVERY_V1_METHOD = "daemon.recovery.v1";
-export { CODEBASE_DETECT_V1_METHOD, CODEBASE_REGISTER_V1_METHOD } from "@heniek/protocol";
+export {
+  ARTIFACT_GET_V1_METHOD,
+  CODEBASE_DETECT_V1_METHOD,
+  CODEBASE_REGISTER_V1_METHOD,
+  DOCTOR_V1_METHOD,
+  RUN_ANSWER_V1_METHOD,
+  RUN_CANCEL_V1_METHOD,
+  RUN_RESULT_V1_METHOD,
+  RUN_RESUME_V1_METHOD,
+  RUN_STATUS_V1_METHOD,
+  STAGE_START_V1_METHOD,
+} from "@heniek/protocol";
 export const RPC_CANCEL_METHOD = "rpc.cancel";
 
 /**
@@ -29,6 +40,14 @@ export const AUTHENTICATED_METHODS = [
   DAEMON_RECOVERY_METHOD,
   "codebase.detect",
   "codebase.register",
+  "stage.start",
+  "run.status",
+  "run.answer",
+  "run.resume",
+  "run.cancel",
+  "run.result",
+  "artifact.get",
+  "doctor",
 ] as const;
 
 export interface MethodContext {

@@ -1108,7 +1108,8 @@ export const applyEvent: Reducer = (state, event) => {
       // foreign_keys = ON`, `database/open.ts`), but a reducer-side check
       // raises a typed `ReducerError` instead of a raw
       // `SQLITE_CONSTRAINT_FOREIGNKEY`.
-      if (state.runs[runId] === undefined) {
+      const previousRun = state.runs[runId];
+      if (previousRun === undefined) {
         throw new ReducerError(event.eventId, event.type, `run does not exist: ${runId}`);
       }
       const stageId = requireStageId(event, payload);
@@ -1162,7 +1163,8 @@ export const applyEvent: Reducer = (state, event) => {
       // would report the wrong row's revision.
       const runId = requireRunId(event, payload);
       // Same F4 rationale as `artifact.published` above.
-      if (state.runs[runId] === undefined) {
+      const previousRun = state.runs[runId];
+      if (previousRun === undefined) {
         throw new ReducerError(event.eventId, event.type, `run does not exist: ${runId}`);
       }
       const stageId = requireStageId(event, payload);
@@ -1237,7 +1239,28 @@ export const applyEvent: Reducer = (state, event) => {
           },
         };
       }
-      return { ...state, artifacts, stageArtifactAliases };
+      const terminalRunStatus = payload.terminalRunStatus;
+      if (terminalRunStatus !== undefined && terminalRunStatus !== "succeeded") {
+        throw new ReducerError(
+          event.eventId,
+          event.type,
+          "payload.terminalRunStatus must be succeeded when present",
+        );
+      }
+      const runs: ProjectionState["runs"] =
+        terminalRunStatus === "succeeded"
+          ? {
+              ...state.runs,
+              [runId]: {
+                ...previousRun,
+                status: "succeeded",
+                revision: previousRun.revision + 1,
+                lastEventSequence: event.sequence,
+                updatedAt: event.recordedAt,
+              },
+            }
+          : state.runs;
+      return { ...state, runs, artifacts, stageArtifactAliases };
     }
     default:
       throw new ReducerError(event.eventId, event.type, "unknown event type");

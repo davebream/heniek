@@ -14,6 +14,22 @@ export const CODEBASE_DETECT_METHOD = "codebase.detect";
 export const CODEBASE_DETECT_V1_METHOD = "codebase.detect.v1";
 export const CODEBASE_REGISTER_METHOD = "codebase.register";
 export const CODEBASE_REGISTER_V1_METHOD = "codebase.register.v1";
+export const STAGE_START_METHOD = "stage.start";
+export const STAGE_START_V1_METHOD = "stage.start.v1";
+export const RUN_STATUS_METHOD = "run.status";
+export const RUN_STATUS_V1_METHOD = "run.status.v1";
+export const RUN_ANSWER_METHOD = "run.answer";
+export const RUN_ANSWER_V1_METHOD = "run.answer.v1";
+export const RUN_RESUME_METHOD = "run.resume";
+export const RUN_RESUME_V1_METHOD = "run.resume.v1";
+export const RUN_CANCEL_METHOD = "run.cancel";
+export const RUN_CANCEL_V1_METHOD = "run.cancel.v1";
+export const RUN_RESULT_METHOD = "run.result";
+export const RUN_RESULT_V1_METHOD = "run.result.v1";
+export const ARTIFACT_GET_METHOD = "artifact.get";
+export const ARTIFACT_GET_V1_METHOD = "artifact.get.v1";
+export const DOCTOR_METHOD = "doctor";
+export const DOCTOR_V1_METHOD = "doctor.v1";
 export const RPC_CANCEL_METHOD = "rpc.cancel";
 
 export const ERROR_CODES = {
@@ -43,13 +59,9 @@ export interface DaemonCredential {
 }
 
 export interface NegotiatedMethodV1 {
-  readonly name: "daemon.status" | "daemon.recovery" | "codebase.detect" | "codebase.register";
+  readonly name: string;
   readonly methodVersion: 1;
-  readonly wireMethod:
-    | "daemon.status.v1"
-    | "daemon.recovery.v1"
-    | "codebase.detect.v1"
-    | "codebase.register.v1";
+  readonly wireMethod: string;
   readonly resultSchemaId: string;
   readonly resultSchemaSha256: string;
 }
@@ -66,6 +78,24 @@ export const CODEBASE_DETECTION_SCHEMA_SHA256 =
 export const REGISTERED_CODEBASE_SCHEMA_ID = "heniek://contract/RegisteredCodebase/v1";
 export const REGISTERED_CODEBASE_SCHEMA_SHA256 =
   "46aaf927a7b496d3da5b4c438c2f49ab7c6638363384cb0d6aca61fa0258b10f";
+export const STAGE_START_SCHEMA_ID = "heniek://contract/StageStartResult/v1";
+export const STAGE_START_SCHEMA_SHA256 =
+  "35776620780b4a150ab249801125096c4edfd9bfb8713c5c3e57e3d41c616341";
+export const RUN_STATUS_SCHEMA_ID = "heniek://contract/StageRunStatusResult/v1";
+export const RUN_STATUS_SCHEMA_SHA256 =
+  "69c0bd03d97d24dab4ee7b8b552b224ec23ddc5536db25e08bdd70b82a88fc79";
+export const RUN_MUTATION_SCHEMA_ID = "heniek://contract/StageRunMutationResult/v1";
+export const RUN_MUTATION_SCHEMA_SHA256 =
+  "7491e0d1842751707d3658b7c71c058f1d2a6b1194d8c6752511b8293f1c9e3b";
+export const RUN_RESULT_SCHEMA_ID = "heniek://contract/StageRunResult/v1";
+export const RUN_RESULT_SCHEMA_SHA256 =
+  "8f0faffeabe166f355b7033e9a45b6cf2bae829d1ab64ab10f086fce501fc8fa";
+export const ARTIFACT_GET_SCHEMA_ID = "heniek://contract/ArtifactGetResult/v1";
+export const ARTIFACT_GET_SCHEMA_SHA256 =
+  "f7b3994c57cb536a8bcca368a33c38d24d5ffafaf60144ce3382e89a03d38223";
+export const DOCTOR_SCHEMA_ID = "heniek://contract/DoctorReport/v1";
+export const DOCTOR_SCHEMA_SHA256 =
+  "1645c1a617331955c3a515bd3942e423e71e3fbc460093092fc149b0cee6e56c";
 
 function hex(bytes: Uint8Array): string {
   return Buffer.from(bytes).toString("hex");

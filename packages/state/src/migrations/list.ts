@@ -358,8 +358,61 @@ const MIGRATION_0006_WORKSPACE_LIFECYCLE: Migration = {
       BEGIN SELECT RAISE(ABORT, 'projection update must advance revision by 1 and cite a newer event'); END`,
   ],
 };
+
+const MIGRATION_0007_STAGE_EXECUTION: Migration = {
+  version: 7,
+  name: "stage-execution",
+  statements: [
+    `CREATE TABLE stage_execution (
+      run_id                 TEXT NOT NULL PRIMARY KEY REFERENCES run_projection(run_id),
+      stage_id               TEXT NOT NULL UNIQUE,
+      codebase_id            TEXT NOT NULL REFERENCES codebase(codebase_id),
+      repository_id          TEXT NOT NULL REFERENCES repository(repository_id),
+      workspace_id           TEXT NOT NULL REFERENCES workspace(workspace_id),
+      backend_kind           TEXT NOT NULL,
+      backend_execution_id   TEXT UNIQUE,
+      status                 TEXT NOT NULL,
+      prompt                 TEXT NOT NULL,
+      artifact_path          TEXT NOT NULL,
+      limits_json            TEXT NOT NULL CHECK (json_valid(limits_json)),
+      summary                TEXT,
+      session_id             TEXT,
+      error                  TEXT,
+      finalized              INTEGER NOT NULL DEFAULT 0,
+      created_at             TEXT NOT NULL,
+      updated_at             TEXT NOT NULL,
+      CHECK (status IN ('queued','running','waiting_on_user','recovery_required','succeeded','failed','cancelled')),
+      CHECK (finalized IN (0,1))
+    ) STRICT`,
+    "CREATE INDEX stage_execution_status ON stage_execution(status, run_id)",
+    `CREATE TABLE execution_interaction (
+      run_id                 TEXT NOT NULL REFERENCES stage_execution(run_id),
+      interaction_id         TEXT NOT NULL,
+      payload_json           TEXT NOT NULL CHECK (json_valid(payload_json)),
+      answer_json            TEXT CHECK (answer_json IS NULL OR json_valid(answer_json)),
+      state                  TEXT NOT NULL,
+      updated_at             TEXT NOT NULL,
+      PRIMARY KEY (run_id, interaction_id),
+      CHECK (state IN ('pending','answered','resolved'))
+    ) STRICT`,
+    `CREATE TABLE backend_artifact_import (
+      run_id                 TEXT NOT NULL REFERENCES stage_execution(run_id),
+      backend_artifact_id    TEXT NOT NULL,
+      artifact_id            TEXT REFERENCES artifact(artifact_id),
+      content_hash           TEXT,
+      byte_length            INTEGER,
+      state                  TEXT NOT NULL,
+      updated_at             TEXT NOT NULL,
+      PRIMARY KEY (run_id, backend_artifact_id),
+      CHECK (state IN ('pending','completed')),
+      CHECK (byte_length IS NULL OR byte_length >= 0)
+    ) STRICT`,
+  ],
+};
 Object.freeze(MIGRATION_0004_ARTIFACT.statements);
 Object.freeze(MIGRATION_0004_ARTIFACT);
+Object.freeze(MIGRATION_0007_STAGE_EXECUTION.statements);
+Object.freeze(MIGRATION_0007_STAGE_EXECUTION);
 
 export const MIGRATIONS: readonly Migration[] = Object.freeze([
   MIGRATION_0001_JOURNAL,
@@ -368,5 +421,6 @@ export const MIGRATIONS: readonly Migration[] = Object.freeze([
   MIGRATION_0004_ARTIFACT,
   MIGRATION_0005_CODEBASE_REGISTRATION,
   MIGRATION_0006_WORKSPACE_LIFECYCLE,
+  MIGRATION_0007_STAGE_EXECUTION,
 ]);
 assertAppendOnly(MIGRATIONS);

@@ -1,0 +1,39 @@
+{
+  "$id": "heniek://contract/BackendArtifact/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "id",
+    "path",
+    "byteLength",
+    "mediaType"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "id": {
+      "minLength": 1,
+      "description": "Opaque BackendArtifactId.",
+      "type": "string"
+    },
+    "path": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "byteLength": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "mediaType": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": "string"
+    }
+  }
+}

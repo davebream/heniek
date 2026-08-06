@@ -28,7 +28,8 @@
  * which no JSON-RPC client expects from a single connection.
  */
 
-import { dirname } from "node:path";
+import { readFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import {
   createNodeFileSystem as createCodebaseFileSystem,
   createNodeGitPort,
@@ -39,15 +40,21 @@ import {
   registerCodebase,
 } from "@heniek/codebase";
 import type { ApplicationHome } from "@heniek/config";
-import type { ExecutionBackend } from "@heniek/contracts";
+import {
+  type ArtifactId,
+  type ExecutionBackend,
+  type ExecutionBackendV2,
+  InteractionAnswerSetV1,
+} from "@heniek/contracts";
 import { createFileSecretStore } from "@heniek/secrets";
-import { openStateDatabase, runMigrations } from "@heniek/state";
+import { openStateDatabase, readPendingInteractions, runMigrations } from "@heniek/state";
 import {
   createNodeOwnerLiveness,
   createWorkspaceService,
   createWorkspaceStateStore,
   type WorkspaceService,
 } from "@heniek/workspace";
+import { Value } from "@sinclair/typebox/value";
 import { mintConnectionAuthState } from "../auth/challenge.js";
 import {
   type DaemonCredential,
@@ -66,6 +73,7 @@ import { createCodec, type Frame } from "../rpc/codec.js";
 import type { DispatchDeps } from "../rpc/dispatch.js";
 import { dispatchFrame } from "../rpc/dispatch.js";
 import {
+  ARTIFACT_GET_V1_METHOD,
   CODEBASE_DETECT_V1_METHOD,
   CODEBASE_REGISTER_V1_METHOD,
   createMethodRegistry,
@@ -73,9 +81,23 @@ import {
   DAEMON_RECOVERY_V1_METHOD,
   DAEMON_STATUS_METHOD,
   DAEMON_STATUS_V1_METHOD,
+  DOCTOR_V1_METHOD,
+  type MethodHandler,
   type MethodRegistry,
+  RUN_ANSWER_V1_METHOD,
+  RUN_CANCEL_V1_METHOD,
+  RUN_RESULT_V1_METHOD,
+  RUN_RESUME_V1_METHOD,
+  RUN_STATUS_V1_METHOD,
+  STAGE_START_V1_METHOD,
 } from "../rpc/methods.js";
 import { createSystemClock } from "./clock.js";
+import {
+  artifactResult,
+  createExecutionService,
+  type ExecutionService,
+  stageRunResult,
+} from "./execution-service.js";
 import { createSystemHostWitness } from "./host-witness.js";
 import { createNodeLockFileSystem } from "./lock-filesystem.js";
 import { createHmacSha256MacProvider } from "./mac.js";
@@ -245,6 +267,8 @@ export interface StartDaemonDeps {
    * against.
    */
   readonly backend: ExecutionBackend;
+  /** Q012 stage backend; omitted for legacy daemon/recovery consumers. */
+  readonly backendV2?: ExecutionBackendV2;
   /** Defaults to `1`. */
   readonly protocolVersion?: number;
   /**
@@ -273,6 +297,7 @@ export type StartDaemonOutcome =
       readonly instanceId: string;
       /** In-process workspace capability; Q011 deliberately adds no wire method. */
       readonly workspaceService: WorkspaceService;
+      readonly executionService?: ExecutionService;
       /**
        * Resolves once a graceful drain (a SIGTERM/SIGINT the caller wires
        * through `requestDrain`, or a direct `requestDrain()` call) has fully
@@ -362,7 +387,11 @@ export async function startDaemon(deps: StartDaemonDeps): Promise<StartDaemonOut
       credential = minted;
 
       reconcileResult = await reconcile(
-        { lock: guard, backend },
+        {
+          lock: guard,
+          backend,
+          ...(deps.backendV2 === undefined ? {} : { backendV2: deps.backendV2 }),
+        },
         {
           database: { path: home.paths.stateDatabaseFile, clock, ids },
           artifactStore: { root: home.paths.artifactsDirectory, clock, ids },
@@ -432,6 +461,18 @@ export async function startDaemon(deps: StartDaemonDeps): Promise<StartDaemonOut
     ids,
     liveness: createNodeOwnerLiveness(),
   });
+  const executionService =
+    deps.backendV2 === undefined
+      ? undefined
+      : createExecutionService({
+          db: workspaceDatabase,
+          backend: deps.backendV2,
+          workspaceService,
+          artifactsDirectory: home.paths.artifactsDirectory,
+          instanceId,
+          ids,
+        });
+  await executionService?.observeAll();
   const startedAt = clock.nowIso();
   const reconciliation = reconcileResult?.reconciliation ?? EMPTY_RECONCILIATION;
   const artifactRecovery = reconcileResult?.artifactRecovery ?? EMPTY_ARTIFACT_RECOVERY;
@@ -468,6 +509,7 @@ export async function startDaemon(deps: StartDaemonDeps): Promise<StartDaemonOut
     // this process created (STD-3) — safe here, unlike on claim loss, since
     // this process still legitimately owns both.
     await socket.close();
+    executionService?.stop();
     workspaceDatabase.close();
     // Inode-verified: only unlinks if the path still carries this guard's
     // identity.
@@ -580,14 +622,173 @@ export async function startDaemon(deps: StartDaemonDeps): Promise<StartDaemonOut
       database.close();
     }
   };
-  const registry: MethodRegistry = createMethodRegistry([
+  const recordParams = (params: unknown): Record<string, unknown> => {
+    if (typeof params !== "object" || params === null || Array.isArray(params)) {
+      throw new Error("invalid params");
+    }
+    return params as Record<string, unknown>;
+  };
+  const requiredParam = (params: Record<string, unknown>, name: string): string => {
+    const value = params[name];
+    if (typeof value !== "string" || value.length === 0) throw new Error(`invalid ${name}`);
+    return value;
+  };
+  const doctorHandler = async () =>
+    executionService === undefined
+      ? {
+          schemaVersion: 1,
+          health: "failed",
+          checks: [
+            {
+              category: "runtime",
+              status: "fail",
+              code: "CLAUDEXOR_BACKEND_UNCONFIGURED",
+              message: "No Claudexor execution backend is configured.",
+              remediation: "Configure the pinned Claudexor runtime and restart the daemon.",
+            },
+            {
+              category: "auth-route",
+              status: "fail",
+              code: "AUTH_ROUTE_UNAVAILABLE",
+              message: "Subscription-route attestation cannot run without a backend.",
+            },
+            {
+              category: "compatibility",
+              status: "fail",
+              code: "COMPATIBILITY_UNAVAILABLE",
+              message: "Claudexor compatibility cannot be checked without a backend.",
+            },
+            {
+              category: "cleanup",
+              status: "warn",
+              code: "CLEANUP_NOT_CHECKED",
+              message: "Execution cleanup checks were not run.",
+            },
+          ],
+        }
+      : executionService.doctor();
+  const entries: Array<readonly [string, MethodHandler]> = [
     [DAEMON_STATUS_METHOD, statusHandler],
     [DAEMON_STATUS_V1_METHOD, statusHandler],
     [DAEMON_RECOVERY_METHOD, recoveryHandler],
     [DAEMON_RECOVERY_V1_METHOD, recoveryHandler],
     [CODEBASE_DETECT_V1_METHOD, detectHandler],
     [CODEBASE_REGISTER_V1_METHOD, registerHandler],
-  ]);
+    [DOCTOR_V1_METHOD, doctorHandler],
+  ];
+  if (executionService !== undefined) {
+    entries.push(
+      [
+        STAGE_START_V1_METHOD,
+        async (params) => {
+          const input = recordParams(params);
+          const limitsValue = input.limits;
+          const limits =
+            typeof limitsValue === "object" && limitsValue !== null && !Array.isArray(limitsValue)
+              ? (limitsValue as { maxDurationMs?: number; maxTurns?: number })
+              : undefined;
+          const started = await executionService.start({
+            currentDirectory: requiredParam(input, "currentDirectory"),
+            prompt: requiredParam(input, "prompt"),
+            artifactPath: requiredParam(input, "artifactPath"),
+            ...(limits === undefined ? {} : { limits }),
+          });
+          return { schemaVersion: 1, ...started, status: "running" };
+        },
+      ],
+      [
+        RUN_STATUS_V1_METHOD,
+        async (params) => {
+          const row = await executionService.status(requiredParam(recordParams(params), "runId"));
+          return {
+            schemaVersion: 1,
+            runId: row.runId,
+            stageId: row.stageId,
+            status: row.status,
+            interactions: readPendingInteractions(workspaceDatabase, row.runId),
+          };
+        },
+      ],
+      [
+        RUN_ANSWER_V1_METHOD,
+        async (params) => {
+          const input = recordParams(params);
+          const runId = requiredParam(input, "runId");
+          const answer = input.answer;
+          if (!Value.Check(InteractionAnswerSetV1, answer)) {
+            throw new Error("invalid answer");
+          }
+          await executionService.answer(runId, answer);
+          const row = await executionService.status(runId);
+          return { schemaVersion: 1, runId, status: row.status, accepted: true };
+        },
+      ],
+      [
+        RUN_RESUME_V1_METHOD,
+        async (params) => {
+          const input = recordParams(params);
+          const runId = requiredParam(input, "runId");
+          const refs = Array.isArray(input.inputArtifactRefs)
+            ? input.inputArtifactRefs.filter(
+                (value): value is ArtifactId => typeof value === "string",
+              )
+            : [];
+          await executionService.resume(runId, refs);
+          return { schemaVersion: 1, runId, status: "running", accepted: true };
+        },
+      ],
+      [
+        RUN_CANCEL_V1_METHOD,
+        async (params) => {
+          const runId = requiredParam(recordParams(params), "runId");
+          await executionService.cancel(runId);
+          const row = await executionService.status(runId);
+          return { schemaVersion: 1, runId, status: row.status, accepted: true };
+        },
+      ],
+      [
+        RUN_RESULT_V1_METHOD,
+        async (params) => {
+          const row = await executionService.result(requiredParam(recordParams(params), "runId"));
+          return stageRunResult(workspaceDatabase, row);
+        },
+      ],
+      [
+        ARTIFACT_GET_V1_METHOD,
+        async (params) => {
+          const input = recordParams(params);
+          const artifactId = requiredParam(input, "artifactId");
+          const artifact = artifactResult(workspaceDatabase, artifactId);
+          if (artifact === undefined) throw new Error("artifact does not exist");
+          const bytes = await readFile(join(home.paths.artifactsDirectory, artifact.relativePath));
+          const requestedOffset = input.offset;
+          const offset =
+            requestedOffset === undefined
+              ? 0
+              : typeof requestedOffset === "number" &&
+                  Number.isSafeInteger(requestedOffset) &&
+                  requestedOffset >= 0
+                ? requestedOffset
+                : -1;
+          if (offset < 0 || offset > bytes.byteLength)
+            throw new Error("artifact offset is invalid");
+          const chunk = bytes.subarray(offset, offset + 32 * 1024);
+          return {
+            schemaVersion: 1,
+            artifactId: artifact.artifactId,
+            name: artifact.name,
+            mediaType: artifact.mediaType,
+            byteLength: artifact.byteLength,
+            sha256: artifact.contentHash,
+            offset,
+            eof: offset + chunk.byteLength === bytes.byteLength,
+            contentBase64: chunk.toString("base64"),
+          };
+        },
+      ],
+    );
+  }
+  const registry: MethodRegistry = createMethodRegistry(entries);
 
   // Attached last (design's non-negotiable ordering) — no client can
   // complete a request against this daemon before every step above it has
@@ -603,5 +804,12 @@ export async function startDaemon(deps: StartDaemonDeps): Promise<StartDaemonOut
     guard,
   });
 
-  return { kind: "serving", instanceId, workspaceService, stopped, requestDrain };
+  return {
+    kind: "serving",
+    instanceId,
+    workspaceService,
+    ...(executionService === undefined ? {} : { executionService }),
+    stopped,
+    requestDrain,
+  };
 }

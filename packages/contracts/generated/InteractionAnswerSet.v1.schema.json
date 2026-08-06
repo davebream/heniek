@@ -1,0 +1,50 @@
+{
+  "$id": "heniek://contract/InteractionAnswerSet/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "interactionId",
+    "answers"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "interactionId": {
+      "minLength": 1,
+      "description": "Opaque InteractionId.",
+      "type": "string"
+    },
+    "answers": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "questionId",
+          "selectedLabels"
+        ],
+        "properties": {
+          "questionId": {
+            "minLength": 1,
+            "description": "Opaque InteractionQuestionId.",
+            "type": "string"
+          },
+          "selectedLabels": {
+            "type": "array",
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "freeText": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

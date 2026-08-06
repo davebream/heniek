@@ -60,6 +60,8 @@ export interface CompleteStageInput {
   readonly stageId: string;
   /** May be empty — a stage that legitimately produces no outputs must be able to complete (F8). */
   readonly artifacts: readonly CompleteStageArtifactInput[];
+  /** Q012: atomically terminalize the owning run with artifact activation. */
+  readonly terminalRunStatus?: "succeeded";
   /** Absent ⇒ this event roots a new causal chain and mints a correlation id. */
   readonly causationEventId?: CausationEventId;
 }
@@ -298,6 +300,9 @@ export function completeStage(
     const payload: JsonValue = {
       runId: input.runId,
       stageId: input.stageId,
+      ...(input.terminalRunStatus === undefined
+        ? {}
+        : { terminalRunStatus: input.terminalRunStatus }),
       artifacts: input.artifacts.map((artifact) => ({
         artifactId: artifact.receipt.artifactId,
         name: artifact.name,

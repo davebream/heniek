@@ -55,7 +55,7 @@
  * this module.
  */
 
-import type { ExecutionBackend, RunRecoveryClass } from "@heniek/contracts";
+import type { ExecutionBackend, ExecutionBackendV2, RunRecoveryClass } from "@heniek/contracts";
 import { RunStatus } from "@heniek/contracts";
 import {
   type ArtifactStoreOptions,
@@ -64,6 +64,7 @@ import {
   type OpenStateDatabaseOptions,
   type RecoverArtifactsReport,
   readAllRunProjections,
+  readStageExecution,
   recoverArtifacts,
   type StateDatabase,
 } from "@heniek/state";
@@ -75,6 +76,7 @@ import { openOwnedStateDatabase } from "./open-owned.js";
 export interface ReconcileDeps {
   readonly lock: LockHandle;
   readonly backend: ExecutionBackend;
+  readonly backendV2?: ExecutionBackendV2;
 }
 
 export interface ReconcileOptions {
@@ -151,7 +153,15 @@ export async function reconcile(
   for (const run of nonTerminalRuns) {
     let outcome: RunProbeOutcome;
     try {
-      const status = await backend.status(run.runId);
+      const execution = readStageExecution(db, run.runId);
+      const status =
+        execution !== undefined &&
+        execution.backendExecutionId !== null &&
+        deps.backendV2 !== undefined
+          ? await deps.backendV2.status(execution.backendExecutionId)
+          : execution !== undefined && execution.backendExecutionId === null
+            ? "queued"
+            : await backend.status(run.runId);
       outcome = { kind: "status", status };
     } catch {
       // Per-run failure — never fatal to the pass (IR-14/IR-16).

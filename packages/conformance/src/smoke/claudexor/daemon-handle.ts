@@ -42,6 +42,8 @@ export interface StartDaemonOptions {
    */
   readonly detached?: boolean;
   readonly readyTimeoutMs?: number;
+  /** Optional pre-scrubbed environment; Q012 uses the Q004 subscription-only recipe. */
+  readonly environment?: NodeJS.ProcessEnv;
 }
 
 /** Reserve an ephemeral port so concurrent canaries cannot collide. */
@@ -94,7 +96,11 @@ export async function startDaemon(options: StartDaemonOptions): Promise<DaemonHa
   let child: ChildProcess | undefined;
   try {
     child = spawn(process.execPath, [entry], {
-      env: { ...process.env, HOME: home, CLAUDEXOR_CONTROL_PORT: String(port) },
+      env: {
+        ...(options.environment ?? process.env),
+        HOME: home,
+        CLAUDEXOR_CONTROL_PORT: String(port),
+      },
       // `stdio: "ignore"` so daemon survival can never be an artifact of the
       // parent's pipes closing (EPIPE) rather than of the engine's design.
       stdio: "ignore",

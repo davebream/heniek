@@ -1,0 +1,81 @@
+{
+  "$id": "heniek://contract/PendingInteraction/v2",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "id",
+    "questions",
+    "requestedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 2,
+      "type": "number"
+    },
+    "id": {
+      "minLength": 1,
+      "description": "Opaque InteractionId.",
+      "type": "string"
+    },
+    "questions": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "prompt",
+          "options",
+          "multiSelect"
+        ],
+        "properties": {
+          "id": {
+            "minLength": 1,
+            "description": "Opaque InteractionQuestionId.",
+            "type": "string"
+          },
+          "prompt": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "header": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "additionalProperties": false,
+              "type": "object",
+              "required": [
+                "label"
+              ],
+              "properties": {
+                "label": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "multiSelect": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "requestedAt": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "timeoutAt": {
+      "format": "date-time",
+      "type": "string"
+    }
+  }
+}
