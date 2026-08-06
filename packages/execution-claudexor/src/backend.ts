@@ -190,7 +190,10 @@ export function createClaudexorExecutionBackend(
       mode: "agent",
       harnesses: ["claude"],
       primaryHarness: "claude",
-      authPreference: "subscription",
+      // Claudexor v3.1.2 reserves `subscription` for native-session login.
+      // Q004 provides only the OAuth carrier and excludes every API-key route,
+      // so `auto` can resolve only to that attested subscription source.
+      authPreference: "auto",
       access: "workspace_write",
     };
     if (limits?.maxTurns !== undefined) body.maxTurns = limits.maxTurns;
@@ -241,7 +244,10 @@ export function createClaudexorExecutionBackend(
         {
           schemaVersion: 1 as const,
           id: entry.path as BackendArtifactId,
-          path: entry.path,
+          // Claudexor's /produced paths are relative to its project's
+          // `artifacts/` output root. Heniek declares artifact paths relative
+          // to the repository, while retaining the upstream value as opaque ID.
+          path: `artifacts/${entry.path}`,
           byteLength: bytes,
           mediaType: mime,
         },
@@ -260,7 +266,9 @@ export function createClaudexorExecutionBackend(
           title: `Heniek ${input.runId}`,
           scope: { kind: "project", root: input.workingDirectory, context: "auto" },
           workspace: "in_place",
-          authPreference: "subscription",
+          // See createTurn: the isolated process environment makes this
+          // auto-selection subscription-only in practice.
+          authPreference: "auto",
           primaryHarness: "claude",
           eligibleHarnesses: ["claude"],
           access: "workspace_write",
@@ -415,7 +423,7 @@ export function createClaudexorExecutionBackend(
       const id = await headRunId(executionId);
       if (id === null) throw new ClaudexorControlError(404, "run_not_started", "readProduced");
       return callBytes(
-        `/v2/runs/${encodeURIComponent(id)}/produced/${encodedArtifactPath(artifact.path)}`,
+        `/v2/runs/${encodeURIComponent(id)}/produced/${encodedArtifactPath(artifact.id)}`,
         "readProduced",
       );
     },

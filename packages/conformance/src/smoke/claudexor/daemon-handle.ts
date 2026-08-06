@@ -1,5 +1,5 @@
 import { type ChildProcess, execFileSync, spawn } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -90,7 +90,16 @@ export async function startDaemon(options: StartDaemonOptions): Promise<DaemonHa
     throw new Error(`pinned claudexord entry not found; build the pin first (${entry})`);
   }
 
-  const home = mkdtempSync(join(tmpdir(), "heniek-claudexor-"));
+  // Claudexor owns a Unix-domain socket beneath HOME. macOS's normal per-user
+  // temporary directory is both a `/var` symlink and too deep for that socket,
+  // so use the canonical spelling of the short POSIX temporary root instead.
+  // Windows does not use Unix-domain socket paths and retains its configured
+  // temporary directory.
+  const homePrefix =
+    process.platform === "win32"
+      ? join(tmpdir(), "heniek-claudexor-")
+      : join(realpathSync.native("/tmp"), "heniek-claudexor-");
+  const home = mkdtempSync(homePrefix);
   const port = await reservePort();
 
   let child: ChildProcess | undefined;
