@@ -72,6 +72,10 @@ const manifestPath = resolve(packageRoot, "../contracts/generated/manifest.json"
  * registration request/result contracts, immutable instruction diagnostics
  * and snapshots, and `Run/v2`. `Run/v1` remains byte-identical for legacy
  * readers; execution readiness rejects legacy rows at the domain guard.
+ *
+ * Q012 raised the count 37 → 50 by pure addition: the provider-neutral V2
+ * execution contracts and the bounded stage/run/artifact/doctor RPC results.
+ * Every previously pinned V1 digest below remains byte-identical.
  */
 const EXPECTED_SCHEMAS: readonly {
   readonly schemaId: string;
@@ -86,10 +90,28 @@ const EXPECTED_SCHEMAS: readonly {
     path: "generated/ApplicationHome.v1.schema.json",
   },
   {
+    schemaId: "heniek://contract/ArtifactGetResult/v1",
+    schemaVersion: 1,
+    sha256: "f7b3994c57cb536a8bcca368a33c38d24d5ffafaf60144ce3382e89a03d38223",
+    path: "generated/ArtifactGetResult.v1.schema.json",
+  },
+  {
     schemaId: "heniek://contract/ArtifactRef/v1",
     schemaVersion: 1,
     sha256: "60de8785feb0de6a90fc0de55fcead8dc060ddf5fa46aaa4980ba2d2ad0a2410",
     path: "generated/ArtifactRef.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/BackendArtifact/v1",
+    schemaVersion: 1,
+    sha256: "ae7d30761009d12e602831b7bed7f729956baf515e8a40c10dbd7ba0f8d24091",
+    path: "generated/BackendArtifact.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/BackendExecutionHandle/v1",
+    schemaVersion: 1,
+    sha256: "5de53f21b77c359b9b0c32c9ba197aab136b0cd8de3eed174f2a7aea0ab0fb8a",
+    path: "generated/BackendExecutionHandle.v1.schema.json",
   },
   {
     schemaId: "heniek://contract/CheckFailure/v1",
@@ -182,16 +204,40 @@ const EXPECTED_SCHEMAS: readonly {
     path: "generated/DaemonStatus.v1.schema.json",
   },
   {
+    schemaId: "heniek://contract/DoctorReport/v1",
+    schemaVersion: 1,
+    sha256: "1645c1a617331955c3a515bd3942e423e71e3fbc460093092fc149b0cee6e56c",
+    path: "generated/DoctorReport.v1.schema.json",
+  },
+  {
     schemaId: "heniek://contract/ExecutionRequest/v1",
     schemaVersion: 1,
     sha256: "0642730af967d4a595cf4855a738e975b8577f6e18c6c1cb4e75a08be0edb02e",
     path: "generated/ExecutionRequest.v1.schema.json",
   },
   {
+    schemaId: "heniek://contract/ExecutionRequest/v2",
+    schemaVersion: 2,
+    sha256: "14b1e641b2d47a74157b242916135d7ac82a3eb69d2604362a405bffe4f08530",
+    path: "generated/ExecutionRequest.v2.schema.json",
+  },
+  {
     schemaId: "heniek://contract/ExecutionResult/v1",
     schemaVersion: 1,
     sha256: "7aabaff4e3b8450036a27c1c25ac299cd5d22a03b5feb7c2ea05657513ac7942",
     path: "generated/ExecutionResult.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/ExecutionResult/v2",
+    schemaVersion: 2,
+    sha256: "1a16ecaf34af5f4f8d3c3c58fa250fdd6a4dd2a26ea0bef5213d160f45174d68",
+    path: "generated/ExecutionResult.v2.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/ExternalStageResult/v1",
+    schemaVersion: 1,
+    sha256: "01bed7cf9a7ddd68324d223ee40f1a84ac8c912735df90905a958045363a3fba",
+    path: "generated/ExternalStageResult.v1.schema.json",
   },
   {
     schemaId: "heniek://contract/InstructionDiagnostic/v1",
@@ -218,10 +264,22 @@ const EXPECTED_SCHEMAS: readonly {
     path: "generated/InteractionAnswer.v1.schema.json",
   },
   {
+    schemaId: "heniek://contract/InteractionAnswerSet/v1",
+    schemaVersion: 1,
+    sha256: "4507e20f81c05c301a8a383dc48f87c56816408c9b8f901285c927cc1e21064b",
+    path: "generated/InteractionAnswerSet.v1.schema.json",
+  },
+  {
     schemaId: "heniek://contract/PendingInteraction/v1",
     schemaVersion: 1,
     sha256: "18105638d2b12bdaeddd18b51e23d60b5e60ebdc9d0fe1f59dd831a86364ced9",
     path: "generated/PendingInteraction.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/PendingInteraction/v2",
+    schemaVersion: 2,
+    sha256: "8f134cc3ad8f7b13d2912bca9d7285eb8d60d03bdd004b8e68a9e588a63bf3d9",
+    path: "generated/PendingInteraction.v2.schema.json",
   },
   {
     schemaId: "heniek://contract/PullRequest/v1",
@@ -272,6 +330,30 @@ const EXPECTED_SCHEMAS: readonly {
     path: "generated/RunRecoveryClassification.v1.schema.json",
   },
   {
+    schemaId: "heniek://contract/StageRunMutationResult/v1",
+    schemaVersion: 1,
+    sha256: "7491e0d1842751707d3658b7c71c058f1d2a6b1194d8c6752511b8293f1c9e3b",
+    path: "generated/StageRunMutationResult.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/StageRunResult/v1",
+    schemaVersion: 1,
+    sha256: "8f0faffeabe166f355b7033e9a45b6cf2bae829d1ab64ab10f086fce501fc8fa",
+    path: "generated/StageRunResult.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/StageRunStatusResult/v1",
+    schemaVersion: 1,
+    sha256: "69c0bd03d97d24dab4ee7b8b552b224ec23ddc5536db25e08bdd70b82a88fc79",
+    path: "generated/StageRunStatusResult.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/StageStartResult/v1",
+    schemaVersion: 1,
+    sha256: "35776620780b4a150ab249801125096c4edfd9bfb8713c5c3e57e3d41c616341",
+    path: "generated/StageStartResult.v1.schema.json",
+  },
+  {
     schemaId: "heniek://contract/TaskContext/v1",
     schemaVersion: 1,
     sha256: "bba19a9bb7a0647c6e80babe821b020650f4fb702fcffb629a1ac57ff56eaa6a",
@@ -304,7 +386,7 @@ const EXPECTED_SCHEMAS: readonly {
 ];
 
 describe("packages/contracts generated manifest is unchanged (AC4)", () => {
-  it("manifest.json lists exactly the 37 known schemas with their recorded sha256", async () => {
+  it("manifest.json lists exactly the 50 known schemas with their recorded sha256", async () => {
     const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
     expect(manifest).toEqual({
       schemaVersion: "heniek.contracts-manifest.v1",

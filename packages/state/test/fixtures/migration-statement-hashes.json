@@ -22,5 +22,9 @@
   "6": {
     "name": "workspace-lifecycle-and-writer-leases",
     "statementHash": "692283717b79398e57345dd5ef69a6484543111e1a3e28c666619776e3f19aaf"
+  },
+  "7": {
+    "name": "stage-execution",
+    "statementHash": "a8516aafa28aac56a9af9ed049d3d9982555509fde782d178eccd93eef350357"
   }
 }

@@ -26,5 +26,9 @@
   "6": {
     "structural": "af532ca05356fc6ef0ca302ba37fde9452a9a78054c26503345accc6c01a1d60",
     "declared": "aab1048e97ed655d17551f7abe27b94496eef1806aa316c1de19157a951cefd1"
+  },
+  "7": {
+    "structural": "79f1e157fa6c9637ec27f2f45a92384cb382bc214bb04e54098bb6d3ca0753d3",
+    "declared": "113d35c7b6bb0cb9f148e457123e9482b26ff3e422da5aa99b5e83e4da819b66"
   }
 }

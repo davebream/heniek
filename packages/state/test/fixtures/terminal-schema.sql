@@ -6,8 +6,8 @@
 -- the migration DDL in both formatting and statement ordering (round-1
 -- minor revision) rather than merely echoing the migration text verbatim.
 --
--- Terminal version in this phase: 6. Migration 6 adds managed-workspace
--- lifecycle metadata and durable writer leases. ALTER-appended columns are
+-- Terminal version in this phase: 7. Migration 7 adds durable external-stage
+-- execution, interaction, and artifact-import projections. ALTER-appended columns are
 -- positioned **last** in their fresh CREATE declarations (finding C2):
 -- `pragma_table_xinfo`
 -- orders by `cid`, and an `ALTER`-appended column always receives the
@@ -281,4 +281,56 @@ BEGIN
     SELECT RAISE(ABORT, 'first projection revision must be 1');
 END;
 
-PRAGMA user_version = 6;
+CREATE TABLE stage_execution
+(
+    run_id                 TEXT NOT NULL PRIMARY KEY REFERENCES run_projection(run_id),
+    stage_id               TEXT NOT NULL UNIQUE,
+    codebase_id            TEXT NOT NULL REFERENCES codebase(codebase_id),
+    repository_id          TEXT NOT NULL REFERENCES repository(repository_id),
+    workspace_id           TEXT NOT NULL REFERENCES workspace(workspace_id),
+    backend_kind           TEXT NOT NULL,
+    backend_execution_id   TEXT UNIQUE,
+    status                 TEXT NOT NULL,
+    prompt                 TEXT NOT NULL,
+    artifact_path          TEXT NOT NULL,
+    limits_json            TEXT NOT NULL CHECK (json_valid(limits_json)),
+    summary                TEXT,
+    session_id             TEXT,
+    error                  TEXT,
+    finalized              INTEGER NOT NULL DEFAULT 0,
+    created_at             TEXT NOT NULL,
+    updated_at             TEXT NOT NULL,
+    CHECK (status IN ('queued','running','waiting_on_user','recovery_required','succeeded','failed','cancelled')),
+    CHECK (finalized IN (0,1))
+) STRICT;
+
+CREATE INDEX stage_execution_status
+ON stage_execution (status, run_id);
+
+CREATE TABLE execution_interaction
+(
+    run_id                 TEXT NOT NULL REFERENCES stage_execution(run_id),
+    interaction_id         TEXT NOT NULL,
+    payload_json           TEXT NOT NULL CHECK (json_valid(payload_json)),
+    answer_json            TEXT CHECK (answer_json IS NULL OR json_valid(answer_json)),
+    state                  TEXT NOT NULL,
+    updated_at             TEXT NOT NULL,
+    PRIMARY KEY (run_id, interaction_id),
+    CHECK (state IN ('pending','answered','resolved'))
+) STRICT;
+
+CREATE TABLE backend_artifact_import
+(
+    run_id                 TEXT NOT NULL REFERENCES stage_execution(run_id),
+    backend_artifact_id    TEXT NOT NULL,
+    artifact_id            TEXT REFERENCES artifact(artifact_id),
+    content_hash           TEXT,
+    byte_length            INTEGER,
+    state                  TEXT NOT NULL,
+    updated_at             TEXT NOT NULL,
+    PRIMARY KEY (run_id, backend_artifact_id),
+    CHECK (state IN ('pending','completed')),
+    CHECK (byte_length IS NULL OR byte_length >= 0)
+) STRICT;
+
+PRAGMA user_version = 7;
