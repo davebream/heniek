@@ -81,6 +81,111 @@ export const DaemonStatusV1 = versioned("DaemonStatus", 1, {
 });
 
 /**
+ * The authenticated protocol negotiation request. Protocol method versions
+ * deliberately live beside, rather than inside, the domain DTO versions.
+ */
+export const DaemonNegotiationRequestV1 = versioned("DaemonNegotiationRequest", 1, {
+  auth: Type.Object(
+    {
+      schemaVersion: Type.Literal(1),
+      keyId: Type.String({ minLength: 1 }),
+      sequence: Type.Integer({ minimum: 1, maximum: 2 ** 31 - 1 }),
+      mac: Type.String({ pattern: HEX_32_BYTES }),
+    },
+    { additionalProperties: false },
+  ),
+  transportVersions: Type.Array(Type.Integer({ minimum: 1 }), { minItems: 1, uniqueItems: true }),
+  requiredMethods: Type.Array(
+    Type.Object(
+      {
+        name: Type.String({ minLength: 1 }),
+        methodVersions: Type.Array(Type.Integer({ minimum: 1 }), {
+          minItems: 1,
+          uniqueItems: true,
+        }),
+        resultSchemas: Type.Array(
+          Type.Object(
+            {
+              schemaId: Type.String({ minLength: 1 }),
+              sha256: Type.String({ pattern: "^[a-f0-9]{64}$" }),
+            },
+            { additionalProperties: false },
+          ),
+          { minItems: 1, uniqueItems: true },
+        ),
+      },
+      { additionalProperties: false },
+    ),
+    { minItems: 1 },
+  ),
+});
+
+export const DaemonNegotiationResultV1 = versioned("DaemonNegotiationResult", 1, {
+  compatibility: Type.Union([Type.Literal("compatible"), Type.Literal("incompatible")]),
+  selectedTransportVersion: Type.Union([Type.Integer({ minimum: 1 }), Type.Null()]),
+  contractManifestVersion: Type.String({ minLength: 1 }),
+  methods: Type.Array(
+    Type.Object(
+      {
+        name: Type.String({ minLength: 1 }),
+        methodVersion: Type.Integer({ minimum: 1 }),
+        wireMethod: Type.String({ minLength: 1 }),
+        resultSchemaId: Type.String({ minLength: 1 }),
+        resultSchemaSha256: Type.String({ pattern: "^[a-f0-9]{64}$" }),
+      },
+      { additionalProperties: false },
+    ),
+  ),
+  reasons: Type.Array(
+    Type.Union([
+      Type.Literal("NO_COMMON_TRANSPORT"),
+      Type.Literal("METHOD_UNAVAILABLE"),
+      Type.Literal("RESULT_SCHEMA_UNAVAILABLE"),
+    ]),
+    { uniqueItems: true },
+  ),
+});
+
+export const RpcCancelRequestV1 = versioned("RpcCancelRequest", 1, {
+  auth: Type.Object(
+    {
+      schemaVersion: Type.Literal(1),
+      keyId: Type.String({ minLength: 1 }),
+      sequence: Type.Integer({ minimum: 1, maximum: 2 ** 31 - 1 }),
+      mac: Type.String({ pattern: HEX_32_BYTES }),
+    },
+    { additionalProperties: false },
+  ),
+  requestId: Type.Union([Type.String({ minLength: 1 }), Type.Integer()]),
+});
+
+export const RpcCancelResultV1 = versioned("RpcCancelResult", 1, {
+  accepted: Type.Boolean(),
+});
+
+export const DaemonRecoveryResultV1 = versioned("DaemonRecoveryResult", 1, {
+  classifications: Type.Array(
+    Type.Object(
+      {
+        runId: Type.String({ minLength: 1 }),
+        classification: Type.Union(RunRecoveryClass.map((value) => Type.Literal(value))),
+        runStatus: Type.Union([
+          Type.Literal("queued"),
+          Type.Literal("running"),
+          Type.Literal("waiting_on_user"),
+          Type.Literal("succeeded"),
+          Type.Literal("failed"),
+          Type.Literal("cancelled"),
+          Type.Literal("recovery_required"),
+        ]),
+        probeOutcome: Type.Union([Type.Literal("status"), Type.Literal("error")]),
+      },
+      { additionalProperties: false },
+    ),
+  ),
+});
+
+/**
  * `daemon.recovery`'s result element (design C12, AC-3) — makes the
  * four-way classification split observable and testable. `classification`
  * references the plain-tuple `RunRecoveryClass`, never `defineStates`; the

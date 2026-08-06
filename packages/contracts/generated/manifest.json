@@ -26,6 +26,24 @@
       "path": "generated/CheckStatus.v1.schema.json"
     },
     {
+      "schemaId": "heniek://contract/CliStatusError/v1",
+      "schemaVersion": 1,
+      "sha256": "8509b5aa316d4df049d6f9d1101dbc649b9695e6d2d8592fb58ce05f12f92456",
+      "path": "generated/CliStatusError.v1.schema.json"
+    },
+    {
+      "schemaId": "heniek://contract/CliStatusResult/v1",
+      "schemaVersion": 1,
+      "sha256": "c50df283fcc7b4e847c92a1da17d80c9e5e9f3fea064404bf2598740b9d2ed3d",
+      "path": "generated/CliStatusResult.v1.schema.json"
+    },
+    {
+      "schemaId": "heniek://contract/CliStatusSuccess/v1",
+      "schemaVersion": 1,
+      "sha256": "5ddce29b0da219c88a64965c0c5f1131a0b4cdc7d482b46dda069f6d95144327",
+      "path": "generated/CliStatusSuccess.v1.schema.json"
+    },
+    {
       "schemaId": "heniek://contract/CreatePullRequestInput/v1",
       "schemaVersion": 1,
       "sha256": "55873424bc47a8bd87d409ef294271c8fd81d1b7a6111b92bb8501f782dba79c",
@@ -36,6 +54,24 @@
       "schemaVersion": 1,
       "sha256": "238a2a706c495f67986ba079f6e6abe15ba80c33ec56f19de3992ac15778470b",
       "path": "generated/DaemonHelloResult.v1.schema.json"
+    },
+    {
+      "schemaId": "heniek://contract/DaemonNegotiationRequest/v1",
+      "schemaVersion": 1,
+      "sha256": "735acf914eb78c3c4a6b19952226f2c99b387209ef52271f7d51e6737eecf271",
+      "path": "generated/DaemonNegotiationRequest.v1.schema.json"
+    },
+    {
+      "schemaId": "heniek://contract/DaemonNegotiationResult/v1",
+      "schemaVersion": 1,
+      "sha256": "00c16803d9abddc83f3fb299fab45f5985d9f504b69e8287d6d4d5fa8cee8c8b",
+      "path": "generated/DaemonNegotiationResult.v1.schema.json"
+    },
+    {
+      "schemaId": "heniek://contract/DaemonRecoveryResult/v1",
+      "schemaVersion": 1,
+      "sha256": "8c4099c58b018a809e8708451e33ccdc4e24fa74fb65865d35953af9f3672e9a",
+      "path": "generated/DaemonRecoveryResult.v1.schema.json"
     },
     {
       "schemaId": "heniek://contract/DaemonRequestAuth/v1",
@@ -90,6 +126,18 @@
       "schemaVersion": 1,
       "sha256": "ab0ae9b99bb0e98c56e93665a92f049d86c3f43949f02764b0501b45e563fbd1",
       "path": "generated/ResolvedConfiguration.v1.schema.json"
+    },
+    {
+      "schemaId": "heniek://contract/RpcCancelRequest/v1",
+      "schemaVersion": 1,
+      "sha256": "803ac5814746c84f6bdd37e4208da4f20ca57d60c5d17bc250d9dd160fe5a64b",
+      "path": "generated/RpcCancelRequest.v1.schema.json"
+    },
+    {
+      "schemaId": "heniek://contract/RpcCancelResult/v1",
+      "schemaVersion": 1,
+      "sha256": "1d6d60cb7480d919ef37faf601e7507b3d93cc12f8bf525489bd7c1e6864e967",
+      "path": "generated/RpcCancelResult.v1.schema.json"
     },
     {
       "schemaId": "heniek://contract/Run/v1",

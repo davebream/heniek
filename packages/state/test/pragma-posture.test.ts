@@ -1,4 +1,4 @@
-import { rm } from "node:fs/promises";
+import { realpath, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -115,11 +115,11 @@ describe("node:sqlite PRAGMA posture pinned by openStateDatabase (design D12, D1
     }
   });
 
-  it("db.location() returns the resolved path", () => {
+  it("db.location() returns the resolved path", async () => {
     const path = join(directory, "state.sqlite");
     const db = openStateDatabase(baseOptions(path));
     try {
-      expect(internalHandle(db).location()).toBe(path);
+      expect(internalHandle(db).location()).toBe(await realpath(path));
     } finally {
       db.close();
     }

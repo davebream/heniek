@@ -18,7 +18,9 @@
  * connection, framed by the real codec, authenticated by the real MAC
  * provider, dispatched through the real registry.
  *
- * **Per-connection frames are processed strictly in arrival order.**
+ * Authentication and request admission run synchronously in wire order;
+ * ordinary handlers may complete out of order so the control-lane
+ * `rpc.cancel` request can interrupt an in-flight handler.
  * `dispatchFrame` is async (a handler may itself be async), so two frames
  * decoded from the same or successive chunks are chained onto one promise
  * queue rather than dispatched concurrently — otherwise a slow handler for
@@ -50,7 +52,9 @@ import { dispatchFrame } from "../rpc/dispatch.js";
 import {
   createMethodRegistry,
   DAEMON_RECOVERY_METHOD,
+  DAEMON_RECOVERY_V1_METHOD,
   DAEMON_STATUS_METHOD,
+  DAEMON_STATUS_V1_METHOD,
   type MethodRegistry,
 } from "../rpc/methods.js";
 import { createSystemClock } from "./clock.js";
@@ -121,7 +125,9 @@ export function createConnectionHandler(
     const authState = mintConnectionAuthState(deps.randomSource);
     const decode = createCodec();
     let hasMarkedAuthenticated = false;
-    let queue: Promise<void> = Promise.resolve();
+    let closed = false;
+    const active = new Map<string, AbortController>();
+    const requestKey = (id: string | number): string => `${typeof id}:${id}`;
 
     const dispatchDeps: DispatchDeps = {
       registry: deps.registry,
@@ -134,11 +140,33 @@ export function createConnectionHandler(
       // value to an optional property — the property must be *absent*, not
       // present-with-`undefined`, when the caller did not supply a handler.
       ...(deps.onHandlerError !== undefined ? { onHandlerError: deps.onHandlerError } : {}),
+      createRequestContext: (id) => {
+        const key = requestKey(id);
+        if (active.has(key)) {
+          return undefined;
+        }
+        const controller = new AbortController();
+        active.set(key, controller);
+        return { signal: controller.signal };
+      },
+      finishRequest: (id) => {
+        active.delete(requestKey(id));
+      },
+      cancelRequest: (id) => {
+        const controller = active.get(requestKey(id));
+        if (controller === undefined || controller.signal.aborted) {
+          return false;
+        }
+        controller.abort();
+        return true;
+      },
     };
 
     async function processFrame(frame: Frame): Promise<void> {
       const line = await dispatchFrame(dispatchDeps, authState, frame);
-      connection.write(textEncoder.encode(line));
+      if (!closed) {
+        connection.write(textEncoder.encode(line));
+      }
 
       if (!hasMarkedAuthenticated && authState.lastSequence > 0) {
         hasMarkedAuthenticated = true;
@@ -152,8 +180,15 @@ export function createConnectionHandler(
 
     connection.onData((chunk: Uint8Array) => {
       for (const frame of decode(chunk)) {
-        queue = queue.then(() => processFrame(frame));
+        void processFrame(frame);
       }
+    });
+    connection.onClose(() => {
+      closed = true;
+      for (const controller of active.values()) {
+        controller.abort();
+      }
+      active.clear();
     });
   };
 }
@@ -426,23 +461,24 @@ export async function startDaemon(deps: StartDaemonDeps): Promise<StartDaemonOut
     process.exit(1);
   });
 
+  const statusHandler = () => ({
+    schemaVersion: 1,
+    instanceId,
+    lifecycleState: servingTracer.currentState(),
+    startedAt,
+    reconciliation,
+    artifactRecovery: {
+      removedIncoming: artifactRecovery.removedIncoming.length,
+      skippedIncoming: artifactRecovery.skippedIncoming.length,
+      unreferencedBlobs: artifactRecovery.unreferencedBlobs.length,
+    },
+  });
+  const recoveryHandler = () => ({ schemaVersion: 1, classifications });
   const registry: MethodRegistry = createMethodRegistry([
-    [
-      DAEMON_STATUS_METHOD,
-      () => ({
-        schemaVersion: 1,
-        instanceId,
-        lifecycleState: servingTracer.currentState(),
-        startedAt,
-        reconciliation,
-        artifactRecovery: {
-          removedIncoming: artifactRecovery.removedIncoming.length,
-          skippedIncoming: artifactRecovery.skippedIncoming.length,
-          unreferencedBlobs: artifactRecovery.unreferencedBlobs.length,
-        },
-      }),
-    ],
-    [DAEMON_RECOVERY_METHOD, () => ({ schemaVersion: 1, classifications })],
+    [DAEMON_STATUS_METHOD, statusHandler],
+    [DAEMON_STATUS_V1_METHOD, statusHandler],
+    [DAEMON_RECOVERY_METHOD, recoveryHandler],
+    [DAEMON_RECOVERY_V1_METHOD, recoveryHandler],
   ]);
 
   // Attached last (design's non-negotiable ordering) — no client can

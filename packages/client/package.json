@@ -1,5 +1,5 @@
 {
-  "name": "@heniek/daemon",
+  "name": "@heniek/client",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -11,14 +11,10 @@
   },
   "dependencies": {
     "@heniek/config": "workspace:*",
-    "@heniek/contracts": "workspace:*",
     "@heniek/protocol": "workspace:*",
-    "@heniek/secrets": "workspace:*",
-    "@heniek/state": "workspace:*"
+    "@heniek/secrets": "workspace:*"
   },
   "devDependencies": {
-    "@sinclair/typebox": "catalog:",
-    "tsx": "catalog:",
     "vitest": "catalog:"
   }
 }

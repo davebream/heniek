@@ -480,6 +480,24 @@ async function proceedAfterClaim(
   instanceId: string,
   tracer: LifecycleTracer,
 ): Promise<AcquireOutcome> {
+  // Do this before the active socket probe. A Unix-domain connect follows a
+  // symlink, which would otherwise misclassify the path according to its
+  // target and lose the chance to refuse the unsafe name without touching it.
+  try {
+    if (deps.lockFileSystem.lstat(options.daemonSocketFile).isSymbolicLink()) {
+      guard.release();
+      tracer.record("refused", "socket path is a symlink");
+      return {
+        kind: "refused",
+        error: new InsecureSocketPath(options.daemonSocketFile, "socket path is a symlink"),
+      };
+    }
+  } catch (error) {
+    if (!isErrnoCode(error, "ENOENT")) {
+      throw error;
+    }
+  }
+
   const verdict = await deps.socketProbe.probe(options.daemonSocketFile);
   tracer.record("probe", `socket probe verdict: ${verdict}`);
 

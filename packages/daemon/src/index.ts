@@ -81,13 +81,17 @@ export {
 export type { DispatchDeps } from "./rpc/dispatch.js";
 export { dispatchFrame } from "./rpc/dispatch.js";
 export { DRAINING_MESSAGE } from "./rpc/errors.js";
-export type { MethodHandler, MethodRegistry } from "./rpc/methods.js";
+export type { MethodContext, MethodHandler, MethodRegistry } from "./rpc/methods.js";
 export {
   AUTHENTICATED_METHODS,
   createMethodRegistry,
   DAEMON_HELLO_METHOD,
+  DAEMON_NEGOTIATE_METHOD,
   DAEMON_RECOVERY_METHOD,
+  DAEMON_RECOVERY_V1_METHOD,
   DAEMON_STATUS_METHOD,
+  DAEMON_STATUS_V1_METHOD,
+  RPC_CANCEL_METHOD,
 } from "./rpc/methods.js";
 export { createSystemClock } from "./runtime/clock.js";
 export type { ConnectionHandlerDeps } from "./runtime/compose.js";
