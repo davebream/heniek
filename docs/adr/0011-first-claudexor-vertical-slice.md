@@ -49,7 +49,6 @@ nonzero; warning-only health remains successful but degraded.
   requires an explicitly configured prebuilt pinned runtime and a
   `CLAUDE_CODE_OAUTH_TOKEN` accepted by both Claude and Claudexor's readiness
   route.
-- The current host lacks those two explicit real-conformance inputs. The code,
-  fake vertical, restart/fault coverage, and Node 24 checks are complete, but a
-  pull request must not be opened until the subscription route is proven.
-
+- Real conformance subsequently passed with the prebuilt pinned runtime and an
+  OAuth subscription carrier; the redacted command transcript and trace are
+  recorded in the adjacent evidence directory.
