@@ -15,6 +15,7 @@
     "tsx": "catalog:"
   },
   "devDependencies": {
+    "@heniek/secrets": "workspace:*",
     "vitest": "catalog:"
   }
 }

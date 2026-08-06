@@ -1,5 +1,5 @@
 {
-  "name": "@heniek/client",
+  "name": "@heniek/codebase",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -12,8 +12,9 @@
   "dependencies": {
     "@heniek/config": "workspace:*",
     "@heniek/contracts": "workspace:*",
-    "@heniek/protocol": "workspace:*",
-    "@heniek/secrets": "workspace:*"
+    "@heniek/state": "workspace:*",
+    "@sinclair/typebox": "catalog:",
+    "yaml": "catalog:"
   },
   "devDependencies": {
     "vitest": "catalog:"
