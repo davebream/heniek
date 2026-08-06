@@ -85,8 +85,13 @@ export {
   type RunState,
   type StageArtifactAliasState,
   stageArtifactAliasKey,
+  type WorkspaceLeaseState,
   type WorkspaceState,
 } from "./projection/state.js";
+export {
+  readWorkspaceLease,
+  type WorkspaceLeaseRow,
+} from "./projection/workspace-lease.js";
 export {
   compareProjectionToReplay,
   type Divergence,

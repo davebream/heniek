@@ -1,0 +1,364 @@
+{
+  "$id": "heniek://contract/WorkspaceProvisioningManifest/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "workspaceId",
+    "codebaseId",
+    "repositoryId",
+    "configurationSha256",
+    "strategy",
+    "lifecycle",
+    "phase",
+    "workspaceRoot",
+    "checkoutPath",
+    "integrationBranch",
+    "remoteBase",
+    "checkoutHeadSha",
+    "cleanliness",
+    "copiedFiles",
+    "setup",
+    "createdAt",
+    "updatedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "workspaceId": {
+      "minLength": 1,
+      "description": "Opaque WorkspaceId.",
+      "type": "string"
+    },
+    "codebaseId": {
+      "minLength": 1,
+      "description": "Opaque CodebaseId.",
+      "type": "string"
+    },
+    "repositoryId": {
+      "minLength": 1,
+      "description": "Opaque RepositoryId.",
+      "type": "string"
+    },
+    "configurationSha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "strategy": {
+      "const": "managed-worktree",
+      "type": "string"
+    },
+    "lifecycle": {
+      "anyOf": [
+        {
+          "const": "provisioning",
+          "type": "string"
+        },
+        {
+          "const": "ready",
+          "type": "string"
+        },
+        {
+          "const": "failed",
+          "type": "string"
+        },
+        {
+          "const": "recovery-required",
+          "type": "string"
+        }
+      ]
+    },
+    "phase": {
+      "anyOf": [
+        {
+          "const": "base-resolved",
+          "type": "string"
+        },
+        {
+          "const": "checkout-creating",
+          "type": "string"
+        },
+        {
+          "const": "checkout-created",
+          "type": "string"
+        },
+        {
+          "const": "files-copying",
+          "type": "string"
+        },
+        {
+          "const": "files-copied",
+          "type": "string"
+        },
+        {
+          "const": "setup-started",
+          "type": "string"
+        },
+        {
+          "const": "completed",
+          "type": "string"
+        },
+        {
+          "const": "failed",
+          "type": "string"
+        },
+        {
+          "const": "recovery-required",
+          "type": "string"
+        }
+      ]
+    },
+    "workspaceRoot": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "checkoutPath": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "integrationBranch": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "remoteBase": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "remote",
+        "branch",
+        "sha",
+        "observedSha",
+        "fetchedAt"
+      ],
+      "properties": {
+        "remote": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "branch": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "sha": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "observedSha": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "fetchedAt": {
+          "format": "date-time",
+          "type": "string"
+        }
+      }
+    },
+    "checkoutHeadSha": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "cleanliness": {
+      "anyOf": [
+        {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "state",
+            "entries",
+            "sha256"
+          ],
+          "properties": {
+            "state": {
+              "anyOf": [
+                {
+                  "const": "clean",
+                  "type": "string"
+                },
+                {
+                  "const": "dirty",
+                  "type": "string"
+                }
+              ]
+            },
+            "entries": {
+              "type": "array",
+              "items": {
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                  "status",
+                  "path"
+                ],
+                "properties": {
+                  "status": {
+                    "minLength": 2,
+                    "maxLength": 2,
+                    "type": "string"
+                  },
+                  "path": {
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "sha256": {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "copiedFiles": {
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "path",
+          "sha256",
+          "byteLength"
+        ],
+        "properties": {
+          "path": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "byteLength": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        }
+      }
+    },
+    "setup": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "state",
+        "commandSha256",
+        "startedAt",
+        "finishedAt",
+        "exitCode",
+        "logPath",
+        "logSha256"
+      ],
+      "properties": {
+        "state": {
+          "anyOf": [
+            {
+              "const": "skipped",
+              "type": "string"
+            },
+            {
+              "const": "running",
+              "type": "string"
+            },
+            {
+              "const": "succeeded",
+              "type": "string"
+            },
+            {
+              "const": "failed",
+              "type": "string"
+            },
+            {
+              "const": "recovery-required",
+              "type": "string"
+            }
+          ]
+        },
+        "commandSha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "startedAt": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "finishedAt": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "exitCode": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "logPath": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "logSha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "createdAt": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "updatedAt": {
+      "format": "date-time",
+      "type": "string"
+    }
+  }
+}

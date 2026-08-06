@@ -320,6 +320,44 @@ const MIGRATION_0005_CODEBASE_REGISTRATION: Migration = {
     "ALTER TABLE run_projection ADD COLUMN instruction_snapshot_json TEXT CHECK (instruction_snapshot_json IS NULL OR json_valid(instruction_snapshot_json))",
   ],
 };
+
+const MIGRATION_0006_WORKSPACE_LIFECYCLE: Migration = {
+  version: 6,
+  name: "workspace-lifecycle-and-writer-leases",
+  statements: [
+    "ALTER TABLE workspace ADD COLUMN repository_id TEXT REFERENCES repository(repository_id)",
+    "ALTER TABLE workspace ADD COLUMN lifecycle_status TEXT",
+    "ALTER TABLE workspace ADD COLUMN checkout_path TEXT",
+    "ALTER TABLE workspace ADD COLUMN configuration_sha256 TEXT",
+    "ALTER TABLE workspace ADD COLUMN manifest_json TEXT CHECK (manifest_json IS NULL OR json_valid(manifest_json))",
+    "CREATE UNIQUE INDEX workspace_checkout_path_unique ON workspace(checkout_path) WHERE checkout_path IS NOT NULL",
+    `CREATE TABLE workspace_lease (
+      checkout_path        TEXT    NOT NULL PRIMARY KEY,
+      workspace_id         TEXT    NOT NULL REFERENCES workspace(workspace_id),
+      repository_id        TEXT    NOT NULL REFERENCES repository(repository_id),
+      lease_id             TEXT    NOT NULL,
+      owner_id             TEXT    NOT NULL,
+      boot_witness         TEXT,
+      process_witnesses_json TEXT  NOT NULL CHECK (json_valid(process_witnesses_json)),
+      expected_sha         TEXT    NOT NULL,
+      fencing_revision     INTEGER NOT NULL,
+      lease_state          TEXT    NOT NULL,
+      acquired_at          TEXT    NOT NULL,
+      renewed_at           TEXT    NOT NULL,
+      expires_at           TEXT    NOT NULL,
+      released_at          TEXT,
+      revision             INTEGER NOT NULL,
+      last_event_sequence  INTEGER NOT NULL REFERENCES state_event(sequence),
+      updated_at           TEXT    NOT NULL
+    ) STRICT`,
+    `CREATE TRIGGER workspace_lease_first_revision BEFORE INSERT ON workspace_lease
+      WHEN NEW.revision <> 1 OR NEW.fencing_revision <> 1
+      BEGIN SELECT RAISE(ABORT, 'first workspace lease revision and fence must be 1'); END`,
+    `CREATE TRIGGER workspace_lease_causal_update BEFORE UPDATE ON workspace_lease
+      WHEN NEW.last_event_sequence <= OLD.last_event_sequence OR NEW.revision <> OLD.revision + 1
+      BEGIN SELECT RAISE(ABORT, 'projection update must advance revision by 1 and cite a newer event'); END`,
+  ],
+};
 Object.freeze(MIGRATION_0004_ARTIFACT.statements);
 Object.freeze(MIGRATION_0004_ARTIFACT);
 
@@ -329,5 +367,6 @@ export const MIGRATIONS: readonly Migration[] = Object.freeze([
   MIGRATION_0003_IDENTITY,
   MIGRATION_0004_ARTIFACT,
   MIGRATION_0005_CODEBASE_REGISTRATION,
+  MIGRATION_0006_WORKSPACE_LIFECYCLE,
 ]);
 assertAppendOnly(MIGRATIONS);

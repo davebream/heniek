@@ -15,7 +15,8 @@
     "@heniek/contracts": "workspace:*",
     "@heniek/protocol": "workspace:*",
     "@heniek/secrets": "workspace:*",
-    "@heniek/state": "workspace:*"
+    "@heniek/state": "workspace:*",
+    "@heniek/workspace": "workspace:*"
   },
   "devDependencies": {
     "@sinclair/typebox": "catalog:",
