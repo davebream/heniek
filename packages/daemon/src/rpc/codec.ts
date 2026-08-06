@@ -140,7 +140,7 @@ function invalidRequest(id: JsonRpcId | null, message: string): JsonRpcErrorFram
 
 /** Recovers an id from an otherwise-invalid envelope so the error can be correlated. */
 function recoverId(value: Record<string, unknown>): JsonRpcId | null {
-  const id = value["id"];
+  const id = value.id;
   if (typeof id === "string" || (typeof id === "number" && Number.isInteger(id))) {
     return id;
   }
@@ -175,10 +175,10 @@ function toFrame(line: string): Frame {
   const record = parsed as Record<string, unknown>;
   const id = recoverId(record);
 
-  if (record["jsonrpc"] !== JSON_RPC_VERSION) {
+  if (record.jsonrpc !== JSON_RPC_VERSION) {
     return invalidRequest(id, `jsonrpc must be "${JSON_RPC_VERSION}"`);
   }
-  if (typeof record["method"] !== "string") {
+  if (typeof record.method !== "string") {
     return invalidRequest(id, "method must be a string");
   }
   if (id === null) {
@@ -188,7 +188,7 @@ function toFrame(line: string): Frame {
     return invalidRequest(null, "id must be a string or an integer");
   }
 
-  return { kind: "request", id, method: record["method"], params: record["params"], raw: line };
+  return { kind: "request", id, method: record.method, params: record.params, raw: line };
 }
 
 function decodeLine(bytes: Uint8Array): string {
