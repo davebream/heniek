@@ -1,0 +1,61 @@
+{
+  "$id": "heniek://contract/CliStatusSuccess/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "ok",
+    "command",
+    "result"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "ok": {
+      "const": true,
+      "type": "boolean"
+    },
+    "command": {
+      "const": "status",
+      "type": "string"
+    },
+    "result": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "health",
+        "daemon",
+        "protocol",
+        "schemas"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1,
+          "type": "number"
+        },
+        "health": {
+          "const": "healthy",
+          "type": "string"
+        },
+        "daemon": {
+          "additionalProperties": true,
+          "type": "object",
+          "properties": {}
+        },
+        "protocol": {
+          "additionalProperties": true,
+          "type": "object",
+          "properties": {}
+        },
+        "schemas": {
+          "additionalProperties": true,
+          "type": "object",
+          "properties": {}
+        }
+      }
+    }
+  }
+}

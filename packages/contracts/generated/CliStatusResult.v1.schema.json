@@ -1,0 +1,166 @@
+{
+  "$id": "heniek://contract/CliStatusResult/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "health",
+    "daemon",
+    "protocol",
+    "schemas"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "health": {
+      "const": "healthy",
+      "type": "string"
+    },
+    "daemon": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "instanceId",
+        "lifecycleState",
+        "startedAt",
+        "reconciliation",
+        "artifactRecovery"
+      ],
+      "properties": {
+        "instanceId": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "lifecycleState": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "startedAt": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "reconciliation": {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "probed",
+            "resumable",
+            "failed",
+            "cancelled",
+            "unknown"
+          ],
+          "properties": {
+            "probed": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "resumable": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "failed": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "cancelled": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "unknown": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        },
+        "artifactRecovery": {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "removedIncoming",
+            "skippedIncoming",
+            "unreferencedBlobs"
+          ],
+          "properties": {
+            "removedIncoming": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "skippedIncoming": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "unreferencedBlobs": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "protocol": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "clientVersion",
+        "daemonVersion",
+        "negotiatedVersion",
+        "compatibility"
+      ],
+      "properties": {
+        "clientVersion": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "daemonVersion": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "negotiatedVersion": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "compatibility": {
+          "const": "compatible",
+          "type": "string"
+        }
+      }
+    },
+    "schemas": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "clientManifestVersion",
+        "daemonManifestVersion",
+        "compatibility"
+      ],
+      "properties": {
+        "clientManifestVersion": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "daemonManifestVersion": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "compatibility": {
+          "anyOf": [
+            {
+              "const": "exact",
+              "type": "string"
+            },
+            {
+              "const": "compatible",
+              "type": "string"
+            },
+            {
+              "const": "incompatible",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "$id": "heniek://contract/RpcCancelResult/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "accepted"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "accepted": {
+      "type": "boolean"
+    }
+  }
+}

@@ -1,0 +1,98 @@
+{
+  "$id": "heniek://contract/DaemonRecoveryResult/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "classifications"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "classifications": {
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "runId",
+          "classification",
+          "runStatus",
+          "probeOutcome"
+        ],
+        "properties": {
+          "runId": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "classification": {
+            "anyOf": [
+              {
+                "const": "resumable",
+                "type": "string"
+              },
+              {
+                "const": "failed",
+                "type": "string"
+              },
+              {
+                "const": "cancelled",
+                "type": "string"
+              },
+              {
+                "const": "unknown",
+                "type": "string"
+              }
+            ]
+          },
+          "runStatus": {
+            "anyOf": [
+              {
+                "const": "queued",
+                "type": "string"
+              },
+              {
+                "const": "running",
+                "type": "string"
+              },
+              {
+                "const": "waiting_on_user",
+                "type": "string"
+              },
+              {
+                "const": "succeeded",
+                "type": "string"
+              },
+              {
+                "const": "failed",
+                "type": "string"
+              },
+              {
+                "const": "cancelled",
+                "type": "string"
+              },
+              {
+                "const": "recovery_required",
+                "type": "string"
+              }
+            ]
+          },
+          "probeOutcome": {
+            "anyOf": [
+              {
+                "const": "status",
+                "type": "string"
+              },
+              {
+                "const": "error",
+                "type": "string"
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

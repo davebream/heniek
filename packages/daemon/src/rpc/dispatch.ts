@@ -27,7 +27,21 @@ import {
   type JsonRpcRequestFrame,
 } from "./codec.js";
 import { DRAINING_MESSAGE } from "./errors.js";
-import { DAEMON_HELLO_METHOD, type MethodRegistry } from "./methods.js";
+import {
+  DAEMON_HELLO_METHOD,
+  DAEMON_NEGOTIATE_METHOD,
+  DAEMON_RECOVERY_V1_METHOD,
+  DAEMON_STATUS_V1_METHOD,
+  type MethodContext,
+  type MethodRegistry,
+  RPC_CANCEL_METHOD,
+} from "./methods.js";
+
+const STATUS_SCHEMA_ID = "heniek://contract/DaemonStatus/v1";
+const STATUS_SCHEMA_SHA256 = "a91375e3509ceb2663a96e656d18e32c722085a1cb574328159cee7ff4fef854";
+const RECOVERY_SCHEMA_ID = "heniek://contract/DaemonRecoveryResult/v1";
+const RECOVERY_SCHEMA_SHA256 = "8c4099c58b018a809e8708451e33ccdc4e24fa74fb65865d35953af9f3672e9a";
+const CONTRACT_MANIFEST_VERSION = "heniek.contracts-manifest.v1";
 
 export interface DispatchDeps {
   readonly registry: MethodRegistry;
@@ -38,6 +52,9 @@ export interface DispatchDeps {
   readonly isDraining: () => boolean;
   /** The full handler error, never surfaced on the wire — a bare `-32603` is sent instead (design's Error Handling section). */
   readonly onHandlerError?: (method: string, error: unknown) => void;
+  readonly createRequestContext?: (id: JsonRpcRequestFrame["id"]) => MethodContext | undefined;
+  readonly finishRequest?: (id: JsonRpcRequestFrame["id"]) => void;
+  readonly cancelRequest?: (id: JsonRpcRequestFrame["id"]) => boolean;
 }
 
 function helloResultLine(
@@ -53,6 +70,119 @@ function helloResultLine(
     macAlgorithm: "hmac-sha256",
     keyId: deps.credential.keyId,
   });
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isNegotiationParams(value: unknown): value is Record<string, unknown> {
+  if (!isRecord(value)) {
+    return false;
+  }
+  const keys = Object.keys(value).sort();
+  if (keys.join(",") !== "auth,requiredMethods,schemaVersion,transportVersions") {
+    return false;
+  }
+  if (value.schemaVersion !== 1 || !Array.isArray(value.transportVersions)) {
+    return false;
+  }
+  if (
+    !value.transportVersions.every((version) => version === 1) ||
+    !Array.isArray(value.requiredMethods)
+  ) {
+    return false;
+  }
+  return value.requiredMethods.every((method) => {
+    if (!isRecord(method) || typeof method.name !== "string") {
+      return false;
+    }
+    return (
+      Array.isArray(method.methodVersions) &&
+      method.methodVersions.every((version) => version === 1) &&
+      Array.isArray(method.resultSchemas) &&
+      method.resultSchemas.every(
+        (schema) =>
+          isRecord(schema) &&
+          typeof schema.schemaId === "string" &&
+          typeof schema.sha256 === "string",
+      )
+    );
+  });
+}
+
+function cancelRequestId(value: unknown): JsonRpcRequestFrame["id"] | undefined {
+  if (!isRecord(value) || value.schemaVersion !== 1) {
+    return undefined;
+  }
+  const keys = Object.keys(value).sort();
+  if (keys.join(",") !== "auth,requestId,schemaVersion") {
+    return undefined;
+  }
+  const requestId = value.requestId;
+  return typeof requestId === "string" ||
+    (typeof requestId === "number" && Number.isInteger(requestId))
+    ? requestId
+    : undefined;
+}
+
+function cancelled(signal: AbortSignal): Promise<never> {
+  return new Promise((_, reject) => {
+    signal.addEventListener("abort", () => reject(new Error("request cancelled")), { once: true });
+  });
+}
+
+function negotiateResult(params: Record<string, unknown>) {
+  const requiredMethods = params.requiredMethods as readonly Record<string, unknown>[];
+  const requestedTransport = params.transportVersions as readonly number[];
+  const reasons: Array<"NO_COMMON_TRANSPORT" | "METHOD_UNAVAILABLE" | "RESULT_SCHEMA_UNAVAILABLE"> =
+    [];
+  if (!requestedTransport.includes(1)) {
+    reasons.push("NO_COMMON_TRANSPORT");
+  }
+  const methods: Array<{
+    name: string;
+    methodVersion: 1;
+    wireMethod: string;
+    resultSchemaId: string;
+    resultSchemaSha256: string;
+  }> = [];
+  for (const required of requiredMethods) {
+    const name = required.name as string;
+    const versions = required.methodVersions as readonly number[];
+    const schemas = required.resultSchemas as readonly Record<string, unknown>[];
+    if ((name !== "daemon.status" && name !== "daemon.recovery") || !versions.includes(1)) {
+      reasons.push("METHOD_UNAVAILABLE");
+      continue;
+    }
+    const resultSchemaId = name === "daemon.status" ? STATUS_SCHEMA_ID : RECOVERY_SCHEMA_ID;
+    const resultSchemaSha256 =
+      name === "daemon.status" ? STATUS_SCHEMA_SHA256 : RECOVERY_SCHEMA_SHA256;
+    const schema = schemas.find(
+      (candidate) =>
+        candidate.schemaId === resultSchemaId && candidate.sha256 === resultSchemaSha256,
+    );
+    if (schema === undefined) {
+      reasons.push("RESULT_SCHEMA_UNAVAILABLE");
+      continue;
+    }
+    methods.push({
+      name,
+      methodVersion: 1,
+      wireMethod: name === "daemon.status" ? DAEMON_STATUS_V1_METHOD : DAEMON_RECOVERY_V1_METHOD,
+      resultSchemaId,
+      resultSchemaSha256,
+    });
+  }
+  const compatibility = reasons.length === 0 ? "compatible" : "incompatible";
+  return {
+    schemaVersion: 1,
+    compatibility,
+    selectedTransportVersion: compatibility === "compatible" ? 1 : null,
+    contractManifestVersion: CONTRACT_MANIFEST_VERSION,
+    methods,
+    reasons: [...new Set(reasons)],
+  };
 }
 
 async function dispatchRequest(
@@ -93,18 +223,68 @@ async function dispatchRequest(
   }
 
   const handler = deps.registry.get(frame.method);
+  if (
+    (frame.method === DAEMON_STATUS_V1_METHOD || frame.method === DAEMON_RECOVERY_V1_METHOD) &&
+    !connection.negotiated
+  ) {
+    return encodeError(frame.id, ERROR_CODES.protocolNotNegotiated, "protocol not negotiated");
+  }
+
+  if (frame.method === DAEMON_NEGOTIATE_METHOD) {
+    if (connection.negotiationCalled) {
+      return encodeError(
+        frame.id,
+        ERROR_CODES.invalidRequest,
+        "daemon.negotiate already called on this connection",
+      );
+    }
+    if (!isNegotiationParams(frame.params)) {
+      return encodeError(frame.id, ERROR_CODES.invalidParams, "invalid params");
+    }
+    const result = negotiateResult(frame.params);
+    connection.negotiationCalled = true;
+    if (result.compatibility === "compatible") {
+      connection.negotiated = true;
+    }
+    return encodeResult(frame.id, result);
+  }
+
+  if (frame.method === RPC_CANCEL_METHOD) {
+    const requestId = cancelRequestId(frame.params);
+    if (requestId === undefined) {
+      return encodeError(frame.id, ERROR_CODES.invalidParams, "invalid params");
+    }
+    return encodeResult(frame.id, {
+      schemaVersion: 1,
+      accepted: deps.cancelRequest?.(requestId) ?? false,
+    });
+  }
+
   if (handler === undefined) {
     return encodeError(frame.id, ERROR_CODES.methodNotFound, "method not found");
   }
 
+  const createdContext = deps.createRequestContext?.(frame.id);
+  if (deps.createRequestContext !== undefined && createdContext === undefined) {
+    return encodeError(frame.id, ERROR_CODES.invalidRequest, "duplicate active request id");
+  }
+  const context: MethodContext = createdContext ?? { signal: new AbortController().signal };
   try {
-    const result = await handler(frame.params);
+    const result = await Promise.race([
+      Promise.resolve(handler(frame.params, context)),
+      cancelled(context.signal),
+    ]);
     return encodeResult(frame.id, result);
   } catch (error) {
+    if (context.signal.aborted) {
+      return encodeError(frame.id, ERROR_CODES.requestCancelled, "request cancelled");
+    }
     // The full error — never a stack trace or a path — goes to the trace
     // sink via the caller-supplied hook; a bare `-32603` goes to the wire.
     deps.onHandlerError?.(frame.method, error);
     return encodeError(frame.id, ERROR_CODES.internal, "internal error");
+  } finally {
+    deps.finishRequest?.(frame.id);
   }
 }
 

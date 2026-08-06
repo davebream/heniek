@@ -51,6 +51,10 @@ export const ERROR_CODES = {
   unauthorized: -32001,
   /** The daemon is shutting down and is no longer accepting work. */
   draining: -32000,
+  /** The target request was cancelled by its authenticated owner. */
+  requestCancelled: -32002,
+  /** A canonical versioned method needs an authenticated negotiation first. */
+  protocolNotNegotiated: -32003,
 } as const;
 
 /** A JSON-RPC id. Notifications (a missing id) are not supported — see `decodeChunk`. */

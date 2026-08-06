@@ -26,6 +26,10 @@ export interface ConnectionAuthState {
   lastSequence: number;
   /** `daemon.hello` may be called at most once per connection (plan-review round 1, finding m5). */
   helloCalled: boolean;
+  /** Set only after a compatible authenticated daemon.negotiate call. */
+  negotiated: boolean;
+  /** A negotiation attempt, compatible or not, is single-use per connection. */
+  negotiationCalled: boolean;
 }
 
 export function mintConnectionAuthState(randomSource: RandomSource): ConnectionAuthState {
@@ -33,5 +37,7 @@ export function mintConnectionAuthState(randomSource: RandomSource): ConnectionA
     challenge: randomSource.bytes(CHALLENGE_BYTES),
     lastSequence: 0,
     helloCalled: false,
+    negotiated: false,
+    negotiationCalled: false,
   };
 }

@@ -11,6 +11,10 @@
 export const DAEMON_HELLO_METHOD = "daemon.hello";
 export const DAEMON_STATUS_METHOD = "daemon.status";
 export const DAEMON_RECOVERY_METHOD = "daemon.recovery";
+export const DAEMON_NEGOTIATE_METHOD = "daemon.negotiate";
+export const DAEMON_STATUS_V1_METHOD = "daemon.status.v1";
+export const DAEMON_RECOVERY_V1_METHOD = "daemon.recovery.v1";
+export const RPC_CANCEL_METHOD = "rpc.cancel";
 
 /**
  * Authenticated methods for Q008 — exactly these two. `daemon.hello` is
@@ -21,7 +25,11 @@ export const DAEMON_RECOVERY_METHOD = "daemon.recovery";
  */
 export const AUTHENTICATED_METHODS = [DAEMON_STATUS_METHOD, DAEMON_RECOVERY_METHOD] as const;
 
-export type MethodHandler = (params: unknown) => unknown | Promise<unknown>;
+export interface MethodContext {
+  readonly signal: AbortSignal;
+}
+
+export type MethodHandler = (params: unknown, context: MethodContext) => unknown | Promise<unknown>;
 
 export type MethodRegistry = ReadonlyMap<string, MethodHandler>;
 
