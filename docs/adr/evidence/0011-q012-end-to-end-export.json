@@ -38,8 +38,13 @@
     "partialImportCrashRecovered": true
   },
   "realConformance": {
-    "status": "blocked",
-    "code": "SUBSCRIPTION_ROUTE_PROOF_UNAVAILABLE",
-    "apiKeyFallback": false
+    "status": "passed",
+    "runtime": "v3.1.2/bb5efee24132aa3d65e417040df201e08da44c8c",
+    "authRoute": "isolated_first_party_oauth_token",
+    "sameBackendThreadReconciled": true,
+    "artifactRetrieved": true,
+    "cancelled": true,
+    "apiKeyFallback": false,
+    "containsSecrets": false
   }
 }

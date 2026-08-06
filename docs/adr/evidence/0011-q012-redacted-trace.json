@@ -55,9 +55,14 @@
     "finalizationCount": 1
   },
   "realConformance": {
-    "status": "blocked",
-    "code": "SUBSCRIPTION_ROUTE_PROOF_UNAVAILABLE",
-    "missingInputs": ["HENIEK_CONFORMANCE_SMOKE_CLAUDEXOR_ROOT", "CLAUDE_CODE_OAUTH_TOKEN"],
-    "apiKeyFallback": false
+    "status": "passed",
+    "runtime": "v3.1.2/bb5efee24132aa3d65e417040df201e08da44c8c",
+    "authRoute": "isolated_first_party_oauth_token",
+    "questionAnswer": "passed",
+    "heniekOnlyRestart": "same_thread_reconciled",
+    "artifactImportAndRetrieval": "passed",
+    "cancellation": "passed",
+    "apiKeyFallback": false,
+    "containsSecrets": false
   }
 }
