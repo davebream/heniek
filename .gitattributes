@@ -1,0 +1,14 @@
+# Normalize line endings on checkin, check out LF everywhere. Keeps the
+# formatter and the secret scanner from disagreeing across platforms.
+* text=auto eol=lf
+
+# Generated artifacts. linguist-generated collapses them in pull request review
+# and excludes them from language statistics. They are still produced by their
+# generators, never edited by hand.
+docs/backlog/revision-1/**         linguist-generated=true
+packages/contracts/generated/**    linguist-generated=true
+
+# The lockfile additionally suppresses textual diffs: it is machine-resolved,
+# and a readable diff of it has no review value. The other generated artifacts
+# keep their diffs so a regenerated change can still be eyeballed.
+pnpm-lock.yaml                     linguist-generated=true -diff
