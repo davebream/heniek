@@ -11,7 +11,9 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@heniek/contracts": "workspace:*",
     "@heniek/secrets": "workspace:*",
+    "@sinclair/typebox": "catalog:",
     "ajv": "catalog:",
     "ajv-formats": "catalog:",
     "yaml": "catalog:"
