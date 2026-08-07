@@ -5,11 +5,13 @@ import type {
   BackendArtifactV1,
   BackendExecutionHandleV1,
   ExecutionEventV1,
+  ExecutionEventV2,
   ExecutionRequestV1,
   ExecutionRequestV2,
   ExecutionRequestV3,
   ExecutionResultV1,
   ExecutionResultV2,
+  ExecutionResultV3,
   InteractionAnswerSetV1,
   PendingInteractionV1,
   PendingInteractionV2,
@@ -70,4 +72,24 @@ export interface ExecutionBackendV3 {
   artifacts(executionId: string): Promise<Static<typeof BackendArtifactV1>[]>;
   readArtifact(executionId: string, artifactId: string): Promise<Uint8Array>;
   events(executionId: string, after?: string): AsyncIterable<Static<typeof ExecutionEventV1>>;
+}
+
+/**
+ * Q017's structured profile-aware execution boundary. V3 remains valid for
+ * existing consumers while V4 carries the deliberately versioned event and
+ * result contracts.
+ */
+export interface ExecutionBackendV4 {
+  start(
+    request: Static<typeof ExecutionRequestV3>,
+  ): Promise<Static<typeof BackendExecutionHandleV1>>;
+  status(executionId: string): Promise<ExecutionStatus>;
+  interactions(executionId: string): Promise<Static<typeof PendingInteractionV2>[]>;
+  answer(executionId: string, answer: Static<typeof InteractionAnswerSetV1>): Promise<void>;
+  resume(executionId: string, inputArtifactRefs: ArtifactId[]): Promise<void>;
+  result(executionId: string): Promise<Static<typeof ExecutionResultV3>>;
+  cancel(executionId: string): Promise<void>;
+  artifacts(executionId: string): Promise<Static<typeof BackendArtifactV1>[]>;
+  readArtifact(executionId: string, artifactId: string): Promise<Uint8Array>;
+  events(executionId: string, after?: string): AsyncIterable<Static<typeof ExecutionEventV2>>;
 }

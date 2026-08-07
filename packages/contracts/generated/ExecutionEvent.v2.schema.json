@@ -1,0 +1,381 @@
+{
+  "$id": "heniek://contract/ExecutionEvent/v2",
+  "anyOf": [
+    {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "cursor",
+        "kind",
+        "status"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 2,
+          "type": "number"
+        },
+        "cursor": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "kind": {
+          "const": "status",
+          "type": "string"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "const": "queued",
+              "type": "string"
+            },
+            {
+              "const": "running",
+              "type": "string"
+            },
+            {
+              "const": "waiting_on_user",
+              "type": "string"
+            },
+            {
+              "const": "recovery_required",
+              "type": "string"
+            },
+            {
+              "const": "succeeded",
+              "type": "string"
+            },
+            {
+              "const": "failed",
+              "type": "string"
+            },
+            {
+              "const": "cancelled",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "cursor",
+        "kind"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 2,
+          "type": "number"
+        },
+        "cursor": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "kind": {
+          "const": "rate_limited",
+          "type": "string"
+        },
+        "retryAfterMs": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      }
+    },
+    {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "cursor",
+        "kind",
+        "pressure"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 2,
+          "type": "number"
+        },
+        "cursor": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "kind": {
+          "const": "context_pressure",
+          "type": "string"
+        },
+        "pressure": {
+          "const": "capacity_exhausted",
+          "type": "string"
+        }
+      }
+    },
+    {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "cursor",
+        "kind",
+        "tool"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 2,
+          "type": "number"
+        },
+        "cursor": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "kind": {
+          "const": "tool_call",
+          "type": "string"
+        },
+        "tool": {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "name",
+            "kind"
+          ],
+          "properties": {
+            "name": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "kind": {
+              "anyOf": [
+                {
+                  "const": "web",
+                  "type": "string"
+                },
+                {
+                  "const": "file",
+                  "type": "string"
+                },
+                {
+                  "const": "command",
+                  "type": "string"
+                },
+                {
+                  "const": "mcp",
+                  "type": "string"
+                },
+                {
+                  "const": "search",
+                  "type": "string"
+                },
+                {
+                  "const": "other",
+                  "type": "string"
+                }
+              ]
+            },
+            "useId": {
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "cursor",
+        "kind",
+        "tool"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 2,
+          "type": "number"
+        },
+        "cursor": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "kind": {
+          "const": "tool_result",
+          "type": "string"
+        },
+        "tool": {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "name",
+            "kind",
+            "outcome"
+          ],
+          "properties": {
+            "name": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "kind": {
+              "anyOf": [
+                {
+                  "const": "web",
+                  "type": "string"
+                },
+                {
+                  "const": "file",
+                  "type": "string"
+                },
+                {
+                  "const": "command",
+                  "type": "string"
+                },
+                {
+                  "const": "mcp",
+                  "type": "string"
+                },
+                {
+                  "const": "search",
+                  "type": "string"
+                },
+                {
+                  "const": "other",
+                  "type": "string"
+                }
+              ]
+            },
+            "useId": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "outcome": {
+              "anyOf": [
+                {
+                  "const": "succeeded",
+                  "type": "string"
+                },
+                {
+                  "const": "failed",
+                  "type": "string"
+                },
+                {
+                  "const": "cancelled",
+                  "type": "string"
+                },
+                {
+                  "const": "denied",
+                  "type": "string"
+                }
+              ]
+            },
+            "exitCode": {
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "cursor",
+        "kind",
+        "path"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 2,
+          "type": "number"
+        },
+        "cursor": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "kind": {
+          "const": "file_change",
+          "type": "string"
+        },
+        "path": {
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\u0000).+$",
+          "type": "string"
+        }
+      }
+    },
+    {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "cursor",
+        "kind",
+        "usage"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 2,
+          "type": "number"
+        },
+        "cursor": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "kind": {
+          "const": "usage",
+          "type": "string"
+        },
+        "usage": {
+          "additionalProperties": false,
+          "type": "object",
+          "properties": {
+            "inputUnits": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "outputUnits": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "cachedInputUnits": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "costUsd": {
+              "minimum": 0,
+              "type": "number"
+            },
+            "estimated": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    },
+    {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "cursor",
+        "kind"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 2,
+          "type": "number"
+        },
+        "cursor": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "kind": {
+          "const": "error",
+          "type": "string"
+        }
+      }
+    }
+  ]
+}
