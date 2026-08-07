@@ -91,11 +91,11 @@ describe("buildIsolatedEnvironment — Claude, allowlist construction (carrierKi
   it("admits the carrier, the dedicated config home, and declared neutral variables", () => {
     const result = buildIsolatedEnvironment(claudeRequest());
     expect(result.env[CLAUDE_CARRIER]).toBe(SENTINEL_CARRIER_VALUE);
-    expect(result.env["HOME"]).toBe("/scratch/claude-home");
-    expect(result.env["CLAUDE_CONFIG_DIR"]).toBe("/scratch/claude-home/.claude");
+    expect(result.env.HOME).toBe("/scratch/claude-home");
+    expect(result.env.CLAUDE_CONFIG_DIR).toBe("/scratch/claude-home/.claude");
     // Review finding 2: PATH is always the fixed ISOLATED_PATH constant,
     // never the ambient value (the fixture's ambient PATH is "/usr/bin:/bin").
-    expect(result.env["PATH"]).toBe(ISOLATED_PATH);
+    expect(result.env.PATH).toBe(ISOLATED_PATH);
     expect(result.decisions.find((d) => d.name === "PATH")?.outcome).toBe("admitted-fixed");
   });
 
@@ -105,8 +105,8 @@ describe("buildIsolatedEnvironment — Claude, allowlist construction (carrierKi
   // claude must always contain `HOME`.
   it("[regression] always includes HOME in the built environment (N3)", () => {
     const result = buildIsolatedEnvironment(claudeRequest());
-    expect(result.env["HOME"]).toBeDefined();
-    expect(result.env["HOME"]).toBe("/scratch/claude-home");
+    expect(result.env.HOME).toBeDefined();
+    expect(result.env.HOME).toBe("/scratch/claude-home");
     expect(result.decisions.find((d) => d.name === "HOME")?.outcome).toBe("admitted-config-home");
   });
 
@@ -125,7 +125,7 @@ describe("buildIsolatedEnvironment — Claude, allowlist construction (carrierKi
     const result = buildIsolatedEnvironment(
       claudeRequest({ ambient: { [CLAUDE_CARRIER]: SENTINEL_CARRIER_VALUE, SHLVL: "3" } }),
     );
-    expect(result.env["SHLVL"]).toBeUndefined();
+    expect(result.env.SHLVL).toBeUndefined();
   });
 
   // PATH is excluded from this parametrization deliberately: unlike every
@@ -159,8 +159,8 @@ describe("buildIsolatedEnvironment — Claude, allowlist construction (carrierKi
         },
       }),
     );
-    expect(result.env["PATH"]).toBe(ISOLATED_PATH);
-    expect(result.env["PATH"]).not.toContain("SENTINEL-ATTACKER-BIN-NOT-REAL");
+    expect(result.env.PATH).toBe(ISOLATED_PATH);
+    expect(result.env.PATH).not.toContain("SENTINEL-ATTACKER-BIN-NOT-REAL");
     expect(result.decisions.find((d) => d.name === "PATH")?.outcome).toBe("admitted-fixed");
   });
 
@@ -179,10 +179,10 @@ describe("buildIsolatedEnvironment — Claude, allowlist construction (carrierKi
         configHome: "/scratch/claude-home",
       }),
     );
-    expect(result.env["HOME"]).toBe("/scratch/claude-home");
-    expect(result.env["CLAUDE_CONFIG_DIR"]).toBe("/scratch/claude-home/.claude");
-    expect(result.env["HOME"]).not.toContain("SENTINEL-HOME-NOT-REAL");
-    expect(result.env["CLAUDE_CONFIG_DIR"]).not.toContain("SENTINEL-CLAUDE-CONFIG-DIR-NOT-REAL");
+    expect(result.env.HOME).toBe("/scratch/claude-home");
+    expect(result.env.CLAUDE_CONFIG_DIR).toBe("/scratch/claude-home/.claude");
+    expect(result.env.HOME).not.toContain("SENTINEL-HOME-NOT-REAL");
+    expect(result.env.CLAUDE_CONFIG_DIR).not.toContain("SENTINEL-CLAUDE-CONFIG-DIR-NOT-REAL");
     expect(result.decisions.find((d) => d.name === "HOME")?.outcome).toBe("admitted-config-home");
     expect(result.decisions.find((d) => d.name === "CLAUDE_CONFIG_DIR")?.outcome).toBe(
       "admitted-config-home",
@@ -198,7 +198,7 @@ describe("buildIsolatedEnvironment — Claude, allowlist construction (carrierKi
         },
       }),
     );
-    expect(result.env["SOME_OTHER_SERVICE_API_KEY"]).toBeUndefined();
+    expect(result.env.SOME_OTHER_SERVICE_API_KEY).toBeUndefined();
     expect(result.decisions.find((d) => d.name === "SOME_OTHER_SERVICE_API_KEY")?.outcome).toBe(
       "denied-unlisted",
     );
@@ -345,7 +345,7 @@ describe("buildIsolatedEnvironment — Claude, fail-closed construction", () => 
 describe("buildIsolatedEnvironment — Codex, brokered carrier model (FIX-1)", () => {
   it("builds a minimal allowlisted environment with no carrier and no config home at all", () => {
     const result = buildIsolatedEnvironment(codexRequest());
-    expect(result.env["PATH"]).toBe(ISOLATED_PATH);
+    expect(result.env.PATH).toBe(ISOLATED_PATH);
     expect(Object.keys(result.env)).toEqual(["PATH"]);
   });
 
@@ -355,8 +355,8 @@ describe("buildIsolatedEnvironment — Codex, brokered carrier model (FIX-1)", (
     const result = buildIsolatedEnvironment(
       codexRequest({ ambient: { PATH: "/opt/SENTINEL-ATTACKER-BIN-NOT-REAL:/usr/bin" } }),
     );
-    expect(result.env["PATH"]).toBe(ISOLATED_PATH);
-    expect(result.env["PATH"]).not.toContain("SENTINEL-ATTACKER-BIN-NOT-REAL");
+    expect(result.env.PATH).toBe(ISOLATED_PATH);
+    expect(result.env.PATH).not.toContain("SENTINEL-ATTACKER-BIN-NOT-REAL");
     expect(result.decisions.find((d) => d.name === "PATH")?.outcome).toBe("admitted-fixed");
   });
 
@@ -370,8 +370,8 @@ describe("buildIsolatedEnvironment — Codex, brokered carrier model (FIX-1)", (
         },
       }),
     );
-    expect(result.env["HOME"]).toBeUndefined();
-    expect(result.env["CODEX_HOME"]).toBeUndefined();
+    expect(result.env.HOME).toBeUndefined();
+    expect(result.env.CODEX_HOME).toBeUndefined();
     expect(result.decisions.find((d) => d.name === "HOME")?.outcome).toBe("denied-broker-owned");
     expect(result.decisions.find((d) => d.name === "CODEX_HOME")?.outcome).toBe(
       "denied-broker-owned",

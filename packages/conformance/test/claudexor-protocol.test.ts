@@ -95,7 +95,7 @@ describe("protocolHeaders", () => {
   it("carries the negotiated major as a string and a loopback origin", () => {
     const headers = protocolHeaders(EXPECTED_PROTOCOL_MAJOR);
     expect(headers["X-Claudexor-Protocol-Major"]).toBe(String(EXPECTED_PROTOCOL_MAJOR));
-    expect(headers["Origin"]).toBe("http://127.0.0.1");
+    expect(headers.Origin).toBe("http://127.0.0.1");
   });
 
   // The bearer token is the client's concern; keeping it out of this pure

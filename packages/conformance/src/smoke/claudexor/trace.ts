@@ -279,18 +279,18 @@ export function createEventTrace(options: EventTraceOptions = {}): EventTrace {
         const record = event as Record<string, unknown>;
         const dropped: string[] = [];
 
-        const rawSeq = Object.hasOwn(record, "seq") ? record["seq"] : undefined;
+        const rawSeq = Object.hasOwn(record, "seq") ? record.seq : undefined;
         const seq =
           typeof rawSeq === "number" && Number.isInteger(rawSeq) && rawSeq >= 0 ? rawSeq : null;
         if (seq === null) return reject("seq", null);
 
         const ts = admissibleTimestamp(
-          Object.hasOwn(record, "ts") ? record["ts"] : undefined,
+          Object.hasOwn(record, "ts") ? record.ts : undefined,
           daemonToken,
         );
         if (ts === null) return reject("ts", seq);
 
-        const rawType = Object.hasOwn(record, "type") ? record["type"] : undefined;
+        const rawType = Object.hasOwn(record, "type") ? record.type : undefined;
         if (typeof rawType !== "string" || !isAdmissibleString(rawType, daemonToken)) {
           return reject("type", seq);
         }
@@ -299,7 +299,7 @@ export function createEventTrace(options: EventTraceOptions = {}): EventTrace {
         const taskId = readOptionalId(record, "task_id", daemonToken, dropped);
 
         const payload = sanitizePayload(
-          Object.hasOwn(record, "payload") ? record["payload"] : undefined,
+          Object.hasOwn(record, "payload") ? record.payload : undefined,
           daemonToken,
           dropped,
         );

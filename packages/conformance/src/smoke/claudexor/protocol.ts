@@ -105,7 +105,7 @@ function asString(record: Record<string, unknown>, field: string, path: string):
 export function negotiateProtocol(response: unknown): NegotiatedProtocol {
   const record = asRecord(response, "<root>");
 
-  const major = Object.hasOwn(record, "protocolMajor") ? record["protocolMajor"] : undefined;
+  const major = Object.hasOwn(record, "protocolMajor") ? record.protocolMajor : undefined;
   if (typeof major !== "number" || !Number.isInteger(major)) {
     throw new InvalidHandshakeResponseError("protocolMajor");
   }
@@ -127,7 +127,7 @@ export function negotiateProtocol(response: unknown): NegotiatedProtocol {
     throw new InvalidHandshakeResponseError("operationsPath");
   }
   const engineRecord = asRecord(
-    Object.hasOwn(record, "engine") ? record["engine"] : undefined,
+    Object.hasOwn(record, "engine") ? record.engine : undefined,
     "engine",
   );
 
