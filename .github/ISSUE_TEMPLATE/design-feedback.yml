@@ -1,0 +1,58 @@
+name: Design feedback
+description: Describe a workflow problem, product tradeoff, or specification concern.
+title: "[Design]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Design feedback is welcome even when implementation is not yet scheduled. Search existing issues first and focus on the user problem before proposing a solution.
+
+        This form is public. Do not include secrets, private repository contents, or unredacted diagnostics.
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Preflight
+      options:
+        - label: I searched existing issues and did not find the same feedback.
+          required: true
+        - label: This report contains no credentials, secrets, private repository contents, or unredacted diagnostics.
+          required: true
+        - label: I understand that filing this issue does not approve implementation work.
+          required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: Who encounters the problem, in what workflow, and why does it matter?
+    validations:
+      required: true
+
+  - type: textarea
+    id: current
+    attributes:
+      label: Current behavior or model
+      description: How does the current implementation, specification, or roadmap handle this today?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Suggested direction
+      description: Optional. Describe the outcome you would prefer without assuming a specific implementation.
+
+  - type: textarea
+    id: tradeoffs
+    attributes:
+      label: Tradeoffs and alternatives
+      description: What becomes harder, less safe, or less compatible? What alternatives did you consider?
+
+  - type: textarea
+    id: anchors
+    attributes:
+      label: Relevant references
+      description: Link related issues, Product Specification v0.2 sections, or public examples.
