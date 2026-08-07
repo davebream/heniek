@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "issue": "Q018",
+  "recordedOn": "2026-08-07",
+  "controlProtocol": {
+    "version": "v2",
+    "major": 3,
+    "engineVersion": "3.1.2",
+    "engineSha": "bb5efee24132aa3d65e417040df201e08da44c8c"
+  },
+  "selection": {
+    "harness": "cursor",
+    "cursorCliVersion": "2026.06.12-01-15-52-7244546",
+    "cursorCliVersionOnPath": "2026.08.04-aaa8809",
+    "model": "Composer 2.5",
+    "subscriptionTier": "Pro",
+    "effortLevelsAdvertised": []
+  },
+  "authentication": {
+    "authRequest": "subscription",
+    "requestedSource": "native_session",
+    "availability": "available",
+    "verification": "passed",
+    "apiKeyFallback": "removed from the environment",
+    "observedApiKeySource": "login",
+    "credentialProfileForwarded": false
+  },
+  "headlessResume": {
+    "headless": "succeeded",
+    "resume": "succeeded",
+    "resumeContinuesSameSession": true,
+    "distinctCursorSessionIdCount": 1,
+    "resumedTurnReloadedPriorContext": true,
+    "frameFamilies": ["system", "user", "thinking", "assistant", "result"],
+    "usageFields": ["inputTokens", "outputTokens", "cacheReadTokens", "cacheWriteTokens"],
+    "costReported": false,
+    "workspaceCleanup": "removed"
+  },
+  "cancellationCleanup": {
+    "terminalState": "cancelled",
+    "launcherExitCode": 143,
+    "observedNewProcessCount": 2,
+    "survivingObservedProcessCount": 1,
+    "survivingProcessKind": "vendor-owned detached worker re-parented to init",
+    "workspaceCleanup": "removed"
+  },
+  "scopedHomeIsolation": {
+    "availability": "unavailable",
+    "verification": "not_run",
+    "cause": "keychain-backed session is read through the daemon's own HOME",
+    "productionConfigurationProven": "real HOME"
+  },
+  "redactions": [
+    "control bearer token",
+    "account, user, and session identifiers",
+    "run and thread identifiers",
+    "prompt and response transcript",
+    "Cursor API key value and login email",
+    "temporary workspace and scoped-home paths"
+  ]
+}
