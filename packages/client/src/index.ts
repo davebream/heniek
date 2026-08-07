@@ -4,6 +4,7 @@ import type { ApplicationHome } from "@heniek/config";
 import type {
   ArtifactGetResultV1,
   ArtifactId,
+  CapabilityCatalogueV1,
   CodebaseDetectionResult,
   DoctorReportV1,
   InteractionAnswerSetV1,
@@ -19,6 +20,8 @@ import {
   ARTIFACT_GET_SCHEMA_SHA256,
   ARTIFACT_GET_V1_METHOD,
   buildSignedRequest,
+  CAPABILITY_CATALOGUE_SCHEMA_ID,
+  CAPABILITY_CATALOGUE_SCHEMA_SHA256,
   CODEBASE_DETECT_METHOD,
   CODEBASE_DETECT_V1_METHOD,
   CODEBASE_DETECTION_SCHEMA_ID,
@@ -36,6 +39,8 @@ import {
   DOCTOR_SCHEMA_ID,
   DOCTOR_SCHEMA_SHA256,
   DOCTOR_V1_METHOD,
+  ENGINE_CATALOGUE_METHOD,
+  ENGINE_CATALOGUE_V1_METHOD,
   JSON_RPC_VERSION,
   MAX_LINE_BYTES,
   REGISTERED_CODEBASE_SCHEMA_ID,
@@ -374,6 +379,13 @@ const DOCTOR_REQUIREMENT: RpcRequirement = {
   wireMethod: DOCTOR_V1_METHOD,
   schemaId: DOCTOR_SCHEMA_ID,
   sha256: DOCTOR_SCHEMA_SHA256,
+};
+
+const ENGINE_CATALOGUE_REQUIREMENT: RpcRequirement = {
+  name: ENGINE_CATALOGUE_METHOD,
+  wireMethod: ENGINE_CATALOGUE_V1_METHOD,
+  schemaId: CAPABILITY_CATALOGUE_SCHEMA_ID,
+  sha256: CAPABILITY_CATALOGUE_SCHEMA_SHA256,
 };
 
 function parseVersioned<T>(value: unknown, description: string): T {
@@ -939,4 +951,17 @@ export function fetchDoctorReportViaDaemon(
   home: ApplicationHome,
 ): Promise<Static<typeof DoctorReportV1>> {
   return domainCall(home, DOCTOR_REQUIREMENT, {}, "doctor");
+}
+
+export function fetchCapabilityCatalogueViaDaemon(
+  home: ApplicationHome,
+  options: { readonly refresh?: boolean; readonly signal?: AbortSignal } = {},
+): Promise<Static<typeof CapabilityCatalogueV1>> {
+  return domainCall(
+    home,
+    ENGINE_CATALOGUE_REQUIREMENT,
+    { schemaVersion: 1, refresh: options.refresh ?? false },
+    "capability catalogue",
+    options.signal,
+  );
 }

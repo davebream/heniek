@@ -30,6 +30,8 @@ export const ARTIFACT_GET_METHOD = "artifact.get";
 export const ARTIFACT_GET_V1_METHOD = "artifact.get.v1";
 export const DOCTOR_METHOD = "doctor";
 export const DOCTOR_V1_METHOD = "doctor.v1";
+export const ENGINE_CATALOGUE_METHOD = "engine.catalogue";
+export const ENGINE_CATALOGUE_V1_METHOD = "engine.catalogue.v1";
 export const RPC_CANCEL_METHOD = "rpc.cancel";
 
 export const ERROR_CODES = {
@@ -96,6 +98,9 @@ export const ARTIFACT_GET_SCHEMA_SHA256 =
 export const DOCTOR_SCHEMA_ID = "heniek://contract/DoctorReport/v1";
 export const DOCTOR_SCHEMA_SHA256 =
   "1645c1a617331955c3a515bd3942e423e71e3fbc460093092fc149b0cee6e56c";
+export const CAPABILITY_CATALOGUE_SCHEMA_ID = "heniek://contract/CapabilityCatalogue/v1";
+export const CAPABILITY_CATALOGUE_SCHEMA_SHA256 =
+  "5fe61be4e0fb222028c0078740e0b407250dddb911855a5dc14e15ed3a55a54c";
 
 function hex(bytes: Uint8Array): string {
   return Buffer.from(bytes).toString("hex");

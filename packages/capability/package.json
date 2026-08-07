@@ -1,5 +1,5 @@
 {
-  "name": "@heniek/state",
+  "name": "@heniek/capability",
   "version": "0.0.0",
   "private": true,
   "license": "MIT",
@@ -11,14 +11,13 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@heniek/config": "workspace:*",
     "@heniek/contracts": "workspace:*",
-    "@sinclair/typebox": "catalog:",
-    "ajv": "catalog:",
-    "ajv-formats": "catalog:"
+    "@heniek/execution-claudexor": "workspace:*",
+    "@heniek/state": "workspace:*",
+    "@sinclair/typebox": "catalog:"
   },
   "devDependencies": {
-    "@sinclair/typebox": "catalog:",
-    "tsx": "catalog:",
     "vitest": "catalog:"
   }
 }

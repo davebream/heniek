@@ -1,0 +1,112 @@
+{
+  "$id": "heniek://contract/CapabilitySelectionError/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "phase",
+    "engine",
+    "accountId",
+    "issues"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "phase": {
+      "anyOf": [
+        {
+          "const": "authoring",
+          "type": "string"
+        },
+        {
+          "const": "execution",
+          "type": "string"
+        }
+      ]
+    },
+    "engine": {
+      "anyOf": [
+        {
+          "const": "claude",
+          "type": "string"
+        },
+        {
+          "const": "codex",
+          "type": "string"
+        },
+        {
+          "const": "cursor",
+          "type": "string"
+        }
+      ]
+    },
+    "accountId": {
+      "anyOf": [
+        {
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "issues": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "capability",
+          "state",
+          "message"
+        ],
+        "properties": {
+          "capability": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "state": {
+            "anyOf": [
+              {
+                "const": "missing",
+                "type": "string"
+              },
+              {
+                "const": "unsupported",
+                "type": "string"
+              },
+              {
+                "const": "unknown",
+                "type": "string"
+              },
+              {
+                "const": "stale",
+                "type": "string"
+              },
+              {
+                "const": "incompatible",
+                "type": "string"
+              },
+              {
+                "const": "unauthenticated",
+                "type": "string"
+              },
+              {
+                "const": "rate-limited",
+                "type": "string"
+              }
+            ]
+          },
+          "message": {
+            "minLength": 1,
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

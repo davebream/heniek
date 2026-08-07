@@ -16,6 +16,12 @@ export {
   createArtifactStore,
 } from "./artifact/store.js";
 export {
+  readLatestCapabilitySnapshot,
+  type StoredCapabilityEngine,
+  type StoredCapabilityEntry,
+  writeCapabilitySnapshot,
+} from "./capability/cache.js";
+export {
   type CommitReport,
   commitStateChange,
   type StateCommand,

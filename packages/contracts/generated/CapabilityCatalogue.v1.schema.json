@@ -1,0 +1,937 @@
+{
+  "$id": "heniek://contract/CapabilityCatalogue/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "generatedAt",
+    "entries"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "generatedAt": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "entries": {
+      "minItems": 3,
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "engine",
+          "accountId",
+          "engineVersion",
+          "claudexorVersion",
+          "observedAt",
+          "expiresAt",
+          "freshness",
+          "discovery",
+          "configured",
+          "installation",
+          "authentication",
+          "compatibility",
+          "capacity",
+          "ready",
+          "models",
+          "features",
+          "provenance",
+          "reasons"
+        ],
+        "properties": {
+          "engine": {
+            "anyOf": [
+              {
+                "const": "claude",
+                "type": "string"
+              },
+              {
+                "const": "codex",
+                "type": "string"
+              },
+              {
+                "const": "cursor",
+                "type": "string"
+              }
+            ]
+          },
+          "accountId": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "engineVersion": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "claudexorVersion": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "observedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "freshness": {
+            "anyOf": [
+              {
+                "const": "fresh",
+                "type": "string"
+              },
+              {
+                "const": "stale",
+                "type": "string"
+              }
+            ]
+          },
+          "discovery": {
+            "anyOf": [
+              {
+                "const": "complete",
+                "type": "string"
+              },
+              {
+                "const": "partial",
+                "type": "string"
+              },
+              {
+                "const": "failed",
+                "type": "string"
+              }
+            ]
+          },
+          "configured": {
+            "type": "boolean"
+          },
+          "installation": {
+            "anyOf": [
+              {
+                "const": "installed",
+                "type": "string"
+              },
+              {
+                "const": "not-installed",
+                "type": "string"
+              },
+              {
+                "const": "unknown",
+                "type": "string"
+              }
+            ]
+          },
+          "authentication": {
+            "anyOf": [
+              {
+                "const": "authenticated",
+                "type": "string"
+              },
+              {
+                "const": "unauthenticated",
+                "type": "string"
+              },
+              {
+                "const": "unknown",
+                "type": "string"
+              }
+            ]
+          },
+          "compatibility": {
+            "anyOf": [
+              {
+                "const": "compatible",
+                "type": "string"
+              },
+              {
+                "const": "incompatible",
+                "type": "string"
+              },
+              {
+                "const": "unknown",
+                "type": "string"
+              }
+            ]
+          },
+          "capacity": {
+            "anyOf": [
+              {
+                "const": "available",
+                "type": "string"
+              },
+              {
+                "const": "rate-limited",
+                "type": "string"
+              },
+              {
+                "const": "unknown",
+                "type": "string"
+              }
+            ]
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "models": {
+            "type": "array",
+            "items": {
+              "additionalProperties": false,
+              "type": "object",
+              "required": [
+                "id",
+                "provenance",
+                "efforts",
+                "executionModes"
+              ],
+              "properties": {
+                "id": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "label": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "provenance": {
+                  "anyOf": [
+                    {
+                      "const": "api",
+                      "type": "string"
+                    },
+                    {
+                      "const": "manifest",
+                      "type": "string"
+                    },
+                    {
+                      "const": "none",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "efforts": {
+                  "uniqueItems": true,
+                  "type": "array",
+                  "items": {
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "executionModes": {
+                  "uniqueItems": true,
+                  "type": "array",
+                  "items": {
+                    "anyOf": [
+                      {
+                        "const": "native",
+                        "type": "string"
+                      },
+                      {
+                        "const": "external",
+                        "type": "string"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "features": {
+            "additionalProperties": false,
+            "type": "object",
+            "required": [
+              "questions",
+              "resume",
+              "usage",
+              "structuredOutput",
+              "cancellation",
+              "tools"
+            ],
+            "properties": {
+              "questions": {
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                  "support",
+                  "evidence",
+                  "reasons"
+                ],
+                "properties": {
+                  "support": {
+                    "anyOf": [
+                      {
+                        "const": "supported",
+                        "type": "string"
+                      },
+                      {
+                        "const": "unsupported",
+                        "type": "string"
+                      },
+                      {
+                        "const": "unknown",
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "evidence": {
+                    "type": "array",
+                    "items": {
+                      "additionalProperties": false,
+                      "type": "object",
+                      "required": [
+                        "source",
+                        "observedAt"
+                      ],
+                      "properties": {
+                        "source": {
+                          "anyOf": [
+                            {
+                              "const": "agent-capabilities",
+                              "type": "string"
+                            },
+                            {
+                              "const": "harness-inventory",
+                              "type": "string"
+                            },
+                            {
+                              "const": "account-profile",
+                              "type": "string"
+                            },
+                            {
+                              "const": "auth-readiness",
+                              "type": "string"
+                            },
+                            {
+                              "const": "model-api",
+                              "type": "string"
+                            },
+                            {
+                              "const": "model-manifest",
+                              "type": "string"
+                            },
+                            {
+                              "const": "compatibility-attestation",
+                              "type": "string"
+                            },
+                            {
+                              "const": "quota",
+                              "type": "string"
+                            },
+                            {
+                              "const": "cache",
+                              "type": "string"
+                            }
+                          ]
+                        },
+                        "observedAt": {
+                          "format": "date-time",
+                          "type": "string"
+                        },
+                        "detail": {
+                          "minLength": 1,
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "reasons": {
+                    "uniqueItems": true,
+                    "type": "array",
+                    "items": {
+                      "minLength": 1,
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "resume": {
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                  "support",
+                  "evidence",
+                  "reasons"
+                ],
+                "properties": {
+                  "support": {
+                    "anyOf": [
+                      {
+                        "const": "supported",
+                        "type": "string"
+                      },
+                      {
+                        "const": "unsupported",
+                        "type": "string"
+                      },
+                      {
+                        "const": "unknown",
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "evidence": {
+                    "type": "array",
+                    "items": {
+                      "additionalProperties": false,
+                      "type": "object",
+                      "required": [
+                        "source",
+                        "observedAt"
+                      ],
+                      "properties": {
+                        "source": {
+                          "anyOf": [
+                            {
+                              "const": "agent-capabilities",
+                              "type": "string"
+                            },
+                            {
+                              "const": "harness-inventory",
+                              "type": "string"
+                            },
+                            {
+                              "const": "account-profile",
+                              "type": "string"
+                            },
+                            {
+                              "const": "auth-readiness",
+                              "type": "string"
+                            },
+                            {
+                              "const": "model-api",
+                              "type": "string"
+                            },
+                            {
+                              "const": "model-manifest",
+                              "type": "string"
+                            },
+                            {
+                              "const": "compatibility-attestation",
+                              "type": "string"
+                            },
+                            {
+                              "const": "quota",
+                              "type": "string"
+                            },
+                            {
+                              "const": "cache",
+                              "type": "string"
+                            }
+                          ]
+                        },
+                        "observedAt": {
+                          "format": "date-time",
+                          "type": "string"
+                        },
+                        "detail": {
+                          "minLength": 1,
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "reasons": {
+                    "uniqueItems": true,
+                    "type": "array",
+                    "items": {
+                      "minLength": 1,
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "usage": {
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                  "support",
+                  "evidence",
+                  "reasons"
+                ],
+                "properties": {
+                  "support": {
+                    "anyOf": [
+                      {
+                        "const": "supported",
+                        "type": "string"
+                      },
+                      {
+                        "const": "unsupported",
+                        "type": "string"
+                      },
+                      {
+                        "const": "unknown",
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "evidence": {
+                    "type": "array",
+                    "items": {
+                      "additionalProperties": false,
+                      "type": "object",
+                      "required": [
+                        "source",
+                        "observedAt"
+                      ],
+                      "properties": {
+                        "source": {
+                          "anyOf": [
+                            {
+                              "const": "agent-capabilities",
+                              "type": "string"
+                            },
+                            {
+                              "const": "harness-inventory",
+                              "type": "string"
+                            },
+                            {
+                              "const": "account-profile",
+                              "type": "string"
+                            },
+                            {
+                              "const": "auth-readiness",
+                              "type": "string"
+                            },
+                            {
+                              "const": "model-api",
+                              "type": "string"
+                            },
+                            {
+                              "const": "model-manifest",
+                              "type": "string"
+                            },
+                            {
+                              "const": "compatibility-attestation",
+                              "type": "string"
+                            },
+                            {
+                              "const": "quota",
+                              "type": "string"
+                            },
+                            {
+                              "const": "cache",
+                              "type": "string"
+                            }
+                          ]
+                        },
+                        "observedAt": {
+                          "format": "date-time",
+                          "type": "string"
+                        },
+                        "detail": {
+                          "minLength": 1,
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "reasons": {
+                    "uniqueItems": true,
+                    "type": "array",
+                    "items": {
+                      "minLength": 1,
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "structuredOutput": {
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                  "support",
+                  "evidence",
+                  "reasons"
+                ],
+                "properties": {
+                  "support": {
+                    "anyOf": [
+                      {
+                        "const": "supported",
+                        "type": "string"
+                      },
+                      {
+                        "const": "unsupported",
+                        "type": "string"
+                      },
+                      {
+                        "const": "unknown",
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "evidence": {
+                    "type": "array",
+                    "items": {
+                      "additionalProperties": false,
+                      "type": "object",
+                      "required": [
+                        "source",
+                        "observedAt"
+                      ],
+                      "properties": {
+                        "source": {
+                          "anyOf": [
+                            {
+                              "const": "agent-capabilities",
+                              "type": "string"
+                            },
+                            {
+                              "const": "harness-inventory",
+                              "type": "string"
+                            },
+                            {
+                              "const": "account-profile",
+                              "type": "string"
+                            },
+                            {
+                              "const": "auth-readiness",
+                              "type": "string"
+                            },
+                            {
+                              "const": "model-api",
+                              "type": "string"
+                            },
+                            {
+                              "const": "model-manifest",
+                              "type": "string"
+                            },
+                            {
+                              "const": "compatibility-attestation",
+                              "type": "string"
+                            },
+                            {
+                              "const": "quota",
+                              "type": "string"
+                            },
+                            {
+                              "const": "cache",
+                              "type": "string"
+                            }
+                          ]
+                        },
+                        "observedAt": {
+                          "format": "date-time",
+                          "type": "string"
+                        },
+                        "detail": {
+                          "minLength": 1,
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "reasons": {
+                    "uniqueItems": true,
+                    "type": "array",
+                    "items": {
+                      "minLength": 1,
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "cancellation": {
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                  "support",
+                  "evidence",
+                  "reasons"
+                ],
+                "properties": {
+                  "support": {
+                    "anyOf": [
+                      {
+                        "const": "supported",
+                        "type": "string"
+                      },
+                      {
+                        "const": "unsupported",
+                        "type": "string"
+                      },
+                      {
+                        "const": "unknown",
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "evidence": {
+                    "type": "array",
+                    "items": {
+                      "additionalProperties": false,
+                      "type": "object",
+                      "required": [
+                        "source",
+                        "observedAt"
+                      ],
+                      "properties": {
+                        "source": {
+                          "anyOf": [
+                            {
+                              "const": "agent-capabilities",
+                              "type": "string"
+                            },
+                            {
+                              "const": "harness-inventory",
+                              "type": "string"
+                            },
+                            {
+                              "const": "account-profile",
+                              "type": "string"
+                            },
+                            {
+                              "const": "auth-readiness",
+                              "type": "string"
+                            },
+                            {
+                              "const": "model-api",
+                              "type": "string"
+                            },
+                            {
+                              "const": "model-manifest",
+                              "type": "string"
+                            },
+                            {
+                              "const": "compatibility-attestation",
+                              "type": "string"
+                            },
+                            {
+                              "const": "quota",
+                              "type": "string"
+                            },
+                            {
+                              "const": "cache",
+                              "type": "string"
+                            }
+                          ]
+                        },
+                        "observedAt": {
+                          "format": "date-time",
+                          "type": "string"
+                        },
+                        "detail": {
+                          "minLength": 1,
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "reasons": {
+                    "uniqueItems": true,
+                    "type": "array",
+                    "items": {
+                      "minLength": 1,
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "tools": {
+                "type": "array",
+                "items": {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "name",
+                    "state"
+                  ],
+                  "properties": {
+                    "name": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "state": {
+                      "additionalProperties": false,
+                      "type": "object",
+                      "required": [
+                        "support",
+                        "evidence",
+                        "reasons"
+                      ],
+                      "properties": {
+                        "support": {
+                          "anyOf": [
+                            {
+                              "const": "supported",
+                              "type": "string"
+                            },
+                            {
+                              "const": "unsupported",
+                              "type": "string"
+                            },
+                            {
+                              "const": "unknown",
+                              "type": "string"
+                            }
+                          ]
+                        },
+                        "evidence": {
+                          "type": "array",
+                          "items": {
+                            "additionalProperties": false,
+                            "type": "object",
+                            "required": [
+                              "source",
+                              "observedAt"
+                            ],
+                            "properties": {
+                              "source": {
+                                "anyOf": [
+                                  {
+                                    "const": "agent-capabilities",
+                                    "type": "string"
+                                  },
+                                  {
+                                    "const": "harness-inventory",
+                                    "type": "string"
+                                  },
+                                  {
+                                    "const": "account-profile",
+                                    "type": "string"
+                                  },
+                                  {
+                                    "const": "auth-readiness",
+                                    "type": "string"
+                                  },
+                                  {
+                                    "const": "model-api",
+                                    "type": "string"
+                                  },
+                                  {
+                                    "const": "model-manifest",
+                                    "type": "string"
+                                  },
+                                  {
+                                    "const": "compatibility-attestation",
+                                    "type": "string"
+                                  },
+                                  {
+                                    "const": "quota",
+                                    "type": "string"
+                                  },
+                                  {
+                                    "const": "cache",
+                                    "type": "string"
+                                  }
+                                ]
+                              },
+                              "observedAt": {
+                                "format": "date-time",
+                                "type": "string"
+                              },
+                              "detail": {
+                                "minLength": 1,
+                                "type": "string"
+                              }
+                            }
+                          }
+                        },
+                        "reasons": {
+                          "uniqueItems": true,
+                          "type": "array",
+                          "items": {
+                            "minLength": 1,
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "provenance": {
+            "type": "array",
+            "items": {
+              "additionalProperties": false,
+              "type": "object",
+              "required": [
+                "source",
+                "observedAt"
+              ],
+              "properties": {
+                "source": {
+                  "anyOf": [
+                    {
+                      "const": "agent-capabilities",
+                      "type": "string"
+                    },
+                    {
+                      "const": "harness-inventory",
+                      "type": "string"
+                    },
+                    {
+                      "const": "account-profile",
+                      "type": "string"
+                    },
+                    {
+                      "const": "auth-readiness",
+                      "type": "string"
+                    },
+                    {
+                      "const": "model-api",
+                      "type": "string"
+                    },
+                    {
+                      "const": "model-manifest",
+                      "type": "string"
+                    },
+                    {
+                      "const": "compatibility-attestation",
+                      "type": "string"
+                    },
+                    {
+                      "const": "quota",
+                      "type": "string"
+                    },
+                    {
+                      "const": "cache",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "observedAt": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "detail": {
+                  "minLength": 1,
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "reasons": {
+            "uniqueItems": true,
+            "type": "array",
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  }
+}
