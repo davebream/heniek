@@ -5,17 +5,19 @@ import type {
   BackendArtifactV1,
   BackendExecutionId,
   ExecutionBackendV2,
-  ExecutionEventV2,
+  ExecutionEventV3,
   ExecutionRequestV2,
   ExecutionRequestV3,
   ExecutionResultV2,
-  ExecutionResultV3,
+  ExecutionResultV4,
   ExecutionStatus,
+  ExecutionTelemetryV1,
   InteractionAnswerSetV1,
   InteractionId,
   InteractionQuestionId,
   PendingInteractionV2,
 } from "@heniek/contracts";
+import { createTelemetryReducer, type TelemetryMetricName } from "@heniek/telemetry";
 import type { Static } from "@sinclair/typebox";
 import {
   type ClaudexorDiagnostic,
@@ -51,9 +53,9 @@ export interface ClaudexorExecutionBackend extends ExecutionBackendV2 {
   /** Internal primitive used by the subscription-only profile adapter. */
   resumeProfile(executionId: string, inputArtifactRefs: ArtifactId[]): Promise<void>;
   /** Normalized, replayable lifecycle facts; raw SSE payloads never escape. */
-  events(executionId: string, after?: string): AsyncIterable<Static<typeof ExecutionEventV2>>;
-  /** Internal structured result used by the Q017 profile adapter. */
-  resultProfile(executionId: string): Promise<Static<typeof ExecutionResultV3>>;
+  events(executionId: string, after?: string): AsyncIterable<Static<typeof ExecutionEventV3>>;
+  /** Internal structured result used by the Q019 profile adapter. */
+  resultProfile(executionId: string): Promise<Static<typeof ExecutionResultV4>>;
   diagnoseCompatibility(): Promise<readonly ClaudexorDiagnostic[]>;
   diagnoseRuntime(): Promise<ClaudexorDiagnostic>;
   diagnoseAuthRoute(): Promise<ClaudexorDiagnostic>;
@@ -256,41 +258,84 @@ function normalizedTool(value: unknown):
   };
 }
 
-function normalizedUsage(value: unknown):
-  | {
-      readonly inputUnits?: number;
-      readonly outputUnits?: number;
-      readonly cachedInputUnits?: number;
-      readonly costUsd?: number;
-      readonly estimated?: boolean;
-    }
-  | undefined {
-  const raw = isRecord(value) ? value : undefined;
-  if (raw === undefined) return undefined;
-  const usage: {
-    inputUnits?: number;
-    outputUnits?: number;
-    cachedInputUnits?: number;
-    costUsd?: number;
-    estimated?: boolean;
-  } = {};
-  const inputTokens = nonNegativeInteger(field(raw, "input_tokens") ?? field(raw, "inputTokens"));
-  const outputTokens = nonNegativeInteger(
-    field(raw, "output_tokens") ?? field(raw, "outputTokens"),
-  );
-  const cachedInputTokens = nonNegativeInteger(
-    field(raw, "cached_input_tokens") ?? field(raw, "cachedInputTokens"),
-  );
-  const costUsd = finiteNonNegative(
-    field(raw, "cost_usd") ?? field(raw, "costUsd") ?? field(raw, "spendUsd"),
-  );
-  const estimated = field(raw, "estimated") ?? field(raw, "spendEstimated");
-  if (inputTokens !== undefined) usage.inputUnits = inputTokens;
-  if (outputTokens !== undefined) usage.outputUnits = outputTokens;
-  if (cachedInputTokens !== undefined) usage.cachedInputUnits = cachedInputTokens;
-  if (costUsd !== undefined) usage.costUsd = costUsd;
-  if (typeof estimated === "boolean") usage.estimated = estimated;
-  return Object.keys(usage).length === 0 ? undefined : usage;
+function firstField(value: unknown, names: readonly string[]): { found: boolean; value: unknown } {
+  if (!isRecord(value)) return { found: false, value: undefined };
+  for (const name of names) {
+    if (Object.hasOwn(value, name)) return { found: true, value: value[name] };
+  }
+  return { found: false, value: undefined };
+}
+
+function normalizedTelemetry(
+  value: unknown,
+  options: {
+    readonly engine: "claude" | "codex" | "cursor";
+    readonly executionMode: "external" | "native";
+    readonly evidenceRef: string;
+    readonly providerSessionId?: unknown;
+    readonly capacityExhausted?: boolean;
+  },
+): Static<typeof ExecutionTelemetryV1> {
+  const reducer = createTelemetryReducer(options);
+  const metrics: Partial<
+    Record<
+      TelemetryMetricName,
+      { value: unknown; confidence: "exact" | "estimated"; aggregation: "cumulative" | "gauge" }
+    >
+  > = {};
+  const mappings = [
+    ["inputUnits", ["input_tokens", "inputTokens"], "cumulative"],
+    ["outputUnits", ["output_tokens", "outputTokens"], "cumulative"],
+    ["cacheReadUnits", ["cache_read_tokens", "cacheReadTokens"], "cumulative"],
+    [
+      "cacheWriteUnits",
+      ["cache_write_input_tokens", "cacheWriteInputTokens", "cacheWriteTokens"],
+      "cumulative",
+    ],
+    ["totalUnits", ["total_tokens", "totalTokens"], "cumulative"],
+    ["costUsd", ["cost_usd", "costUsd", "spendUsd"], "cumulative"],
+    ["wallDurationMs", ["duration_ms", "durationMs"], "gauge"],
+    ["apiDurationMs", ["duration_api_ms", "durationApiMs"], "gauge"],
+    ["contextUsedUnits", ["context_used_tokens", "contextUsedTokens"], "gauge"],
+    ["contextWindowUnits", ["context_window_tokens", "contextWindowTokens"], "gauge"],
+    ["contextUtilization", ["context_utilization", "contextUtilization"], "gauge"],
+  ] as const;
+  const estimated = field(value, "estimated") ?? field(value, "spendEstimated");
+  for (const [name, aliases, aggregation] of mappings) {
+    const candidate = firstField(value, aliases);
+    if (!candidate.found) continue;
+    metrics[name] = {
+      value: candidate.value,
+      confidence: name === "costUsd" && estimated === true ? "estimated" : "exact",
+      aggregation,
+    };
+  }
+  const cachedInput = firstField(value, ["cached_input_tokens", "cachedInputTokens"]);
+  if (cachedInput.found) {
+    // Claudexor combines Claude cache reads and cache creation into one counter.
+    // Codex and Cursor expose the same normalized field as cache reads.
+    metrics[options.engine === "claude" ? "cachedInputUnits" : "cacheReadUnits"] = {
+      value: cachedInput.value,
+      confidence: "exact",
+      aggregation: "cumulative",
+    };
+  }
+  const usedPercentage = firstField(value, ["used_percentage", "usedPercentage"]);
+  if (usedPercentage.found && typeof usedPercentage.value === "number") {
+    metrics.contextUtilization = {
+      value: usedPercentage.value / 100,
+      confidence: "estimated",
+      aggregation: "gauge",
+    };
+  }
+  reducer.observe({
+    providerSessionId: options.providerSessionId,
+    metrics,
+    ...(options.capacityExhausted === undefined
+      ? {}
+      : { capacityExhausted: options.capacityExhausted }),
+  });
+  return reducer.snapshot();
 }
 
 function normalizedDiff(
@@ -706,7 +751,7 @@ export function createClaudexorExecutionBackend(
       );
     },
 
-    async resultProfile(executionId: string): Promise<Static<typeof ExecutionResultV3>> {
+    async resultProfile(executionId: string): Promise<Static<typeof ExecutionResultV4>> {
       const value = await run(executionId);
       if (value === null) throw new ClaudexorControlError(409, "run_not_started", "resultProfile");
       const status = mapStatus(value);
@@ -723,10 +768,16 @@ export function createClaudexorExecutionBackend(
         ? sessions.find((entry) => field(entry, "harnessId") === (profile?.engine ?? "claude"))
         : undefined;
       const sessionId = field(session, "nativeSessionId");
-      const usage = normalizedUsage(summary);
+      const telemetry = normalizedTelemetry(summary, {
+        engine: profile?.engine ?? "claude",
+        executionMode: profile?.executionMode ?? "external",
+        evidenceRef: `backend-result:${executionId}`,
+        providerSessionId: sessionId,
+        capacityExhausted: hasContextCapacityExhaustion(value),
+      });
       const diff = normalizedDiff(field(field(summary, "result"), "diffStat"));
       return {
-        schemaVersion: 3,
+        schemaVersion: 4,
         status,
         // Trimmed, not just non-empty: Q018 observed Cursor terminate a run as
         // `subtype: "success"` with an empty `result` and no assistant frame at
@@ -741,7 +792,7 @@ export function createClaudexorExecutionBackend(
               : `Claudexor execution ${status}.`,
         ...(typeof sessionId === "string" && sessionId.length > 0 ? { sessionId } : {}),
         artifacts: await listedArtifacts(executionId),
-        ...(usage === undefined ? {} : { usage }),
+        telemetry,
         ...(diff === undefined ? {} : { diff }),
       };
     },
@@ -803,29 +854,37 @@ export function createClaudexorExecutionBackend(
       );
       for (const event of parseSse(text)) {
         const status = statusFromEvent(event.data);
+        const profile = profiles.get(executionId);
+        const engine = profile?.engine ?? "claude";
+        const executionMode = profile?.executionMode ?? "external";
         if (status !== undefined) {
-          yield { schemaVersion: 2, cursor: event.id, kind: "status", status } satisfies Static<
-            typeof ExecutionEventV2
+          yield { schemaVersion: 3, cursor: event.id, kind: "status", status } satisfies Static<
+            typeof ExecutionEventV3
           >;
           continue;
         }
         if (hasRateLimit(event.data)) {
           const retry = retryAfterMs(event.data);
           yield {
-            schemaVersion: 2,
+            schemaVersion: 3,
             cursor: event.id,
             kind: "rate_limited",
             ...(retry === undefined ? {} : { retryAfterMs: retry }),
-          } satisfies Static<typeof ExecutionEventV2>;
+          } satisfies Static<typeof ExecutionEventV3>;
           continue;
         }
         if (hasContextCapacityExhaustion(event.data)) {
           yield {
-            schemaVersion: 2,
+            schemaVersion: 3,
             cursor: event.id,
-            kind: "context_pressure",
-            pressure: "capacity_exhausted",
-          } satisfies Static<typeof ExecutionEventV2>;
+            kind: "telemetry",
+            telemetry: normalizedTelemetry(undefined, {
+              engine,
+              executionMode,
+              evidenceRef: `backend-event:${event.id}`,
+              capacityExhausted: true,
+            }),
+          } satisfies Static<typeof ExecutionEventV3>;
           continue;
         }
         const payload = harnessPayload(event.data);
@@ -833,8 +892,8 @@ export function createClaudexorExecutionBackend(
         if (type === "tool_call") {
           const tool = normalizedTool(field(payload, "tool"));
           if (tool !== undefined) {
-            yield { schemaVersion: 2, cursor: event.id, kind: "tool_call", tool } satisfies Static<
-              typeof ExecutionEventV2
+            yield { schemaVersion: 3, cursor: event.id, kind: "tool_call", tool } satisfies Static<
+              typeof ExecutionEventV3
             >;
           }
           continue;
@@ -845,7 +904,7 @@ export function createClaudexorExecutionBackend(
           const exitCode = field(field(payload, "tool"), "exit_code");
           if (tool !== undefined && outcome !== undefined) {
             yield {
-              schemaVersion: 2,
+              schemaVersion: 3,
               cursor: event.id,
               kind: "tool_result",
               tool: {
@@ -855,7 +914,7 @@ export function createClaudexorExecutionBackend(
                   ? { exitCode }
                   : {}),
               },
-            } satisfies Static<typeof ExecutionEventV2>;
+            } satisfies Static<typeof ExecutionEventV3>;
           }
           continue;
         }
@@ -863,26 +922,30 @@ export function createClaudexorExecutionBackend(
           const path = field(field(payload, "payload"), "path");
           if (typeof path === "string" && safeArtifactPath(path)) {
             yield {
-              schemaVersion: 2,
+              schemaVersion: 3,
               cursor: event.id,
               kind: "file_change",
               path,
-            } satisfies Static<typeof ExecutionEventV2>;
+            } satisfies Static<typeof ExecutionEventV3>;
           }
           continue;
         }
         if (type === "usage") {
-          const usage = normalizedUsage(field(payload, "usage"));
-          if (usage !== undefined) {
-            yield { schemaVersion: 2, cursor: event.id, kind: "usage", usage } satisfies Static<
-              typeof ExecutionEventV2
-            >;
-          }
+          yield {
+            schemaVersion: 3,
+            cursor: event.id,
+            kind: "telemetry",
+            telemetry: normalizedTelemetry(field(payload, "usage"), {
+              engine,
+              executionMode,
+              evidenceRef: `backend-event:${event.id}`,
+            }),
+          } satisfies Static<typeof ExecutionEventV3>;
           continue;
         }
         if (type === "error") {
-          yield { schemaVersion: 2, cursor: event.id, kind: "error" } satisfies Static<
-            typeof ExecutionEventV2
+          yield { schemaVersion: 3, cursor: event.id, kind: "error" } satisfies Static<
+            typeof ExecutionEventV3
           >;
         }
       }

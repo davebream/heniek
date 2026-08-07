@@ -2,10 +2,10 @@ import type {
   ArtifactId,
   BackendArtifactV1,
   BackendExecutionHandleV1,
-  ExecutionBackendV4,
-  ExecutionEventV2,
+  ExecutionBackendV5,
+  ExecutionEventV3,
   ExecutionRequestV3,
-  ExecutionResultV3,
+  ExecutionResultV4,
   ExecutionStatus,
   InteractionAnswerSetV1,
   PendingInteractionV2,
@@ -23,7 +23,7 @@ import {
  * native-Claude configuration: the resolved profile is its complete routing
  * authority and the underlying control client rejects anything else.
  */
-interface ProfileExecutionAdapter extends ExecutionBackendV4 {
+interface ProfileExecutionAdapter extends ExecutionBackendV5 {
   diagnoseCompatibility(): ReturnType<ClaudexorExecutionBackend["diagnoseCompatibility"]>;
   diagnoseRuntime(): ReturnType<ClaudexorExecutionBackend["diagnoseRuntime"]>;
   diagnoseAuthRoute(): ReturnType<ClaudexorExecutionBackend["diagnoseAuthRoute"]>;
@@ -58,14 +58,14 @@ function createProfileExecutionAdapter(
       backend.answer(executionId, answer),
     resume: (executionId: string, inputArtifactRefs: ArtifactId[]): Promise<void> =>
       backend.resumeProfile(executionId, inputArtifactRefs),
-    result: (executionId: string): Promise<Static<typeof ExecutionResultV3>> =>
+    result: (executionId: string): Promise<Static<typeof ExecutionResultV4>> =>
       backend.resultProfile(executionId),
     cancel: (executionId: string): Promise<void> => backend.cancel(executionId),
     artifacts: (executionId: string): Promise<Static<typeof BackendArtifactV1>[]> =>
       backend.artifacts(executionId),
     readArtifact: (executionId: string, artifactId: string): Promise<Uint8Array> =>
       backend.readArtifact(executionId, artifactId),
-    events: (executionId: string, after?: string): AsyncIterable<Static<typeof ExecutionEventV2>> =>
+    events: (executionId: string, after?: string): AsyncIterable<Static<typeof ExecutionEventV3>> =>
       backend.events(executionId, after),
     diagnoseCompatibility: () => backend.diagnoseCompatibility(),
     diagnoseRuntime: () => backend.diagnoseRuntime(),

@@ -1,0 +1,1247 @@
+{
+  "$id": "heniek://contract/ExecutionTelemetry/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "engine",
+    "executionMode",
+    "evidenceRefs",
+    "session",
+    "usage",
+    "timing",
+    "context"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "engine": {
+      "anyOf": [
+        {
+          "const": "claude",
+          "type": "string"
+        },
+        {
+          "const": "codex",
+          "type": "string"
+        },
+        {
+          "const": "cursor",
+          "type": "string"
+        }
+      ]
+    },
+    "executionMode": {
+      "anyOf": [
+        {
+          "const": "external",
+          "type": "string"
+        },
+        {
+          "const": "native",
+          "type": "string"
+        }
+      ]
+    },
+    "evidenceRefs": {
+      "minItems": 1,
+      "maxItems": 32,
+      "uniqueItems": true,
+      "type": "array",
+      "items": {
+        "minLength": 1,
+        "maxLength": 512,
+        "type": "string"
+      }
+    },
+    "session": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "providerSessionId"
+      ],
+      "properties": {
+        "providerSessionId": {
+          "anyOf": [
+            {
+              "additionalProperties": false,
+              "type": "object",
+              "required": [
+                "availability",
+                "value",
+                "confidence"
+              ],
+              "properties": {
+                "availability": {
+                  "const": "available",
+                  "type": "string"
+                },
+                "value": {
+                  "minLength": 1,
+                  "maxLength": 512,
+                  "type": "string"
+                },
+                "confidence": {
+                  "anyOf": [
+                    {
+                      "const": "exact",
+                      "type": "string"
+                    },
+                    {
+                      "const": "estimated",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "additionalProperties": false,
+              "type": "object",
+              "required": [
+                "availability",
+                "reason"
+              ],
+              "properties": {
+                "availability": {
+                  "const": "unavailable",
+                  "type": "string"
+                },
+                "reason": {
+                  "anyOf": [
+                    {
+                      "const": "not_reported",
+                      "type": "string"
+                    },
+                    {
+                      "const": "unsupported",
+                      "type": "string"
+                    },
+                    {
+                      "const": "invalid",
+                      "type": "string"
+                    },
+                    {
+                      "const": "contradictory",
+                      "type": "string"
+                    },
+                    {
+                      "const": "overflow",
+                      "type": "string"
+                    },
+                    {
+                      "const": "counter_reset",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "usage": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "inputUnits",
+        "outputUnits",
+        "cachedInputUnits",
+        "cacheReadUnits",
+        "cacheWriteUnits",
+        "totalUnits",
+        "costUsd"
+      ],
+      "properties": {
+        "inputUnits": {
+          "anyOf": [
+            {
+              "additionalProperties": false,
+              "type": "object",
+              "required": [
+                "availability",
+                "value",
+                "confidence"
+              ],
+              "properties": {
+                "availability": {
+                  "const": "available",
+                  "type": "string"
+                },
+                "value": {
+                  "minimum": 0,
+                  "maximum": 9007199254740991,
+                  "type": "integer"
+                },
+                "confidence": {
+                  "anyOf": [
+                    {
+                      "const": "exact",
+                      "type": "string"
+                    },
+                    {
+                      "const": "estimated",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "additionalProperties": false,
+              "type": "object",
+              "required": [
+                "availability",
+                "reason"
+              ],
+              "properties": {
+                "availability": {
+                  "const": "unavailable",
+                  "type": "string"
+                },
+                "reason": {
+                  "anyOf": [
+                    {
+                      "const": "not_reported",
+                      "type": "string"
+                    },
+                    {
+                      "const": "unsupported",
+                      "type": "string"
+                    },
+                    {
+                      "const": "invalid",
+                      "type": "string"
+                    },
+                    {
+                      "const": "contradictory",
+                      "type": "string"
+                    },
+                    {
+                      "const": "overflow",
+                      "type": "string"
+                    },
+                    {
+                      "const": "counter_reset",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "outputUnits": {
+          "anyOf": [
+            {
+              "additionalProperties": false,
+              "type": "object",
+              "required": [
+                "availability",
+                "value",
+                "confidence"
+              ],
+              "properties": {
+                "availability": {
+                  "const": "available",
+                  "type": "string"
+                },
+                "value": {
+                  "minimum": 0,
+                  "maximum": 9007199254740991,
+                  "type": "integer"
+                },
+                "confidence": {
+                  "anyOf": [
+                    {
+                      "const": "exact",
+                      "type": "string"
+                    },
+                    {
+                      "const": "estimated",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "additionalProperties": false,
+              "type": "object",
+              "required": [
+                "availability",
+                "reason"
+              ],
+              "properties": {
+                "availability": {
+                  "const": "unavailable",
+                  "type": "string"
+                },
+                "reason": {
+                  "anyOf": [
+                    {
+                      "const": "not_reported",
+                      "type": "string"
+                    },
+                    {
+                      "const": "unsupported",
+                      "type": "string"
+                    },
+                    {
+                      "const": "invalid",
+                      "type": "string"
+                    },
+                    {
+                      "const": "contradictory",
+                      "type": "string"
+                    },
+                    {
+                      "const": "overflow",
+                      "type": "string"
+                    },
+                    {
+                      "const": "counter_reset",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "cachedInputUnits": {
+          "anyOf": [
+            {
+              "additionalProperties": false,
+              "type": "object",
+              "required": [
+                "availability",
+                "value",
+                "confidence"
+              ],
+              "properties": {
+                "availability": {
+                  "const": "available",
+                  "type": "string"
+                },
+                "value": {
+                  "minimum": 0,
+                  "maximum": 9007199254740991,
+                  "type": "integer"
+                },
+                "confidence": {
+                  "anyOf": [
+                    {
+                      "const": "exact",
+                      "type": "string"
+                    },
+                    {
+                      "const": "estimated",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "additionalProperties": false,
+              "type": "object",
+              "required": [
+                "availability",
+                "reason"
+              ],
+              "properties": {
+                "availability": {
+                  "const": "unavailable",
+                  "type": "string"
+                },
+                "reason": {
+                  "anyOf": [
+                    {
+                      "const": "not_reported",
+                      "type": "string"
+                    },
+                    {
+                      "const": "unsupported",
+                      "type": "string"
+                    },
+                    {
+                      "const": "invalid",
+                      "type": "string"
+                    },
+                    {
+                      "const": "contradictory",
+                      "type": "string"
+                    },
+                    {
+                      "const": "overflow",
+                      "type": "string"
+                    },
+                    {
+                      "const": "counter_reset",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "cacheReadUnits": {
+          "anyOf": [
+            {
+              "additionalProperties": false,
+              "type": "object",
+              "required": [
+                "availability",
+                "value",
+                "confidence"
+              ],
+              "properties": {
+                "availability": {
+                  "const": "available",
+                  "type": "string"
+                },
+                "value": {
+                  "minimum": 0,
+                  "maximum": 9007199254740991,
+                  "type": "integer"
+                },
+                "confidence": {
+                  "anyOf": [
+                    {
+                      "const": "exact",
+                      "type": "string"
+                    },
+                    {
+                      "const": "estimated",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "additionalProperties": false,
+              "type": "object",
+              "required": [
+                "availability",
+                "reason"
+              ],
+              "properties": {
+                "availability": {
+                  "const": "unavailable",
+                  "type": "string"
+                },
+                "reason": {
+                  "anyOf": [
+                    {
+                      "const": "not_reported",
+                      "type": "string"
+                    },
+                    {
+                      "const": "unsupported",
+                      "type": "string"
+                    },
+                    {
+                      "const": "invalid",
+                      "type": "string"
+                    },
+                    {
+                      "const": "contradictory",
+                      "type": "string"
+                    },
+                    {
+                      "const": "overflow",
+                      "type": "string"
+                    },
+                    {
+                      "const": "counter_reset",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "cacheWriteUnits": {
+          "anyOf": [
+            {
+              "additionalProperties": false,
+              "type": "object",
+              "required": [
+                "availability",
+                "value",
+                "confidence"
+              ],
+              "properties": {
+                "availability": {
+                  "const": "available",
+                  "type": "string"
+                },
+                "value": {
+                  "minimum": 0,
+                  "maximum": 9007199254740991,
+                  "type": "integer"
+                },
+                "confidence": {
+                  "anyOf": [
+                    {
+                      "const": "exact",
+                      "type": "string"
+                    },
+                    {
+                      "const": "estimated",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "additionalProperties": false,
+              "type": "object",
+              "required": [
+                "availability",
+                "reason"
+              ],
+              "properties": {
+                "availability": {
+                  "const": "unavailable",
+                  "type": "string"
+                },
+                "reason": {
+                  "anyOf": [
+                    {
+                      "const": "not_reported",
+                      "type": "string"
+                    },
+                    {
+                      "const": "unsupported",
+                      "type": "string"
+                    },
+                    {
+                      "const": "invalid",
+                      "type": "string"
+                    },
+                    {
+                      "const": "contradictory",
+                      "type": "string"
+                    },
+                    {
+                      "const": "overflow",
+                      "type": "string"
+                    },
+                    {
+                      "const": "counter_reset",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "totalUnits": {
+          "anyOf": [
+            {
+              "additionalProperties": false,
+              "type": "object",
+              "required": [
+                "availability",
+                "value",
+                "confidence"
+              ],
+              "properties": {
+                "availability": {
+                  "const": "available",
+                  "type": "string"
+                },
+                "value": {
+                  "minimum": 0,
+                  "maximum": 9007199254740991,
+                  "type": "integer"
+                },
+                "confidence": {
+                  "anyOf": [
+                    {
+                      "const": "exact",
+                      "type": "string"
+                    },
+                    {
+                      "const": "estimated",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "additionalProperties": false,
+              "type": "object",
+              "required": [
+                "availability",
+                "reason"
+              ],
+              "properties": {
+                "availability": {
+                  "const": "unavailable",
+                  "type": "string"
+                },
+                "reason": {
+                  "anyOf": [
+                    {
+                      "const": "not_reported",
+                      "type": "string"
+                    },
+                    {
+                      "const": "unsupported",
+                      "type": "string"
+                    },
+                    {
+                      "const": "invalid",
+                      "type": "string"
+                    },
+                    {
+                      "const": "contradictory",
+                      "type": "string"
+                    },
+                    {
+                      "const": "overflow",
+                      "type": "string"
+                    },
+                    {
+                      "const": "counter_reset",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "costUsd": {
+          "anyOf": [
+            {
+              "additionalProperties": false,
+              "type": "object",
+              "required": [
+                "availability",
+                "value",
+                "confidence"
+              ],
+              "properties": {
+                "availability": {
+                  "const": "available",
+                  "type": "string"
+                },
+                "value": {
+                  "minimum": 0,
+                  "type": "number"
+                },
+                "confidence": {
+                  "anyOf": [
+                    {
+                      "const": "exact",
+                      "type": "string"
+                    },
+                    {
+                      "const": "estimated",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "additionalProperties": false,
+              "type": "object",
+              "required": [
+                "availability",
+                "reason"
+              ],
+              "properties": {
+                "availability": {
+                  "const": "unavailable",
+                  "type": "string"
+                },
+                "reason": {
+                  "anyOf": [
+                    {
+                      "const": "not_reported",
+                      "type": "string"
+                    },
+                    {
+                      "const": "unsupported",
+                      "type": "string"
+                    },
+                    {
+                      "const": "invalid",
+                      "type": "string"
+                    },
+                    {
+                      "const": "contradictory",
+                      "type": "string"
+                    },
+                    {
+                      "const": "overflow",
+                      "type": "string"
+                    },
+                    {
+                      "const": "counter_reset",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "timing": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "wallDurationMs",
+        "apiDurationMs"
+      ],
+      "properties": {
+        "wallDurationMs": {
+          "anyOf": [
+            {
+              "additionalProperties": false,
+              "type": "object",
+              "required": [
+                "availability",
+                "value",
+                "confidence"
+              ],
+              "properties": {
+                "availability": {
+                  "const": "available",
+                  "type": "string"
+                },
+                "value": {
+                  "minimum": 0,
+                  "maximum": 9007199254740991,
+                  "type": "integer"
+                },
+                "confidence": {
+                  "anyOf": [
+                    {
+                      "const": "exact",
+                      "type": "string"
+                    },
+                    {
+                      "const": "estimated",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "additionalProperties": false,
+              "type": "object",
+              "required": [
+                "availability",
+                "reason"
+              ],
+              "properties": {
+                "availability": {
+                  "const": "unavailable",
+                  "type": "string"
+                },
+                "reason": {
+                  "anyOf": [
+                    {
+                      "const": "not_reported",
+                      "type": "string"
+                    },
+                    {
+                      "const": "unsupported",
+                      "type": "string"
+                    },
+                    {
+                      "const": "invalid",
+                      "type": "string"
+                    },
+                    {
+                      "const": "contradictory",
+                      "type": "string"
+                    },
+                    {
+                      "const": "overflow",
+                      "type": "string"
+                    },
+                    {
+                      "const": "counter_reset",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "apiDurationMs": {
+          "anyOf": [
+            {
+              "additionalProperties": false,
+              "type": "object",
+              "required": [
+                "availability",
+                "value",
+                "confidence"
+              ],
+              "properties": {
+                "availability": {
+                  "const": "available",
+                  "type": "string"
+                },
+                "value": {
+                  "minimum": 0,
+                  "maximum": 9007199254740991,
+                  "type": "integer"
+                },
+                "confidence": {
+                  "anyOf": [
+                    {
+                      "const": "exact",
+                      "type": "string"
+                    },
+                    {
+                      "const": "estimated",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "additionalProperties": false,
+              "type": "object",
+              "required": [
+                "availability",
+                "reason"
+              ],
+              "properties": {
+                "availability": {
+                  "const": "unavailable",
+                  "type": "string"
+                },
+                "reason": {
+                  "anyOf": [
+                    {
+                      "const": "not_reported",
+                      "type": "string"
+                    },
+                    {
+                      "const": "unsupported",
+                      "type": "string"
+                    },
+                    {
+                      "const": "invalid",
+                      "type": "string"
+                    },
+                    {
+                      "const": "contradictory",
+                      "type": "string"
+                    },
+                    {
+                      "const": "overflow",
+                      "type": "string"
+                    },
+                    {
+                      "const": "counter_reset",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "context": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "usedUnits",
+        "windowUnits",
+        "utilization",
+        "pressure"
+      ],
+      "properties": {
+        "usedUnits": {
+          "anyOf": [
+            {
+              "additionalProperties": false,
+              "type": "object",
+              "required": [
+                "availability",
+                "value",
+                "confidence"
+              ],
+              "properties": {
+                "availability": {
+                  "const": "available",
+                  "type": "string"
+                },
+                "value": {
+                  "minimum": 0,
+                  "maximum": 9007199254740991,
+                  "type": "integer"
+                },
+                "confidence": {
+                  "anyOf": [
+                    {
+                      "const": "exact",
+                      "type": "string"
+                    },
+                    {
+                      "const": "estimated",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "additionalProperties": false,
+              "type": "object",
+              "required": [
+                "availability",
+                "reason"
+              ],
+              "properties": {
+                "availability": {
+                  "const": "unavailable",
+                  "type": "string"
+                },
+                "reason": {
+                  "anyOf": [
+                    {
+                      "const": "not_reported",
+                      "type": "string"
+                    },
+                    {
+                      "const": "unsupported",
+                      "type": "string"
+                    },
+                    {
+                      "const": "invalid",
+                      "type": "string"
+                    },
+                    {
+                      "const": "contradictory",
+                      "type": "string"
+                    },
+                    {
+                      "const": "overflow",
+                      "type": "string"
+                    },
+                    {
+                      "const": "counter_reset",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "windowUnits": {
+          "anyOf": [
+            {
+              "additionalProperties": false,
+              "type": "object",
+              "required": [
+                "availability",
+                "value",
+                "confidence"
+              ],
+              "properties": {
+                "availability": {
+                  "const": "available",
+                  "type": "string"
+                },
+                "value": {
+                  "minimum": 0,
+                  "maximum": 9007199254740991,
+                  "type": "integer"
+                },
+                "confidence": {
+                  "anyOf": [
+                    {
+                      "const": "exact",
+                      "type": "string"
+                    },
+                    {
+                      "const": "estimated",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "additionalProperties": false,
+              "type": "object",
+              "required": [
+                "availability",
+                "reason"
+              ],
+              "properties": {
+                "availability": {
+                  "const": "unavailable",
+                  "type": "string"
+                },
+                "reason": {
+                  "anyOf": [
+                    {
+                      "const": "not_reported",
+                      "type": "string"
+                    },
+                    {
+                      "const": "unsupported",
+                      "type": "string"
+                    },
+                    {
+                      "const": "invalid",
+                      "type": "string"
+                    },
+                    {
+                      "const": "contradictory",
+                      "type": "string"
+                    },
+                    {
+                      "const": "overflow",
+                      "type": "string"
+                    },
+                    {
+                      "const": "counter_reset",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "utilization": {
+          "anyOf": [
+            {
+              "additionalProperties": false,
+              "type": "object",
+              "required": [
+                "availability",
+                "value",
+                "confidence"
+              ],
+              "properties": {
+                "availability": {
+                  "const": "available",
+                  "type": "string"
+                },
+                "value": {
+                  "minimum": 0,
+                  "maximum": 1,
+                  "type": "number"
+                },
+                "confidence": {
+                  "anyOf": [
+                    {
+                      "const": "exact",
+                      "type": "string"
+                    },
+                    {
+                      "const": "estimated",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "additionalProperties": false,
+              "type": "object",
+              "required": [
+                "availability",
+                "reason"
+              ],
+              "properties": {
+                "availability": {
+                  "const": "unavailable",
+                  "type": "string"
+                },
+                "reason": {
+                  "anyOf": [
+                    {
+                      "const": "not_reported",
+                      "type": "string"
+                    },
+                    {
+                      "const": "unsupported",
+                      "type": "string"
+                    },
+                    {
+                      "const": "invalid",
+                      "type": "string"
+                    },
+                    {
+                      "const": "contradictory",
+                      "type": "string"
+                    },
+                    {
+                      "const": "overflow",
+                      "type": "string"
+                    },
+                    {
+                      "const": "counter_reset",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "pressure": {
+          "anyOf": [
+            {
+              "additionalProperties": false,
+              "type": "object",
+              "required": [
+                "state",
+                "utilization",
+                "basis"
+              ],
+              "properties": {
+                "state": {
+                  "const": "measured",
+                  "type": "string"
+                },
+                "utilization": {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "availability",
+                    "value",
+                    "confidence"
+                  ],
+                  "properties": {
+                    "availability": {
+                      "const": "available",
+                      "type": "string"
+                    },
+                    "value": {
+                      "minimum": 0,
+                      "maximum": 1,
+                      "type": "number"
+                    },
+                    "confidence": {
+                      "anyOf": [
+                        {
+                          "const": "exact",
+                          "type": "string"
+                        },
+                        {
+                          "const": "estimated",
+                          "type": "string"
+                        }
+                      ]
+                    }
+                  }
+                },
+                "basis": {
+                  "anyOf": [
+                    {
+                      "const": "reported_ratio",
+                      "type": "string"
+                    },
+                    {
+                      "const": "usage_ratio",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "additionalProperties": false,
+              "type": "object",
+              "required": [
+                "state",
+                "confidence",
+                "basis"
+              ],
+              "properties": {
+                "state": {
+                  "const": "exhausted",
+                  "type": "string"
+                },
+                "confidence": {
+                  "const": "exact",
+                  "type": "string"
+                },
+                "basis": {
+                  "const": "capacity_signal",
+                  "type": "string"
+                }
+              }
+            },
+            {
+              "additionalProperties": false,
+              "type": "object",
+              "required": [
+                "state",
+                "reason"
+              ],
+              "properties": {
+                "state": {
+                  "const": "unavailable",
+                  "type": "string"
+                },
+                "reason": {
+                  "anyOf": [
+                    {
+                      "const": "not_reported",
+                      "type": "string"
+                    },
+                    {
+                      "const": "unsupported",
+                      "type": "string"
+                    },
+                    {
+                      "const": "invalid",
+                      "type": "string"
+                    },
+                    {
+                      "const": "contradictory",
+                      "type": "string"
+                    },
+                    {
+                      "const": "overflow",
+                      "type": "string"
+                    },
+                    {
+                      "const": "counter_reset",
+                      "type": "string"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

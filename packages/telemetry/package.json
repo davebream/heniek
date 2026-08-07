@@ -1,5 +1,5 @@
 {
-  "name": "@heniek/execution-claudexor",
+  "name": "@heniek/telemetry",
   "version": "0.0.0",
   "private": true,
   "license": "MIT",
@@ -12,7 +12,6 @@
   },
   "dependencies": {
     "@heniek/contracts": "workspace:*",
-    "@heniek/telemetry": "workspace:*",
     "@sinclair/typebox": "catalog:"
   },
   "devDependencies": {

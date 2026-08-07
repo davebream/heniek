@@ -1,0 +1,177 @@
+{
+  "schemaVersion": "heniek.telemetry-fixture-matrix.v1",
+  "fixtures": [
+    {
+      "id": "external-claude-result",
+      "engine": "claude",
+      "executionMode": "external",
+      "evidenceKind": "recorded",
+      "sourceVersion": "claude-code-2.1.165",
+      "evidenceRef": "fixture:external-claude-result",
+      "rawFieldPaths": [
+        "session_id",
+        "usage.input_tokens",
+        "usage.output_tokens",
+        "usage.cache_read_input_tokens",
+        "usage.cache_creation_input_tokens",
+        "total_cost_usd",
+        "duration_ms",
+        "duration_api_ms"
+      ],
+      "observations": [
+        {
+          "providerSessionId": "session-fixture-claude",
+          "metrics": {
+            "inputUnits": { "value": 1818, "confidence": "exact", "aggregation": "cumulative" },
+            "outputUnits": { "value": 452, "confidence": "exact", "aggregation": "cumulative" },
+            "cacheReadUnits": {
+              "value": 69557,
+              "confidence": "exact",
+              "aggregation": "cumulative"
+            },
+            "cacheWriteUnits": {
+              "value": 9194,
+              "confidence": "exact",
+              "aggregation": "cumulative"
+            },
+            "costUsd": {
+              "value": 0.142361,
+              "confidence": "estimated",
+              "aggregation": "cumulative"
+            },
+            "wallDurationMs": { "value": 16436, "confidence": "exact", "aggregation": "gauge" },
+            "apiDurationMs": { "value": 18241, "confidence": "exact", "aggregation": "gauge" }
+          }
+        }
+      ],
+      "expected": {
+        "inputUnits": { "availability": "available", "value": 1818, "confidence": "exact" },
+        "contextPressure": { "state": "unavailable", "reason": "not_reported" }
+      }
+    },
+    {
+      "id": "codex-token-count",
+      "engine": "codex",
+      "executionMode": "external",
+      "evidenceKind": "recorded",
+      "sourceVersion": "codex-cli-0.146.0",
+      "evidenceRef": "fixture:codex-token-count",
+      "rawFieldPaths": [
+        "thread_id",
+        "usage.input_tokens",
+        "usage.cached_input_tokens",
+        "usage.output_tokens",
+        "usage.reasoning_output_tokens"
+      ],
+      "observations": [
+        {
+          "providerSessionId": "session-fixture-codex",
+          "metrics": {
+            "inputUnits": { "value": 41176, "confidence": "exact", "aggregation": "cumulative" },
+            "outputUnits": { "value": 79, "confidence": "exact", "aggregation": "cumulative" },
+            "cacheReadUnits": { "value": 28160, "confidence": "exact", "aggregation": "cumulative" }
+          }
+        }
+      ],
+      "expected": {
+        "inputUnits": { "availability": "available", "value": 41176, "confidence": "exact" },
+        "contextPressure": { "state": "unavailable", "reason": "not_reported" }
+      }
+    },
+    {
+      "id": "cursor-result",
+      "engine": "cursor",
+      "executionMode": "external",
+      "evidenceKind": "recorded",
+      "sourceVersion": "cursor-agent-2026.06.12-01-15-52-7244546",
+      "evidenceRef": "fixture:cursor-result",
+      "rawFieldPaths": [
+        "session_id",
+        "inputTokens",
+        "outputTokens",
+        "cacheReadTokens",
+        "cacheWriteTokens"
+      ],
+      "observations": [
+        {
+          "providerSessionId": "session-fixture-cursor",
+          "metrics": {
+            "inputUnits": { "value": 29985, "confidence": "exact", "aggregation": "cumulative" },
+            "outputUnits": { "value": 33, "confidence": "exact", "aggregation": "cumulative" },
+            "cacheReadUnits": { "value": 5957, "confidence": "exact", "aggregation": "cumulative" }
+          },
+          "unavailable": {
+            "contextUsedUnits": "unsupported",
+            "contextWindowUnits": "unsupported",
+            "contextUtilization": "unsupported"
+          }
+        }
+      ],
+      "expected": {
+        "inputUnits": { "availability": "available", "value": 29985, "confidence": "exact" },
+        "contextPressure": { "state": "unavailable", "reason": "unsupported" }
+      }
+    },
+    {
+      "id": "native-claude-statusline",
+      "engine": "claude",
+      "executionMode": "native",
+      "evidenceKind": "documented",
+      "sourceVersion": "claude-code-statusline-v2.1.132+",
+      "evidenceRef": "fixture:native-claude-statusline",
+      "rawFieldPaths": [
+        "session_id",
+        "cost.total_duration_ms",
+        "cost.total_api_duration_ms",
+        "cost.total_cost_usd",
+        "context_window.total_input_tokens",
+        "context_window.total_output_tokens",
+        "context_window.context_window_size",
+        "context_window.used_percentage",
+        "context_window.current_usage.input_tokens",
+        "context_window.current_usage.output_tokens",
+        "context_window.current_usage.cache_creation_input_tokens",
+        "context_window.current_usage.cache_read_input_tokens"
+      ],
+      "observations": [
+        {
+          "providerSessionId": "session-fixture-native-claude",
+          "metrics": {
+            "inputUnits": { "value": 8500, "confidence": "exact", "aggregation": "gauge" },
+            "outputUnits": { "value": 1200, "confidence": "exact", "aggregation": "gauge" },
+            "cachedInputUnits": { "value": 7000, "confidence": "exact", "aggregation": "gauge" },
+            "cacheReadUnits": { "value": 2000, "confidence": "exact", "aggregation": "gauge" },
+            "cacheWriteUnits": { "value": 5000, "confidence": "exact", "aggregation": "gauge" },
+            "totalUnits": { "value": 16700, "confidence": "exact", "aggregation": "gauge" },
+            "costUsd": { "value": 0.01234, "confidence": "estimated", "aggregation": "cumulative" },
+            "wallDurationMs": { "value": 45000, "confidence": "exact", "aggregation": "gauge" },
+            "apiDurationMs": { "value": 2300, "confidence": "exact", "aggregation": "gauge" },
+            "contextUsedUnits": { "value": 15500, "confidence": "exact", "aggregation": "gauge" },
+            "contextWindowUnits": {
+              "value": 200000,
+              "confidence": "exact",
+              "aggregation": "gauge"
+            },
+            "contextUtilization": {
+              "value": 0.08,
+              "confidence": "estimated",
+              "aggregation": "gauge"
+            }
+          }
+        }
+      ],
+      "expected": {
+        "inputUnits": { "availability": "available", "value": 8500, "confidence": "exact" },
+        "contextPressure": {
+          "state": "measured",
+          "utilization": {
+            "availability": "available",
+            "value": 0.08,
+            "confidence": "estimated"
+          },
+          "basis": "reported_ratio"
+        }
+      }
+    }
+  ]
+}
