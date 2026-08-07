@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "issue": "Q017",
+  "recordedOn": "2026-08-07",
+  "controlProtocol": {
+    "version": "v2",
+    "major": 3,
+    "engineVersion": "3.1.2"
+  },
+  "selection": {
+    "harness": "codex",
+    "codexCliVersion": "0.146.0",
+    "model": "gpt-5.6-sol",
+    "effort": "low"
+  },
+  "authentication": {
+    "authRequest": "subscription",
+    "requestedSource": "native_session",
+    "availability": "available",
+    "verification": "passed",
+    "apiKeyFallback": "unavailable"
+  },
+  "headlessResume": {
+    "headless": "succeeded",
+    "resume": "succeeded",
+    "nativeCodexSessionCount": 1,
+    "eventFamilies": ["budget", "harness", "lifecycle", "output", "session-continuity"],
+    "workspaceCleanup": "trashed"
+  },
+  "cancellationCleanup": {
+    "terminalState": "cancelled",
+    "observedNewDaemonDescendantCount": 1,
+    "survivingObservedDescendantCount": 0,
+    "workspaceCleanup": "trashed"
+  },
+  "redactions": [
+    "control bearer token",
+    "account and session identifiers",
+    "run and thread identifiers",
+    "prompt and response transcript",
+    "temporary workspace path"
+  ]
+}
