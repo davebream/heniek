@@ -6,12 +6,14 @@ import type {
   BackendExecutionHandleV1,
   ExecutionEventV1,
   ExecutionEventV2,
+  ExecutionEventV3,
   ExecutionRequestV1,
   ExecutionRequestV2,
   ExecutionRequestV3,
   ExecutionResultV1,
   ExecutionResultV2,
   ExecutionResultV3,
+  ExecutionResultV4,
   InteractionAnswerSetV1,
   PendingInteractionV1,
   PendingInteractionV2,
@@ -92,4 +94,23 @@ export interface ExecutionBackendV4 {
   artifacts(executionId: string): Promise<Static<typeof BackendArtifactV1>[]>;
   readArtifact(executionId: string, artifactId: string): Promise<Uint8Array>;
   events(executionId: string, after?: string): AsyncIterable<Static<typeof ExecutionEventV2>>;
+}
+
+/**
+ * Q019's truthful telemetry boundary. V4 remains byte-for-byte compatible;
+ * V5 opts callers into explicit availability/confidence and live pressure.
+ */
+export interface ExecutionBackendV5 {
+  start(
+    request: Static<typeof ExecutionRequestV3>,
+  ): Promise<Static<typeof BackendExecutionHandleV1>>;
+  status(executionId: string): Promise<ExecutionStatus>;
+  interactions(executionId: string): Promise<Static<typeof PendingInteractionV2>[]>;
+  answer(executionId: string, answer: Static<typeof InteractionAnswerSetV1>): Promise<void>;
+  resume(executionId: string, inputArtifactRefs: ArtifactId[]): Promise<void>;
+  result(executionId: string): Promise<Static<typeof ExecutionResultV4>>;
+  cancel(executionId: string): Promise<void>;
+  artifacts(executionId: string): Promise<Static<typeof BackendArtifactV1>[]>;
+  readArtifact(executionId: string, artifactId: string): Promise<Uint8Array>;
+  events(executionId: string, after?: string): AsyncIterable<Static<typeof ExecutionEventV3>>;
 }

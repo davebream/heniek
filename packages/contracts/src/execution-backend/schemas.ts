@@ -128,6 +128,7 @@ export const BackendExecutionHandleV1 = versioned("BackendExecutionHandle", 1, {
  */
 const EXECUTION_EVENT_SCHEMA_ID = "heniek://contract/ExecutionEvent/v1";
 const EXECUTION_EVENT_V2_SCHEMA_ID = "heniek://contract/ExecutionEvent/v2";
+const EXECUTION_EVENT_V3_SCHEMA_ID = "heniek://contract/ExecutionEvent/v3";
 
 export const ExecutionEventV1 = Type.Union(
   [
@@ -299,6 +300,234 @@ if (SCHEMA_REGISTRY.has(EXECUTION_EVENT_V2_SCHEMA_ID)) {
 }
 SCHEMA_REGISTRY.set(EXECUTION_EVENT_V2_SCHEMA_ID, ExecutionEventV2);
 
+const TelemetryUnavailableReasonV1 = Type.Union([
+  Type.Literal("not_reported"),
+  Type.Literal("unsupported"),
+  Type.Literal("invalid"),
+  Type.Literal("contradictory"),
+  Type.Literal("overflow"),
+  Type.Literal("counter_reset"),
+]);
+
+const TelemetryConfidenceV1 = Type.Union([Type.Literal("exact"), Type.Literal("estimated")]);
+
+function telemetryNumber(options: { readonly integer?: boolean; readonly maximum?: number } = {}) {
+  const value = options.integer
+    ? Type.Integer({ minimum: 0, maximum: options.maximum ?? Number.MAX_SAFE_INTEGER })
+    : Type.Number({
+        minimum: 0,
+        ...(options.maximum === undefined ? {} : { maximum: options.maximum }),
+      });
+  return Type.Union([
+    Type.Object(
+      {
+        availability: Type.Literal("available"),
+        value,
+        confidence: TelemetryConfidenceV1,
+      },
+      { additionalProperties: false },
+    ),
+    Type.Object(
+      {
+        availability: Type.Literal("unavailable"),
+        reason: TelemetryUnavailableReasonV1,
+      },
+      { additionalProperties: false },
+    ),
+  ]);
+}
+
+const TelemetryIdentifierV1 = Type.Union([
+  Type.Object(
+    {
+      availability: Type.Literal("available"),
+      value: Type.String({ minLength: 1, maxLength: 512 }),
+      confidence: TelemetryConfidenceV1,
+    },
+    { additionalProperties: false },
+  ),
+  Type.Object(
+    {
+      availability: Type.Literal("unavailable"),
+      reason: TelemetryUnavailableReasonV1,
+    },
+    { additionalProperties: false },
+  ),
+]);
+
+const TelemetryPressureV1 = Type.Union([
+  Type.Object(
+    {
+      state: Type.Literal("measured"),
+      utilization: Type.Object(
+        {
+          availability: Type.Literal("available"),
+          value: Type.Number({ minimum: 0, maximum: 1 }),
+          confidence: TelemetryConfidenceV1,
+        },
+        { additionalProperties: false },
+      ),
+      basis: Type.Union([Type.Literal("reported_ratio"), Type.Literal("usage_ratio")]),
+    },
+    { additionalProperties: false },
+  ),
+  Type.Object(
+    {
+      state: Type.Literal("exhausted"),
+      confidence: Type.Literal("exact"),
+      basis: Type.Literal("capacity_signal"),
+    },
+    { additionalProperties: false },
+  ),
+  Type.Object(
+    {
+      state: Type.Literal("unavailable"),
+      reason: TelemetryUnavailableReasonV1,
+    },
+    { additionalProperties: false },
+  ),
+]);
+
+const executionTelemetryProperties = {
+  engine: Type.Union([Type.Literal("claude"), Type.Literal("codex"), Type.Literal("cursor")]),
+  executionMode: Type.Union([Type.Literal("external"), Type.Literal("native")]),
+  evidenceRefs: Type.Array(Type.String({ minLength: 1, maxLength: 512 }), {
+    minItems: 1,
+    maxItems: 32,
+    uniqueItems: true,
+  }),
+  session: Type.Object(
+    { providerSessionId: TelemetryIdentifierV1 },
+    { additionalProperties: false },
+  ),
+  usage: Type.Object(
+    {
+      inputUnits: telemetryNumber({ integer: true }),
+      outputUnits: telemetryNumber({ integer: true }),
+      cachedInputUnits: telemetryNumber({ integer: true }),
+      cacheReadUnits: telemetryNumber({ integer: true }),
+      cacheWriteUnits: telemetryNumber({ integer: true }),
+      totalUnits: telemetryNumber({ integer: true }),
+      costUsd: telemetryNumber(),
+    },
+    { additionalProperties: false },
+  ),
+  timing: Type.Object(
+    {
+      wallDurationMs: telemetryNumber({ integer: true }),
+      apiDurationMs: telemetryNumber({ integer: true }),
+    },
+    { additionalProperties: false },
+  ),
+  context: Type.Object(
+    {
+      usedUnits: telemetryNumber({ integer: true }),
+      windowUnits: telemetryNumber({ integer: true }),
+      utilization: telemetryNumber({ maximum: 1 }),
+      pressure: TelemetryPressureV1,
+    },
+    { additionalProperties: false },
+  ),
+};
+
+/** Q019's provider-neutral, evidence-linked telemetry snapshot. */
+export const ExecutionTelemetryV1 = versioned(
+  "ExecutionTelemetry",
+  1,
+  executionTelemetryProperties,
+);
+
+/** Q019 carries live telemetry without changing the replayable V2 event contract. */
+export const ExecutionEventV3 = Type.Union(
+  [
+    Type.Object(
+      {
+        schemaVersion: Type.Literal(3),
+        cursor: Type.String({ minLength: 1 }),
+        kind: Type.Literal("status"),
+        status: ExecutionStatus.schema,
+      },
+      { additionalProperties: false },
+    ),
+    Type.Object(
+      {
+        schemaVersion: Type.Literal(3),
+        cursor: Type.String({ minLength: 1 }),
+        kind: Type.Literal("rate_limited"),
+        retryAfterMs: Type.Optional(Type.Integer({ minimum: 0 })),
+      },
+      { additionalProperties: false },
+    ),
+    Type.Object(
+      {
+        schemaVersion: Type.Literal(3),
+        cursor: Type.String({ minLength: 1 }),
+        kind: Type.Literal("telemetry"),
+        telemetry: Type.Ref(ExecutionTelemetryV1),
+      },
+      { additionalProperties: false },
+    ),
+    Type.Object(
+      {
+        schemaVersion: Type.Literal(3),
+        cursor: Type.String({ minLength: 1 }),
+        kind: Type.Literal("tool_call"),
+        tool: ExecutionToolEventV1,
+      },
+      { additionalProperties: false },
+    ),
+    Type.Object(
+      {
+        schemaVersion: Type.Literal(3),
+        cursor: Type.String({ minLength: 1 }),
+        kind: Type.Literal("tool_result"),
+        tool: Type.Object(
+          {
+            name: Type.String({ minLength: 1 }),
+            kind: ExecutionToolKindV1,
+            useId: Type.Optional(Type.String({ minLength: 1 })),
+            outcome: Type.Union([
+              Type.Literal("succeeded"),
+              Type.Literal("failed"),
+              Type.Literal("cancelled"),
+              Type.Literal("denied"),
+            ]),
+            exitCode: Type.Optional(Type.Integer()),
+          },
+          { additionalProperties: false },
+        ),
+      },
+      { additionalProperties: false },
+    ),
+    Type.Object(
+      {
+        schemaVersion: Type.Literal(3),
+        cursor: Type.String({ minLength: 1 }),
+        kind: Type.Literal("file_change"),
+        path: Type.String({
+          minLength: 1,
+          pattern: "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\u0000).+$",
+        }),
+      },
+      { additionalProperties: false },
+    ),
+    Type.Object(
+      {
+        schemaVersion: Type.Literal(3),
+        cursor: Type.String({ minLength: 1 }),
+        kind: Type.Literal("error"),
+      },
+      { additionalProperties: false },
+    ),
+  ],
+  { $id: EXECUTION_EVENT_V3_SCHEMA_ID },
+);
+
+if (SCHEMA_REGISTRY.has(EXECUTION_EVENT_V3_SCHEMA_ID)) {
+  throw new Error(`Duplicate contract schema id: ${EXECUTION_EVENT_V3_SCHEMA_ID}`);
+}
+SCHEMA_REGISTRY.set(EXECUTION_EVENT_V3_SCHEMA_ID, ExecutionEventV3);
+
 const InteractionOptionV1 = Type.Object(
   {
     label: Type.String({ minLength: 1 }),
@@ -383,6 +612,29 @@ export const ExecutionResultV3 = versioned("ExecutionResult", 3, {
       { additionalProperties: false },
     ),
   ),
+  diff: Type.Optional(
+    Type.Object(
+      {
+        files: Type.Integer({ minimum: 0 }),
+        additions: Type.Integer({ minimum: 0 }),
+        deletions: Type.Integer({ minimum: 0 }),
+      },
+      { additionalProperties: false },
+    ),
+  ),
+});
+
+/** Q019's additive result contract replaces ambiguous usage with explicit telemetry. */
+export const ExecutionResultV4 = versioned("ExecutionResult", 4, {
+  status: Type.Union([
+    Type.Literal("succeeded"),
+    Type.Literal("failed"),
+    Type.Literal("cancelled"),
+  ]),
+  summary: Type.String({ minLength: 1 }),
+  sessionId: Type.Optional(Type.String({ minLength: 1 })),
+  artifacts: Type.Array(BackendArtifactV1),
+  telemetry: Type.Ref(ExecutionTelemetryV1),
   diff: Type.Optional(
     Type.Object(
       {

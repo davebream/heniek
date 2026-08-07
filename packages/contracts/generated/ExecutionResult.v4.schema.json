@@ -1,0 +1,110 @@
+{
+  "$id": "heniek://contract/ExecutionResult/v4",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "status",
+    "summary",
+    "artifacts",
+    "telemetry"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 4,
+      "type": "number"
+    },
+    "status": {
+      "anyOf": [
+        {
+          "const": "succeeded",
+          "type": "string"
+        },
+        {
+          "const": "failed",
+          "type": "string"
+        },
+        {
+          "const": "cancelled",
+          "type": "string"
+        }
+      ]
+    },
+    "summary": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "sessionId": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "$id": "heniek://contract/BackendArtifact/v1",
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "id",
+          "path",
+          "byteLength",
+          "mediaType"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "const": 1,
+            "type": "number"
+          },
+          "id": {
+            "minLength": 1,
+            "description": "Opaque BackendArtifactId.",
+            "type": "string"
+          },
+          "path": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "byteLength": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "mediaType": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "sha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "type": "string"
+          }
+        }
+      }
+    },
+    "telemetry": {
+      "$ref": "heniek://contract/ExecutionTelemetry/v1"
+    },
+    "diff": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "files",
+        "additions",
+        "deletions"
+      ],
+      "properties": {
+        "files": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "additions": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "deletions": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      }
+    }
+  }
+}
