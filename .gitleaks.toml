@@ -1,0 +1,12 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Exact synthetic JWT and private-key marker values used by credential-redaction fixtures"
+regexes = [
+  '''^eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.eyJzdWIiOiIxMjM0NTY3ODkwIn0\.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U$''',
+  '''^eyJhbGciOiJIUzI1NiJ9\.eyJzdWIiOiIxMjM0NSJ9\.dBjftJeZ4CVPmB92K27uhbUJU1p1r-2f$''',
+  '''^-----BEGIN RSA PRIVATE KEY-----$''',
+  '''^-----BEGIN PRIVATE KEY-----$''',
+  '''^-----BEGIN RSA PRIVATE KEY-----"\)\)\.toBe\(true\);\n    expect\(looksLikeCredentialValue\("-----BEGIN PRIVATE KEY-----$''',
+]
