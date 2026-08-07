@@ -18,6 +18,7 @@ dist/
 # directory overlaid on the checkout root, so an unscoped `git add` would
 # otherwise sweep control artifacts into the repository.
 .factory/
+.serena/
 .claude/*
 !.claude/branch-policy
 .bash_profile
