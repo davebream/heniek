@@ -94,20 +94,20 @@ export function parseClaudeAuthDiagnostic(stdout: string): ClaudeAuthDiagnostic 
   const record = asRecord(parsed);
   if (record === undefined) throw new MalformedClaudeDiagnosticError("<root>");
 
-  const loggedIn = record["loggedIn"];
+  const loggedIn = record.loggedIn;
   if (typeof loggedIn !== "boolean") throw new MalformedClaudeDiagnosticError("loggedIn");
 
-  const authMethod = record["authMethod"];
+  const authMethod = record.authMethod;
   if (typeof authMethod !== "string" || authMethod.length === 0) {
     throw new MalformedClaudeDiagnosticError("authMethod");
   }
 
-  const apiProvider = record["apiProvider"];
+  const apiProvider = record.apiProvider;
   if (typeof apiProvider !== "string" || apiProvider.length === 0) {
     throw new MalformedClaudeDiagnosticError("apiProvider");
   }
 
-  const rawApiKeySource = record["apiKeySource"];
+  const rawApiKeySource = record.apiKeySource;
   let apiKeySource: string | undefined;
   if (rawApiKeySource !== undefined) {
     // Review finding 6 (revises FIX-4): a structurally wrong type (not a

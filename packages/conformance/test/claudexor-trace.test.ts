@@ -169,7 +169,7 @@ describe("createEventTrace — deny layer", () => {
     const entry = asEvent(
       trace.recordEvent({ ...baseEvent(), payload: { state: "run.tok.9e02.4c11.end" } }),
     );
-    expect(entry.payload["state"]).toBe("run.tok.9e02.4c11.end");
+    expect(entry.payload.state).toBe("run.tok.9e02.4c11.end");
   });
 });
 
@@ -244,7 +244,7 @@ describe("createEventTrace — names as data", () => {
 
   it("does not pick up values from the prototype chain", () => {
     const payload = Object.create({ state: "INHERITED" }) as Record<string, unknown>;
-    payload["mode"] = "agent";
+    payload.mode = "agent";
     const trace = createEventTrace();
     trace.recordEvent({ ...baseEvent(), payload });
     expect(serialised(trace)).not.toContain("INHERITED");
@@ -254,7 +254,7 @@ describe("createEventTrace — names as data", () => {
     const payload = JSON.parse('{"__proto__": {"polluted": true}}') as Record<string, unknown>;
     const entry = asEvent(createEventTrace().recordEvent({ ...baseEvent(), payload }));
     expect(entry.droppedFields).toContain("payload.__proto__");
-    expect(({} as Record<string, unknown>)["polluted"]).toBeUndefined();
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined();
   });
 
   it("cannot forge a Markdown row through type or a payload value", () => {

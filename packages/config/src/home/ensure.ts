@@ -274,7 +274,7 @@ async function ensureDirectory(
     before = undefined;
   }
 
-  if (before !== undefined && before.isSymbolicLink()) {
+  if (before?.isSymbolicLink()) {
     diagnostics.push(
       createDiagnostic(
         "home.directory-is-symlink",

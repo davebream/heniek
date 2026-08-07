@@ -289,8 +289,10 @@ export function createClaudexorCapabilityAdapter(
           const native = harnessAccounts.find(
             (item) => engineId(first(item, "harness_id", "harnessId")) === target.engine,
           );
+          const nativeSessionRoute =
+            (target.engine === "claude" && target.accountId === null) || target.engine === "codex";
           const readinessResult =
-            target.configured && target.engine === "claude" && target.accountId === null
+            target.configured && nativeSessionRoute
               ? await Promise.allSettled([
                   post(`/v2/harnesses/${encodeURIComponent(target.engine)}/auth-readiness`, {
                     authRequest: "subscription",

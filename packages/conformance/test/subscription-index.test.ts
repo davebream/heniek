@@ -63,6 +63,6 @@ describe("smoke/subscription/index.ts — export surface", () => {
       ambient: { [carrier]: "SENTINEL-VALUE-NOT-REAL" },
       configHome: "/scratch/claude-home",
     });
-    expect(result.env["PATH"]).toBe(subscriptionIndex.ISOLATED_PATH);
+    expect(result.env.PATH).toBe(subscriptionIndex.ISOLATED_PATH);
   });
 });

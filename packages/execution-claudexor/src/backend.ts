@@ -5,10 +5,11 @@ import type {
   BackendArtifactV1,
   BackendExecutionId,
   ExecutionBackendV2,
-  ExecutionEventV1,
+  ExecutionEventV2,
   ExecutionRequestV2,
   ExecutionRequestV3,
   ExecutionResultV2,
+  ExecutionResultV3,
   ExecutionStatus,
   InteractionAnswerSetV1,
   InteractionId,
@@ -50,10 +51,13 @@ export interface ClaudexorExecutionBackend extends ExecutionBackendV2 {
   /** Internal primitive used by the subscription-only profile adapter. */
   resumeProfile(executionId: string, inputArtifactRefs: ArtifactId[]): Promise<void>;
   /** Normalized, replayable lifecycle facts; raw SSE payloads never escape. */
-  events(executionId: string, after?: string): AsyncIterable<Static<typeof ExecutionEventV1>>;
+  events(executionId: string, after?: string): AsyncIterable<Static<typeof ExecutionEventV2>>;
+  /** Internal structured result used by the Q017 profile adapter. */
+  resultProfile(executionId: string): Promise<Static<typeof ExecutionResultV3>>;
   diagnoseCompatibility(): Promise<readonly ClaudexorDiagnostic[]>;
   diagnoseRuntime(): Promise<ClaudexorDiagnostic>;
   diagnoseAuthRoute(): Promise<ClaudexorDiagnostic>;
+  diagnoseCodexAuthRoute(): Promise<ClaudexorDiagnostic>;
 }
 
 export class ClaudexorControlError extends Error {
@@ -119,18 +123,41 @@ function encodedArtifactPath(path: string): string {
 }
 
 type ResolvedProfile = Static<typeof ExecutionRequestV3>["profile"];
+type ProfileHarness = "claude" | "codex";
 
-function subscriptionClaudeProfile(profile: ResolvedProfile, operation: string): string {
+interface SubscriptionProfileRoute {
+  readonly harness: ProfileHarness;
+  readonly credentialProfileId?: string;
+}
+
+function subscriptionProfileRoute(
+  profile: ResolvedProfile,
+  operation: string,
+): SubscriptionProfileRoute {
+  if (profile.engine !== "claude" && profile.engine !== "codex") {
+    throw new ClaudexorControlError(400, "unsupported_profile", operation);
+  }
   if (
-    profile.engine !== "claude" ||
     profile.executionMode !== "external" ||
     profile.billing !== "subscription" ||
-    typeof profile.accountId !== "string" ||
-    profile.accountId.length === 0
+    (profile.engine === "claude" &&
+      (typeof profile.accountId !== "string" || profile.accountId.length === 0))
   ) {
     throw new ClaudexorControlError(400, "unsupported_profile", operation);
   }
-  return profile.accountId;
+  // Codex's selected ChatGPT session belongs to Claudexor, not to a Heniek
+  // account label. A resolved Heniek account may still identify the user's
+  // profile, but must never be forwarded as a Claudexor credential-profile
+  // id when the route is `native_session`.
+  if (profile.engine === "codex") return { harness: "codex" };
+  const accountId = profile.accountId;
+  if (typeof accountId !== "string" || accountId.length === 0) {
+    throw new ClaudexorControlError(400, "unsupported_profile", operation);
+  }
+  return {
+    harness: "claude",
+    credentialProfileId: accountId,
+  };
 }
 
 function statusFromEvent(value: unknown): ExecutionStatus | undefined {
@@ -164,6 +191,102 @@ function hasRateLimit(value: unknown): boolean {
 function hasContextCapacityExhaustion(value: unknown): boolean {
   const facts = field(value, "outcomeFacts") ?? field(field(value, "summary"), "outcomeFacts");
   return field(facts, "reason") === "context_capacity_exhausted";
+}
+
+function harnessPayload(value: unknown): Record<string, unknown> | undefined {
+  const payload = field(value, "payload");
+  if (field(value, "type") === "harness.event" && isRecord(payload)) return payload;
+  return isRecord(value) ? value : undefined;
+}
+
+function finiteNonNegative(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : undefined;
+}
+
+function nonNegativeInteger(value: unknown): number | undefined {
+  const candidate = finiteNonNegative(value);
+  return candidate !== undefined && Number.isSafeInteger(candidate) ? candidate : undefined;
+}
+
+const TOOL_KINDS = new Set(["web", "file", "command", "mcp", "search", "other"]);
+const TOOL_OUTCOMES = new Map([
+  ["ok", "succeeded"],
+  ["error", "failed"],
+  ["cancelled", "cancelled"],
+  ["denied", "denied"],
+] as const);
+
+function normalizedTool(value: unknown):
+  | {
+      readonly name: string;
+      readonly kind: "web" | "file" | "command" | "mcp" | "search" | "other";
+      readonly useId?: string;
+    }
+  | undefined {
+  const name = field(value, "name");
+  const kind = field(value, "kind");
+  const useId = field(value, "use_id");
+  if (
+    typeof name !== "string" ||
+    name.length === 0 ||
+    typeof kind !== "string" ||
+    !TOOL_KINDS.has(kind)
+  ) {
+    return undefined;
+  }
+  return {
+    name,
+    kind: kind as "web" | "file" | "command" | "mcp" | "search" | "other",
+    ...(typeof useId === "string" && useId.length > 0 ? { useId } : {}),
+  };
+}
+
+function normalizedUsage(value: unknown):
+  | {
+      readonly inputUnits?: number;
+      readonly outputUnits?: number;
+      readonly cachedInputUnits?: number;
+      readonly costUsd?: number;
+      readonly estimated?: boolean;
+    }
+  | undefined {
+  const raw = isRecord(value) ? value : undefined;
+  if (raw === undefined) return undefined;
+  const usage: {
+    inputUnits?: number;
+    outputUnits?: number;
+    cachedInputUnits?: number;
+    costUsd?: number;
+    estimated?: boolean;
+  } = {};
+  const inputTokens = nonNegativeInteger(field(raw, "input_tokens") ?? field(raw, "inputTokens"));
+  const outputTokens = nonNegativeInteger(
+    field(raw, "output_tokens") ?? field(raw, "outputTokens"),
+  );
+  const cachedInputTokens = nonNegativeInteger(
+    field(raw, "cached_input_tokens") ?? field(raw, "cachedInputTokens"),
+  );
+  const costUsd = finiteNonNegative(
+    field(raw, "cost_usd") ?? field(raw, "costUsd") ?? field(raw, "spendUsd"),
+  );
+  const estimated = field(raw, "estimated") ?? field(raw, "spendEstimated");
+  if (inputTokens !== undefined) usage.inputUnits = inputTokens;
+  if (outputTokens !== undefined) usage.outputUnits = outputTokens;
+  if (cachedInputTokens !== undefined) usage.cachedInputUnits = cachedInputTokens;
+  if (costUsd !== undefined) usage.costUsd = costUsd;
+  if (typeof estimated === "boolean") usage.estimated = estimated;
+  return Object.keys(usage).length === 0 ? undefined : usage;
+}
+
+function normalizedDiff(
+  value: unknown,
+): { readonly files: number; readonly additions: number; readonly deletions: number } | undefined {
+  const files = nonNegativeInteger(field(value, "files"));
+  const additions = nonNegativeInteger(field(value, "additions"));
+  const deletions = nonNegativeInteger(field(value, "deletions"));
+  return files === undefined || additions === undefined || deletions === undefined
+    ? undefined
+    : { files, additions, deletions };
 }
 
 interface ParsedSseEvent {
@@ -265,6 +388,28 @@ export function createClaudexorExecutionBackend(
     handshakeComplete = true;
   }
 
+  async function codexNativeSessionAttested(): Promise<boolean> {
+    const response = await callJson("POST", "/v2/harnesses/codex/auth-readiness", "authReadiness", {
+      authRequest: "subscription",
+      source: "native_session",
+    });
+    const readiness = field(response, "readiness");
+    return (
+      field(response, "harnessId") === "codex" &&
+      field(response, "authRequest") === "subscription" &&
+      field(response, "requestedSource") === "native_session" &&
+      field(readiness, "source") === "native_session" &&
+      field(readiness, "availability") === "available" &&
+      field(readiness, "verification") === "passed"
+    );
+  }
+
+  async function requireCodexNativeSession(): Promise<void> {
+    if (!(await codexNativeSessionAttested())) {
+      throw new ClaudexorControlError(409, "codex_native_session_unattested", "authReadiness");
+    }
+  }
+
   async function thread(executionId: string): Promise<unknown> {
     await handshake();
     return callJson("GET", `/v2/threads/${encodeURIComponent(executionId)}`, "getThread");
@@ -299,9 +444,13 @@ export function createClaudexorExecutionBackend(
       access: "workspace_write",
     };
     if (profile !== undefined) {
-      const accountId = subscriptionClaudeProfile(profile, "createTurn");
+      const route = subscriptionProfileRoute(profile, "createTurn");
+      body.harnesses = [route.harness];
+      body.primaryHarness = route.harness;
       body.authPreference = "subscription";
-      body.credentialProfileId = accountId;
+      if (route.credentialProfileId !== undefined) {
+        body.credentialProfileId = route.credentialProfileId;
+      }
       body.model = profile.model;
       body.effort = profile.effort;
     }
@@ -396,8 +545,9 @@ export function createClaudexorExecutionBackend(
     },
 
     async startProfile(input: Static<typeof ExecutionRequestV3>) {
-      const accountId = subscriptionClaudeProfile(input.profile, "startProfile");
+      const route = subscriptionProfileRoute(input.profile, "startProfile");
       await handshake();
+      if (route.harness === "codex") await requireCodexNativeSession();
       const created = await callJson(
         "POST",
         "/v2/threads",
@@ -407,9 +557,11 @@ export function createClaudexorExecutionBackend(
           scope: { kind: "project", root: input.workingDirectory, context: "auto" },
           workspace: "in_place",
           authPreference: "subscription",
-          credentialProfileId: accountId,
-          primaryHarness: "claude",
-          eligibleHarnesses: ["claude"],
+          ...(route.credentialProfileId === undefined
+            ? {}
+            : { credentialProfileId: route.credentialProfileId }),
+          primaryHarness: route.harness,
+          eligibleHarnesses: [route.harness],
           access: "workspace_write",
         },
         {
@@ -513,6 +665,7 @@ export function createClaudexorExecutionBackend(
       if (profile === undefined) {
         throw new ClaudexorControlError(409, "profile_context_unavailable", "resume");
       }
+      if (profile.engine === "codex") await requireCodexNativeSession();
       await createTurn(
         executionId,
         inputArtifactRefs.length === 0
@@ -524,24 +677,27 @@ export function createClaudexorExecutionBackend(
       );
     },
 
-    async result(executionId: string): Promise<Static<typeof ExecutionResultV2>> {
+    async resultProfile(executionId: string): Promise<Static<typeof ExecutionResultV3>> {
       const value = await run(executionId);
-      if (value === null) throw new ClaudexorControlError(409, "run_not_started", "result");
+      if (value === null) throw new ClaudexorControlError(409, "run_not_started", "resultProfile");
       const status = mapStatus(value);
       if (status !== "succeeded" && status !== "failed" && status !== "cancelled") {
-        throw new ClaudexorControlError(409, "run_not_terminal", "result");
+        throw new ClaudexorControlError(409, "run_not_terminal", "resultProfile");
       }
       const summary = field(value, "summary");
       const rawSummary = field(value, "finalSummary");
       const rawError = field(summary, "error");
       const threadValue = await thread(executionId);
       const sessions = field(threadValue, "sessions");
+      const profile = profiles.get(executionId);
       const session = Array.isArray(sessions)
-        ? sessions.find((entry) => field(entry, "harnessId") === "claude")
+        ? sessions.find((entry) => field(entry, "harnessId") === (profile?.engine ?? "claude"))
         : undefined;
       const sessionId = field(session, "nativeSessionId");
+      const usage = normalizedUsage(summary);
+      const diff = normalizedDiff(field(field(summary, "result"), "diffStat"));
       return {
-        schemaVersion: 2,
+        schemaVersion: 3,
         status,
         summary:
           typeof rawSummary === "string" && rawSummary.length > 0
@@ -551,6 +707,19 @@ export function createClaudexorExecutionBackend(
               : `Claudexor execution ${status}.`,
         ...(typeof sessionId === "string" && sessionId.length > 0 ? { sessionId } : {}),
         artifacts: await listedArtifacts(executionId),
+        ...(usage === undefined ? {} : { usage }),
+        ...(diff === undefined ? {} : { diff }),
+      };
+    },
+
+    async result(executionId: string): Promise<Static<typeof ExecutionResultV2>> {
+      const result = await this.resultProfile(executionId);
+      return {
+        schemaVersion: 2,
+        status: result.status,
+        summary: result.summary,
+        ...(result.sessionId === undefined ? {} : { sessionId: result.sessionId }),
+        artifacts: result.artifacts,
       };
     },
 
@@ -601,28 +770,86 @@ export function createClaudexorExecutionBackend(
       for (const event of parseSse(text)) {
         const status = statusFromEvent(event.data);
         if (status !== undefined) {
-          yield { schemaVersion: 1, cursor: event.id, kind: "status", status } satisfies Static<
-            typeof ExecutionEventV1
+          yield { schemaVersion: 2, cursor: event.id, kind: "status", status } satisfies Static<
+            typeof ExecutionEventV2
           >;
           continue;
         }
         if (hasRateLimit(event.data)) {
           const retry = retryAfterMs(event.data);
           yield {
-            schemaVersion: 1,
+            schemaVersion: 2,
             cursor: event.id,
             kind: "rate_limited",
             ...(retry === undefined ? {} : { retryAfterMs: retry }),
-          } satisfies Static<typeof ExecutionEventV1>;
+          } satisfies Static<typeof ExecutionEventV2>;
           continue;
         }
         if (hasContextCapacityExhaustion(event.data)) {
           yield {
-            schemaVersion: 1,
+            schemaVersion: 2,
             cursor: event.id,
             kind: "context_pressure",
             pressure: "capacity_exhausted",
-          } satisfies Static<typeof ExecutionEventV1>;
+          } satisfies Static<typeof ExecutionEventV2>;
+          continue;
+        }
+        const payload = harnessPayload(event.data);
+        const type = field(payload, "type");
+        if (type === "tool_call") {
+          const tool = normalizedTool(field(payload, "tool"));
+          if (tool !== undefined) {
+            yield { schemaVersion: 2, cursor: event.id, kind: "tool_call", tool } satisfies Static<
+              typeof ExecutionEventV2
+            >;
+          }
+          continue;
+        }
+        if (type === "tool_result") {
+          const tool = normalizedTool(field(payload, "tool"));
+          const outcome = TOOL_OUTCOMES.get(field(field(payload, "tool"), "status") as never);
+          const exitCode = field(field(payload, "tool"), "exit_code");
+          if (tool !== undefined && outcome !== undefined) {
+            yield {
+              schemaVersion: 2,
+              cursor: event.id,
+              kind: "tool_result",
+              tool: {
+                ...tool,
+                outcome,
+                ...(typeof exitCode === "number" && Number.isSafeInteger(exitCode)
+                  ? { exitCode }
+                  : {}),
+              },
+            } satisfies Static<typeof ExecutionEventV2>;
+          }
+          continue;
+        }
+        if (type === "file_change") {
+          const path = field(field(payload, "payload"), "path");
+          if (typeof path === "string" && safeArtifactPath(path)) {
+            yield {
+              schemaVersion: 2,
+              cursor: event.id,
+              kind: "file_change",
+              path,
+            } satisfies Static<typeof ExecutionEventV2>;
+          }
+          continue;
+        }
+        if (type === "usage") {
+          const usage = normalizedUsage(field(payload, "usage"));
+          if (usage !== undefined) {
+            yield { schemaVersion: 2, cursor: event.id, kind: "usage", usage } satisfies Static<
+              typeof ExecutionEventV2
+            >;
+          }
+          continue;
+        }
+        if (type === "error") {
+          yield { schemaVersion: 2, cursor: event.id, kind: "error" } satisfies Static<
+            typeof ExecutionEventV2
+          >;
         }
       }
     },
@@ -718,6 +945,31 @@ export function createClaudexorExecutionBackend(
               "Claudexor did not attest the isolated OAuth-token subscription source as ready.",
             remediation:
               "Start the pinned runtime with the Q004 isolated subscription carrier and rerun heniek doctor.",
+          };
+        }
+      })();
+    },
+
+    diagnoseCodexAuthRoute() {
+      return (async () => {
+        try {
+          await handshake();
+          if (!(await codexNativeSessionAttested())) {
+            throw new Error("unattested");
+          }
+          return {
+            category: "auth-route" as const,
+            status: "pass" as const,
+            code: "CODEX_NATIVE_SESSION_ATTESTED",
+            message: "Claudexor attested a native Codex ChatGPT subscription session.",
+          };
+        } catch {
+          return {
+            category: "auth-route" as const,
+            status: "fail" as const,
+            code: "CODEX_NATIVE_SESSION_UNATTESTED",
+            message: "Claudexor did not attest a native Codex ChatGPT subscription session.",
+            remediation: "Sign in to Codex through Claudexor and rerun heniek doctor.",
           };
         }
       })();

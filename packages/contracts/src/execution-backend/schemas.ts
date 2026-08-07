@@ -127,6 +127,7 @@ export const BackendExecutionHandleV1 = versioned("BackendExecutionHandle", 1, {
  * intentionally deferred to Q019.
  */
 const EXECUTION_EVENT_SCHEMA_ID = "heniek://contract/ExecutionEvent/v1";
+const EXECUTION_EVENT_V2_SCHEMA_ID = "heniek://contract/ExecutionEvent/v2";
 
 export const ExecutionEventV1 = Type.Union(
   [
@@ -165,6 +166,138 @@ if (SCHEMA_REGISTRY.has(EXECUTION_EVENT_SCHEMA_ID)) {
   throw new Error(`Duplicate contract schema id: ${EXECUTION_EVENT_SCHEMA_ID}`);
 }
 SCHEMA_REGISTRY.set(EXECUTION_EVENT_SCHEMA_ID, ExecutionEventV1);
+
+/**
+ * Q017's structured execution feed. V1 remains available unchanged for
+ * existing profile consumers; V2 adds only provider-neutral facts carried by
+ * Claudexor's typed harness events. It intentionally does not expose tool
+ * arguments, tool output, prompt text, or provider event payloads.
+ */
+const ExecutionToolKindV1 = Type.Union([
+  Type.Literal("web"),
+  Type.Literal("file"),
+  Type.Literal("command"),
+  Type.Literal("mcp"),
+  Type.Literal("search"),
+  Type.Literal("other"),
+]);
+
+const ExecutionToolEventV1 = Type.Object(
+  {
+    name: Type.String({ minLength: 1 }),
+    kind: ExecutionToolKindV1,
+    useId: Type.Optional(Type.String({ minLength: 1 })),
+  },
+  { additionalProperties: false },
+);
+
+export const ExecutionEventV2 = Type.Union(
+  [
+    Type.Object(
+      {
+        schemaVersion: Type.Literal(2),
+        cursor: Type.String({ minLength: 1 }),
+        kind: Type.Literal("status"),
+        status: ExecutionStatus.schema,
+      },
+      { additionalProperties: false },
+    ),
+    Type.Object(
+      {
+        schemaVersion: Type.Literal(2),
+        cursor: Type.String({ minLength: 1 }),
+        kind: Type.Literal("rate_limited"),
+        retryAfterMs: Type.Optional(Type.Integer({ minimum: 0 })),
+      },
+      { additionalProperties: false },
+    ),
+    Type.Object(
+      {
+        schemaVersion: Type.Literal(2),
+        cursor: Type.String({ minLength: 1 }),
+        kind: Type.Literal("context_pressure"),
+        pressure: Type.Literal("capacity_exhausted"),
+      },
+      { additionalProperties: false },
+    ),
+    Type.Object(
+      {
+        schemaVersion: Type.Literal(2),
+        cursor: Type.String({ minLength: 1 }),
+        kind: Type.Literal("tool_call"),
+        tool: ExecutionToolEventV1,
+      },
+      { additionalProperties: false },
+    ),
+    Type.Object(
+      {
+        schemaVersion: Type.Literal(2),
+        cursor: Type.String({ minLength: 1 }),
+        kind: Type.Literal("tool_result"),
+        tool: Type.Object(
+          {
+            name: Type.String({ minLength: 1 }),
+            kind: ExecutionToolKindV1,
+            useId: Type.Optional(Type.String({ minLength: 1 })),
+            outcome: Type.Union([
+              Type.Literal("succeeded"),
+              Type.Literal("failed"),
+              Type.Literal("cancelled"),
+              Type.Literal("denied"),
+            ]),
+            exitCode: Type.Optional(Type.Integer()),
+          },
+          { additionalProperties: false },
+        ),
+      },
+      { additionalProperties: false },
+    ),
+    Type.Object(
+      {
+        schemaVersion: Type.Literal(2),
+        cursor: Type.String({ minLength: 1 }),
+        kind: Type.Literal("file_change"),
+        path: Type.String({
+          minLength: 1,
+          pattern: "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\u0000).+$",
+        }),
+      },
+      { additionalProperties: false },
+    ),
+    Type.Object(
+      {
+        schemaVersion: Type.Literal(2),
+        cursor: Type.String({ minLength: 1 }),
+        kind: Type.Literal("usage"),
+        usage: Type.Object(
+          {
+            inputUnits: Type.Optional(Type.Integer({ minimum: 0 })),
+            outputUnits: Type.Optional(Type.Integer({ minimum: 0 })),
+            cachedInputUnits: Type.Optional(Type.Integer({ minimum: 0 })),
+            costUsd: Type.Optional(Type.Number({ minimum: 0 })),
+            estimated: Type.Optional(Type.Boolean()),
+          },
+          { additionalProperties: false },
+        ),
+      },
+      { additionalProperties: false },
+    ),
+    Type.Object(
+      {
+        schemaVersion: Type.Literal(2),
+        cursor: Type.String({ minLength: 1 }),
+        kind: Type.Literal("error"),
+      },
+      { additionalProperties: false },
+    ),
+  ],
+  { $id: EXECUTION_EVENT_V2_SCHEMA_ID },
+);
+
+if (SCHEMA_REGISTRY.has(EXECUTION_EVENT_V2_SCHEMA_ID)) {
+  throw new Error(`Duplicate contract schema id: ${EXECUTION_EVENT_V2_SCHEMA_ID}`);
+}
+SCHEMA_REGISTRY.set(EXECUTION_EVENT_V2_SCHEMA_ID, ExecutionEventV2);
 
 const InteractionOptionV1 = Type.Object(
   {
@@ -226,6 +359,40 @@ export const ExecutionResultV2 = versioned("ExecutionResult", 2, {
   sessionId: Type.Optional(Type.String({ minLength: 1 })),
   artifacts: Type.Array(BackendArtifactV1),
   usage: Type.Optional(Type.Record(OPEN_MAP_KEY, Type.Number(), { additionalProperties: false })),
+});
+
+/** Q017's result contract adds normalized usage and a diff summary without provider DTOs. */
+export const ExecutionResultV3 = versioned("ExecutionResult", 3, {
+  status: Type.Union([
+    Type.Literal("succeeded"),
+    Type.Literal("failed"),
+    Type.Literal("cancelled"),
+  ]),
+  summary: Type.String({ minLength: 1 }),
+  sessionId: Type.Optional(Type.String({ minLength: 1 })),
+  artifacts: Type.Array(BackendArtifactV1),
+  usage: Type.Optional(
+    Type.Object(
+      {
+        inputUnits: Type.Optional(Type.Integer({ minimum: 0 })),
+        outputUnits: Type.Optional(Type.Integer({ minimum: 0 })),
+        cachedInputUnits: Type.Optional(Type.Integer({ minimum: 0 })),
+        costUsd: Type.Optional(Type.Number({ minimum: 0 })),
+        estimated: Type.Optional(Type.Boolean()),
+      },
+      { additionalProperties: false },
+    ),
+  ),
+  diff: Type.Optional(
+    Type.Object(
+      {
+        files: Type.Integer({ minimum: 0 }),
+        additions: Type.Integer({ minimum: 0 }),
+        deletions: Type.Integer({ minimum: 0 }),
+      },
+      { additionalProperties: false },
+    ),
+  ),
 });
 
 /** The one-stage structured result Heniek validates before completion. */

@@ -90,7 +90,7 @@ describe("Claudexor capability normalization", () => {
     ]);
   });
 
-  it("matches configured account ids exactly", async () => {
+  it("uses Codex native-session readiness even when no matching credential-profile id exists", async () => {
     const adapter = createClaudexorCapabilityAdapter({
       baseUrl: "http://127.0.0.1:9999",
       expectedEngine,
@@ -113,9 +113,7 @@ describe("Claudexor capability normalization", () => {
       clock: { now: () => new Date(OBSERVED_AT) },
     });
     const entries = await adapter.discover([{ engine: "codex", accountId: "codex-work" }]);
-    expect(entries.find((entry) => entry.engine === "codex")?.authentication).toBe(
-      "unauthenticated",
-    );
+    expect(entries.find((entry) => entry.engine === "codex")?.authentication).toBe("authenticated");
   });
 
   it.each([

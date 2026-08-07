@@ -2,9 +2,11 @@ import { Ajv } from "ajv";
 import { describe, expect, it } from "vitest";
 import {
   ExecutionEventV1,
+  ExecutionEventV2,
   ExecutionRequestV1,
   ExecutionRequestV2,
   ExecutionRequestV3,
+  ExecutionResultV3,
   ProfileConfigurationV1,
   ResolvedProfileV1,
 } from "../src/index.js";
@@ -140,5 +142,51 @@ describe("profile contracts", () => {
         claudeRateLimit: { raw: "do-not-leak" },
       }),
     ).toBe(false);
+  });
+
+  it("versions structured tool, usage, and diff normalization without provider DTO leakage", () => {
+    const validateEvent = ajv.compile(ExecutionEventV2);
+    expect(
+      validateEvent({
+        schemaVersion: 2,
+        cursor: "44",
+        kind: "tool_result",
+        tool: {
+          name: "shell",
+          kind: "command",
+          useId: "tool-1",
+          outcome: "succeeded",
+          exitCode: 0,
+        },
+      }),
+    ).toBe(true);
+    expect(
+      validateEvent({
+        schemaVersion: 2,
+        cursor: "45",
+        kind: "usage",
+        usage: { inputUnits: 12, outputUnits: 34, cachedInputUnits: 5, costUsd: 0.01 },
+      }),
+    ).toBe(true);
+    expect(
+      validateEvent({
+        schemaVersion: 2,
+        cursor: "46",
+        kind: "tool_call",
+        tool: { name: "shell", kind: "command", codexToolCall: { raw: "do-not-leak" } },
+      }),
+    ).toBe(false);
+
+    const validateResult = ajv.compile(ExecutionResultV3);
+    expect(
+      validateResult({
+        schemaVersion: 3,
+        status: "succeeded",
+        summary: "Finished.",
+        artifacts: [],
+        usage: { inputUnits: 12, outputUnits: 34 },
+        diff: { files: 1, additions: 2, deletions: 3 },
+      }),
+    ).toBe(true);
   });
 });
