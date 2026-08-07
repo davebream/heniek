@@ -1,0 +1,32 @@
+{
+  "mismatchedAccount": [
+    {
+      "code": "profile.account-engine-mismatch",
+      "message": "Account \"codex-main\" belongs to engine \"codex\", not \"claude\".",
+      "pointer": "/accounts/codex-main/engine",
+      "severity": "error"
+    },
+    {
+      "code": "profile.capability-not-found",
+      "message": "No capability row matches engine \"claude\", account \"codex-main\", and model \"opus\".",
+      "pointer": "/capabilities",
+      "severity": "error"
+    }
+  ],
+  "unknownModel": [
+    {
+      "code": "profile.capability-not-found",
+      "message": "No capability row matches engine \"claude\", account \"claude-main\", and model \"unknown-model\".",
+      "pointer": "/capabilities",
+      "severity": "error"
+    }
+  ],
+  "unsupportedEffort": [
+    {
+      "code": "profile.effort-unsupported",
+      "message": "Effort \"ultra\" is not supported for the resolved engine/account/model/mode.",
+      "pointer": "/effort",
+      "severity": "error"
+    }
+  ]
+}
