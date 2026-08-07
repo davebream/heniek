@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "mode": "deterministic-fake",
+  "run": {
+    "runId": "run-q012",
+    "stageId": "stage-q012",
+    "status": "succeeded",
+    "backendKind": "claudexor-v2",
+    "backendExecutionId": "thread-q012",
+    "summary": "Completed after one answer.",
+    "sessionId": "session-q012",
+    "finalized": true
+  },
+  "interaction": {
+    "interactionId": "interaction-q012",
+    "state": "answered",
+    "questions": [
+      {
+        "questionId": "question-q012",
+        "prompt": "Which title?",
+        "answer": "Release notes"
+      }
+    ]
+  },
+  "artifact": {
+    "name": "artifacts/report.md",
+    "mediaType": "text/markdown",
+    "byteLength": 19,
+    "sha256": "10cefe936267450e95f93147f45bfca5c0ee79883c5b0c68b0e4445abcf69e4a",
+    "retrieved": true,
+    "validated": true
+  },
+  "durability": {
+    "heniekDaemonRestartedMidRun": true,
+    "sameBackendThreadReconciled": true,
+    "duplicateStartCount": 0,
+    "workspaceLeaseReleased": true,
+    "partialImportCrashRecovered": true
+  },
+  "realConformance": {
+    "status": "passed",
+    "runtime": "v3.1.2/bb5efee24132aa3d65e417040df201e08da44c8c",
+    "authRoute": "isolated_first_party_oauth_token",
+    "sameBackendThreadReconciled": true,
+    "artifactRetrieved": true,
+    "cancelled": true,
+    "apiKeyFallback": false,
+    "containsSecrets": false
+  }
+}

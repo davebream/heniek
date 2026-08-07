@@ -1,0 +1,53 @@
+{
+  "$id": "heniek://contract/ArtifactGetResult/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "artifactId",
+    "name",
+    "mediaType",
+    "byteLength",
+    "sha256",
+    "offset",
+    "eof",
+    "contentBase64"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "artifactId": {
+      "minLength": 1,
+      "description": "Opaque ArtifactId.",
+      "type": "string"
+    },
+    "name": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "mediaType": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "byteLength": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "offset": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "eof": {
+      "type": "boolean"
+    },
+    "contentBase64": {
+      "type": "string"
+    }
+  }
+}

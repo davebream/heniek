@@ -43,6 +43,26 @@ export {
   StateDatabaseCorruptionError,
   StateStoreError,
 } from "./errors.js";
+export {
+  type ArtifactRecord,
+  assignBackendExecution,
+  completePendingArtifactImports,
+  createStageExecution,
+  executionCleanupCounts,
+  findRegisteredExecutionContext,
+  markArtifactImport,
+  markExecutionFinalized,
+  type RegisteredExecutionContext,
+  readActiveStageExecutions,
+  readArtifactRecord,
+  readPendingInteractions,
+  readStageArtifacts,
+  readStageExecution,
+  recordInteractionAnswer,
+  replacePendingInteractions,
+  type StageExecutionRow,
+  updateStageExecutionStatus,
+} from "./execution/store.js";
 export type {
   AppendEventInput,
   CausationEventId,

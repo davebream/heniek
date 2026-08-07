@@ -66,6 +66,7 @@ export interface WorkspaceService {
 }
 
 export interface WorkspaceLeaseService {
+  current(checkoutPath: string): WorkspaceWriterLease | undefined;
   acquire(input: AcquireWriterLeaseInput): WorkspaceWriterLease;
   renew(
     lease: WorkspaceWriterLease,

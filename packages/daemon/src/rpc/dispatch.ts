@@ -15,10 +15,22 @@
  */
 
 import {
+  ARTIFACT_GET_SCHEMA_ID,
+  ARTIFACT_GET_SCHEMA_SHA256,
   CODEBASE_DETECTION_SCHEMA_ID,
   CODEBASE_DETECTION_SCHEMA_SHA256,
+  DOCTOR_SCHEMA_ID,
+  DOCTOR_SCHEMA_SHA256,
   REGISTERED_CODEBASE_SCHEMA_ID,
   REGISTERED_CODEBASE_SCHEMA_SHA256,
+  RUN_MUTATION_SCHEMA_ID,
+  RUN_MUTATION_SCHEMA_SHA256,
+  RUN_RESULT_SCHEMA_ID,
+  RUN_RESULT_SCHEMA_SHA256,
+  RUN_STATUS_SCHEMA_ID,
+  RUN_STATUS_SCHEMA_SHA256,
+  STAGE_START_SCHEMA_ID,
+  STAGE_START_SCHEMA_SHA256,
 } from "@heniek/protocol";
 import type { ConnectionAuthState } from "../auth/challenge.js";
 import { UNAUTHORIZED_MESSAGE } from "../auth/errors.js";
@@ -34,15 +46,23 @@ import {
 } from "./codec.js";
 import { DRAINING_MESSAGE } from "./errors.js";
 import {
+  ARTIFACT_GET_V1_METHOD,
   CODEBASE_DETECT_V1_METHOD,
   CODEBASE_REGISTER_V1_METHOD,
   DAEMON_HELLO_METHOD,
   DAEMON_NEGOTIATE_METHOD,
   DAEMON_RECOVERY_V1_METHOD,
   DAEMON_STATUS_V1_METHOD,
+  DOCTOR_V1_METHOD,
   type MethodContext,
   type MethodRegistry,
   RPC_CANCEL_METHOD,
+  RUN_ANSWER_V1_METHOD,
+  RUN_CANCEL_V1_METHOD,
+  RUN_RESULT_V1_METHOD,
+  RUN_RESUME_V1_METHOD,
+  RUN_STATUS_V1_METHOD,
+  STAGE_START_V1_METHOD,
 } from "./methods.js";
 
 const STATUS_SCHEMA_ID = "heniek://contract/DaemonStatus/v1";
@@ -179,6 +199,46 @@ function negotiateResult(params: Record<string, unknown>) {
         schemaId: REGISTERED_CODEBASE_SCHEMA_ID,
         sha256: REGISTERED_CODEBASE_SCHEMA_SHA256,
         wireMethod: CODEBASE_REGISTER_V1_METHOD,
+      },
+      "stage.start": {
+        schemaId: STAGE_START_SCHEMA_ID,
+        sha256: STAGE_START_SCHEMA_SHA256,
+        wireMethod: STAGE_START_V1_METHOD,
+      },
+      "run.status": {
+        schemaId: RUN_STATUS_SCHEMA_ID,
+        sha256: RUN_STATUS_SCHEMA_SHA256,
+        wireMethod: RUN_STATUS_V1_METHOD,
+      },
+      "run.answer": {
+        schemaId: RUN_MUTATION_SCHEMA_ID,
+        sha256: RUN_MUTATION_SCHEMA_SHA256,
+        wireMethod: RUN_ANSWER_V1_METHOD,
+      },
+      "run.resume": {
+        schemaId: RUN_MUTATION_SCHEMA_ID,
+        sha256: RUN_MUTATION_SCHEMA_SHA256,
+        wireMethod: RUN_RESUME_V1_METHOD,
+      },
+      "run.cancel": {
+        schemaId: RUN_MUTATION_SCHEMA_ID,
+        sha256: RUN_MUTATION_SCHEMA_SHA256,
+        wireMethod: RUN_CANCEL_V1_METHOD,
+      },
+      "run.result": {
+        schemaId: RUN_RESULT_SCHEMA_ID,
+        sha256: RUN_RESULT_SCHEMA_SHA256,
+        wireMethod: RUN_RESULT_V1_METHOD,
+      },
+      "artifact.get": {
+        schemaId: ARTIFACT_GET_SCHEMA_ID,
+        sha256: ARTIFACT_GET_SCHEMA_SHA256,
+        wireMethod: ARTIFACT_GET_V1_METHOD,
+      },
+      doctor: {
+        schemaId: DOCTOR_SCHEMA_ID,
+        sha256: DOCTOR_SCHEMA_SHA256,
+        wireMethod: DOCTOR_V1_METHOD,
       },
     }[name];
     if (available === undefined || !versions.includes(1)) {

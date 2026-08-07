@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "mode": "deterministic-fake",
+  "redaction": {
+    "authorization": "removed",
+    "credentials": "removed",
+    "providerPayloads": "adapter-local",
+    "transcript": "not-exported"
+  },
+  "events": [
+    {
+      "sequence": 1,
+      "operation": "POST /v2/threads",
+      "idempotencyKey": "sha256:<redacted>",
+      "result": "thread-q012"
+    },
+    {
+      "sequence": 2,
+      "operation": "POST /v2/threads/{threadId}/turns",
+      "idempotencyKey": "sha256:<redacted>",
+      "threadId": "thread-q012"
+    },
+    {
+      "sequence": 3,
+      "operation": "GET /v2/threads/{threadId}",
+      "threadId": "thread-q012",
+      "headRunId": "run-head-q012"
+    },
+    {
+      "sequence": 4,
+      "operation": "GET /v2/runs/{runId}",
+      "state": "waiting_on_user",
+      "interactionCount": 1,
+      "questionCount": 1
+    },
+    {
+      "sequence": 5,
+      "operation": "POST /v2/runs/{runId}/interactions/{interactionId}/answer",
+      "answerCount": 1,
+      "accepted": true
+    },
+    {
+      "sequence": 6,
+      "operation": "GET /v2/runs/{runId}/produced",
+      "artifactPath": "artifacts/report.md",
+      "byteLength": 19,
+      "sha256": "10cefe936267450e95f93147f45bfca5c0ee79883c5b0c68b0e4445abcf69e4a"
+    }
+  ],
+  "restartAssertion": {
+    "heniekDaemonRestarts": 1,
+    "backendStartCalls": 1,
+    "observedBackendHandle": "thread-q012",
+    "heniekRunIdUsedAsBackendHandle": false,
+    "finalizationCount": 1
+  },
+  "realConformance": {
+    "status": "passed",
+    "runtime": "v3.1.2/bb5efee24132aa3d65e417040df201e08da44c8c",
+    "authRoute": "isolated_first_party_oauth_token",
+    "questionAnswer": "passed",
+    "heniekOnlyRestart": "same_thread_reconciled",
+    "artifactImportAndRetrieval": "passed",
+    "cancellation": "passed",
+    "apiKeyFallback": false,
+    "containsSecrets": false
+  }
+}

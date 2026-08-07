@@ -1,4 +1,6 @@
 import { Type } from "@sinclair/typebox";
+import { ArtifactId } from "../artifact/index.js";
+import { PendingInteractionV2, StageId } from "../execution-backend/index.js";
 import { versioned } from "../kernel/index.js";
 import { RunId } from "../run/ids.js";
 import { RunStatus } from "../run/state.js";
@@ -207,4 +209,85 @@ export const RunRecoveryClassificationV1 = versioned("RunRecoveryClassification"
   classification: Type.Union(RunRecoveryClass.map((value) => Type.Literal(value))),
   runStatus: RunStatus.schema,
   probeOutcome: Type.Union([Type.Literal("status"), Type.Literal("error")]),
+});
+
+export const StageStartResultV1 = versioned("StageStartResult", 1, {
+  runId: RunId,
+  stageId: StageId,
+  status: RunStatus.schema,
+});
+
+export const StageRunStatusResultV1 = versioned("StageRunStatusResult", 1, {
+  runId: RunId,
+  stageId: StageId,
+  status: RunStatus.schema,
+  interactions: Type.Array(PendingInteractionV2),
+});
+
+export const StageRunMutationResultV1 = versioned("StageRunMutationResult", 1, {
+  runId: RunId,
+  status: RunStatus.schema,
+  accepted: Type.Boolean(),
+});
+
+export const StageRunResultV1 = versioned("StageRunResult", 1, {
+  runId: RunId,
+  stageId: StageId,
+  status: RunStatus.schema,
+  summary: Type.Optional(Type.String({ minLength: 1 })),
+  sessionId: Type.Optional(Type.String({ minLength: 1 })),
+  artifacts: Type.Array(
+    Type.Object(
+      {
+        name: Type.String({ minLength: 1 }),
+        artifactId: ArtifactId,
+        mediaType: Type.String({ minLength: 1 }),
+        byteLength: Type.Integer({ minimum: 0 }),
+        sha256: Type.String({ pattern: "^[a-f0-9]{64}$" }),
+      },
+      { additionalProperties: false },
+    ),
+  ),
+  error: Type.Optional(Type.String({ minLength: 1 })),
+});
+
+export const ArtifactGetResultV1 = versioned("ArtifactGetResult", 1, {
+  artifactId: ArtifactId,
+  name: Type.String({ minLength: 1 }),
+  mediaType: Type.String({ minLength: 1 }),
+  byteLength: Type.Integer({ minimum: 0 }),
+  sha256: Type.String({ pattern: "^[a-f0-9]{64}$" }),
+  offset: Type.Integer({ minimum: 0 }),
+  eof: Type.Boolean(),
+  contentBase64: Type.String(),
+});
+
+const DoctorCheckCategory = Type.Union([
+  Type.Literal("runtime"),
+  Type.Literal("auth-route"),
+  Type.Literal("compatibility"),
+  Type.Literal("cleanup"),
+]);
+
+const DoctorCheckStatus = Type.Union([
+  Type.Literal("pass"),
+  Type.Literal("warn"),
+  Type.Literal("fail"),
+]);
+
+export const DoctorReportV1 = versioned("DoctorReport", 1, {
+  health: Type.Union([Type.Literal("healthy"), Type.Literal("degraded"), Type.Literal("failed")]),
+  checks: Type.Array(
+    Type.Object(
+      {
+        category: DoctorCheckCategory,
+        status: DoctorCheckStatus,
+        code: Type.String({ minLength: 1 }),
+        message: Type.String({ minLength: 1 }),
+        remediation: Type.Optional(Type.String({ minLength: 1 })),
+      },
+      { additionalProperties: false },
+    ),
+    { minItems: 4 },
+  ),
 });

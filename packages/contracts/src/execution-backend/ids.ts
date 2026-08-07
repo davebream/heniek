@@ -10,6 +10,13 @@ export type StageId = Static<typeof StageId>;
 export const StageAttemptId = defineIdNamespace("StageAttemptId");
 export type StageAttemptId = Static<typeof StageAttemptId>;
 
+/** Provider-neutral opaque identifiers owned by an execution-backend adapter. */
+export const BackendExecutionId = defineIdNamespace("BackendExecutionId");
+export type BackendExecutionId = Static<typeof BackendExecutionId>;
+
+export const BackendArtifactId = defineIdNamespace("BackendArtifactId");
+export type BackendArtifactId = Static<typeof BackendArtifactId>;
+
 /**
  * Opaque forward reference only — §9.4's `Profile` (worker + role
  * composition) has no contract schema yet; that's a later queue issue.

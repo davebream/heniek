@@ -46,6 +46,8 @@
  *    offender outside the allowlist — so nothing is lost.
  *
  * `EXPECTED_EXEMPTIONS` now names Phase 5's eleven `src/runtime/**` adapters
+ * plus Q012's execution supervisor, whose clock, timer and process witness are
+ * deliberately composed at the same runtime boundary.
  * — one line per file, per the plan's allowlist table (plan Task 5, "the
  * gate asserts set equality against this list, so adding, removing, or
  * renaming a runtime file without updating the test is a hard failure").
@@ -81,6 +83,7 @@ const FORBIDDEN_PATTERN =
 const EXPECTED_EXEMPTIONS: readonly string[] = [
   "runtime/clock.ts",
   "runtime/compose.ts",
+  "runtime/execution-service.ts",
   "runtime/host-witness.ts",
   "runtime/lock-filesystem.ts",
   "runtime/mac.ts",

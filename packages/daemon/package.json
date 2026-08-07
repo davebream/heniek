@@ -16,10 +16,11 @@
     "@heniek/protocol": "workspace:*",
     "@heniek/secrets": "workspace:*",
     "@heniek/state": "workspace:*",
-    "@heniek/workspace": "workspace:*"
+    "@heniek/workspace": "workspace:*",
+    "@sinclair/typebox": "catalog:"
   },
   "devDependencies": {
-    "@sinclair/typebox": "catalog:",
+    "@heniek/execution-claudexor": "workspace:*",
     "tsx": "catalog:",
     "vitest": "catalog:"
   }
