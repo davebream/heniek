@@ -13,6 +13,10 @@ import {
 } from "../src/index.js";
 
 const homes: string[] = [];
+const expectedEngine = {
+  version: CLAUDEXOR_ENGINE_VERSION,
+  buildSha: CLAUDEXOR_ENGINE_SHA,
+} as const;
 
 afterEach(async () => {
   for (const home of homes.splice(0)) await rm(home, { recursive: true, force: true });
@@ -25,12 +29,12 @@ function json(value: unknown, status = 200): Response {
   });
 }
 
-function handshake(sha = CLAUDEXOR_ENGINE_SHA): unknown {
+function handshake(sha = CLAUDEXOR_ENGINE_SHA, version = CLAUDEXOR_ENGINE_VERSION): unknown {
   return {
     protocolMajor: 3,
     compatible: true,
     operationsPath: "/v2/operations",
-    engine: { version: CLAUDEXOR_ENGINE_VERSION, sha, entry: "/runtime/claudexord.js" },
+    engine: { version, sha, entry: "/runtime/claudexord.js" },
   };
 }
 
@@ -47,6 +51,30 @@ const input: Static<typeof ExecutionRequestV2> = {
 };
 
 describe("Claudexor ExecutionBackendV2", () => {
+  it("accepts the dynamically selected runtime identity", async () => {
+    const selected = { version: "3.2.0", buildSha: "c".repeat(40) };
+    const backend = createClaudexorExecutionBackend({
+      baseUrl: "http://127.0.0.1:43001",
+      expectedEngine: selected,
+      fetch: async (url) => {
+        const path = new URL(String(url)).pathname;
+        if (path === "/v2/handshake") return json(handshake(selected.buildSha, selected.version));
+        if (path === "/v2/operations") {
+          return json({
+            operations: REQUIRED_OPERATIONS.map((operation) => {
+              const [method, ...pathParts] = operation.split(" ");
+              return { method, path: pathParts.join(" ") };
+            }),
+          });
+        }
+        throw new Error(`unexpected ${path}`);
+      },
+    });
+    await expect(backend.diagnoseCompatibility()).resolves.toMatchObject([
+      { status: "pass", code: "CLAUDEXOR_COMPATIBLE" },
+    ]);
+  });
+
   it("uses exact /v2 routes, stable thread continuation, grouped answers and produced bytes", async () => {
     const calls: { method: string; path: string; body: unknown; idempotencyKey: string | null }[] =
       [];
@@ -126,7 +154,11 @@ describe("Claudexor ExecutionBackendV2", () => {
       }
       throw new Error(`unexpected route: ${method} ${parsed.pathname}`);
     };
-    const backend = createClaudexorExecutionBackend({ baseUrl: "http://127.0.0.1:43001", fetch });
+    const backend = createClaudexorExecutionBackend({
+      baseUrl: "http://127.0.0.1:43001",
+      expectedEngine,
+      fetch,
+    });
 
     const handle = await backend.start(input);
     expect(handle.executionId).toBe("thread-stable-1");
@@ -187,9 +219,10 @@ describe("Claudexor ExecutionBackendV2", () => {
   it("rejects incompatible pins, unsafe paths, malformed sizes and redacts remote payloads", async () => {
     const incompatible = createClaudexorExecutionBackend({
       baseUrl: "http://127.0.0.1:1",
+      expectedEngine,
       fetch: async () => json(handshake("0".repeat(40))),
     });
-    await expect(incompatible.start(input)).rejects.toThrow("required pinned build");
+    await expect(incompatible.start(input)).rejects.toThrow("selected build");
 
     const artifactFetch: typeof globalThis.fetch = async (url) => {
       const path = new URL(String(url)).pathname;
@@ -204,6 +237,7 @@ describe("Claudexor ExecutionBackendV2", () => {
     };
     const artifacts = createClaudexorExecutionBackend({
       baseUrl: "http://127.0.0.1:1",
+      expectedEngine,
       fetch: artifactFetch,
     });
     await expect(artifacts.artifacts("thread-1")).rejects.toMatchObject({
@@ -213,6 +247,7 @@ describe("Claudexor ExecutionBackendV2", () => {
     const secret = "sk-secret-should-not-escape";
     const failing = createClaudexorExecutionBackend({
       baseUrl: "http://127.0.0.1:1",
+      expectedEngine,
       fetch: async () => json({ code: secret, detail: secret }, 500),
     });
     let observed: unknown;
@@ -264,8 +299,9 @@ describe("Claudexor ExecutionBackendV2", () => {
     };
     const backend = createClaudexorExecutionBackend({
       baseUrl: "http://127.0.0.1:43001",
+      expectedEngine,
       fetch,
-      runtimeRoot: root,
+      runtimeEntryPath: join(root, "packages/cli/dist/claudexord.js"),
       environment: {
         CLAUDE_CODE_OAUTH_TOKEN: "oauth-secret",
         ANTHROPIC_API_KEY: "must-not-pass",
@@ -309,6 +345,7 @@ describe("Claudexor ExecutionBackendV2", () => {
     };
     const backend = createClaudexorExecutionBackend({
       baseUrl: "http://127.0.0.1:43001",
+      expectedEngine,
       fetch,
       environment: {},
     });

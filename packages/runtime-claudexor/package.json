@@ -1,23 +1,22 @@
 {
-  "name": "@heniek/cli",
+  "name": "@heniek/runtime-claudexor",
   "version": "0.0.0",
   "private": true,
   "license": "MIT",
   "type": "module",
-  "bin": {
-    "heniek": "./src/bin.ts"
+  "exports": {
+    ".": "./src/index.ts"
   },
   "scripts": {
     "test": "vitest run"
   },
   "dependencies": {
-    "@heniek/client": "workspace:*",
     "@heniek/config": "workspace:*",
-    "@heniek/runtime-claudexor": "workspace:*",
-    "tsx": "catalog:"
+    "@heniek/contracts": "workspace:*",
+    "@sinclair/typebox": "catalog:",
+    "tar": "catalog:"
   },
   "devDependencies": {
-    "@heniek/secrets": "workspace:*",
     "vitest": "catalog:"
   }
 }

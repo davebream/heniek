@@ -330,6 +330,30 @@ const EXPECTED_SCHEMAS: readonly {
     path: "generated/RunRecoveryClassification.v1.schema.json",
   },
   {
+    schemaId: "heniek://contract/RuntimeCompatibilityReport/v1",
+    schemaVersion: 1,
+    sha256: "9cb943be798d7b0ff377da4f2127890cf7730f5f337e37760c3861a5cf788247",
+    path: "generated/RuntimeCompatibilityReport.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/RuntimeIdentity/v1",
+    schemaVersion: 1,
+    sha256: "ce7aec12b69118ab3dcd3010eb9c9b90b8ae7d9d0511264e0af6b8a7df7b30a2",
+    path: "generated/RuntimeIdentity.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/RuntimeInventory/v1",
+    schemaVersion: 1,
+    sha256: "496a2e872289f10186114835ee8b7c2e4bf570ee1d44d728399377577f3037af",
+    path: "generated/RuntimeInventory.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/RuntimeMutationResult/v1",
+    schemaVersion: 1,
+    sha256: "2bdfc6eba6e46da51ad8b1bd88e6aceaad031090e2963a3886123d03914ef840",
+    path: "generated/RuntimeMutationResult.v1.schema.json",
+  },
+  {
     schemaId: "heniek://contract/StageRunMutationResult/v1",
     schemaVersion: 1,
     sha256: "7491e0d1842751707d3658b7c71c058f1d2a6b1194d8c6752511b8293f1c9e3b",
@@ -386,7 +410,7 @@ const EXPECTED_SCHEMAS: readonly {
 ];
 
 describe("packages/contracts generated manifest is unchanged (AC4)", () => {
-  it("manifest.json lists exactly the 50 known schemas with their recorded sha256", async () => {
+  it("manifest.json lists exactly the 54 known schemas with their recorded sha256", async () => {
     const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
     expect(manifest).toEqual({
       schemaVersion: "heniek.contracts-manifest.v1",

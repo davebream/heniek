@@ -11,6 +11,7 @@ catalog:
   ajv: 8.20.0
   ajv-formats: 3.0.1
   tsx: 4.23.1
+  tar: 7.5.22
   typescript: 7.0.2
   vitest: 4.1.10
   yaml: 2.9.0

@@ -21,9 +21,8 @@ import {
   diagnoseSubscriptionRoute,
 } from "./diagnostics.js";
 import {
-  CLAUDEXOR_ENGINE_SHA,
-  CLAUDEXOR_ENGINE_VERSION,
   CLAUDEXOR_PROTOCOL_MAJOR,
+  type ClaudexorEngineIdentity,
   claudexorHeaders,
   parseHandshake,
   REQUIRED_OPERATIONS,
@@ -31,10 +30,11 @@ import {
 
 export interface ClaudexorBackendOptions {
   readonly baseUrl: string;
+  readonly expectedEngine: ClaudexorEngineIdentity;
   readonly token?: string;
   readonly fetch?: typeof globalThis.fetch;
   readonly timeoutMilliseconds?: number;
-  readonly runtimeRoot?: string;
+  readonly runtimeEntryPath?: string;
   readonly environment?: NodeJS.ProcessEnv;
   readonly claudeCommand?: string;
   readonly diagnosticRunner?: DiagnosticRunner;
@@ -160,6 +160,7 @@ export function createClaudexorExecutionBackend(
         protocolMajor: CLAUDEXOR_PROTOCOL_MAJOR,
         client: "heniek-q012",
       }),
+      options.expectedEngine,
     );
     handshakeComplete = true;
   }
@@ -453,7 +454,7 @@ export function createClaudexorExecutionBackend(
               status: "fail" as const,
               code: "CLAUDEXOR_OPERATIONS_MISSING",
               message: `${missing.length} required Claudexor operation(s) are unavailable.`,
-              remediation: `Use pinned Claudexor ${CLAUDEXOR_ENGINE_VERSION}/${CLAUDEXOR_ENGINE_SHA}.`,
+              remediation: `Use selected Claudexor ${options.expectedEngine.version}/${options.expectedEngine.buildSha}.`,
             },
           ];
         }
@@ -462,7 +463,7 @@ export function createClaudexorExecutionBackend(
             category: "compatibility" as const,
             status: "pass" as const,
             code: "CLAUDEXOR_COMPATIBLE",
-            message: `Pinned Claudexor ${CLAUDEXOR_ENGINE_VERSION} exposes the required /v2 operations.`,
+            message: `Selected Claudexor ${options.expectedEngine.version} exposes the required /v2 operations.`,
           },
         ];
       } catch {
@@ -472,14 +473,14 @@ export function createClaudexorExecutionBackend(
             status: "fail" as const,
             code: "CLAUDEXOR_INCOMPATIBLE",
             message: "Claudexor handshake or operation compatibility failed.",
-            remediation: `Start pinned Claudexor ${CLAUDEXOR_ENGINE_VERSION} and verify its local control endpoint.`,
+            remediation: `Start selected Claudexor ${options.expectedEngine.version} and verify its local control endpoint.`,
           },
         ];
       }
     },
 
     diagnoseRuntime() {
-      return diagnoseRuntimeAvailability(options.runtimeRoot);
+      return diagnoseRuntimeAvailability(options.runtimeEntryPath, options.expectedEngine);
     },
 
     diagnoseAuthRoute() {

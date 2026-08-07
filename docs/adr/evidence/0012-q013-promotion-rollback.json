@@ -1,0 +1,46 @@
+{
+  "schemaVersion": "heniek.q013-promotion-rollback-evidence.v1",
+  "capturedAt": "2026-08-07T10:42:00.000Z",
+  "suiteVersion": 1,
+  "requiredChecks": [
+    "identity-protocol-operations",
+    "external-planning-20m",
+    "question-continuation",
+    "cancellation-process-cleanup",
+    "subscription-auth-route",
+    "claude-external-profile",
+    "codex-external-profile",
+    "cursor-external-profile",
+    "session-resume",
+    "event-result-normalization",
+    "isolated-write",
+    "daemon-restart-recovery",
+    "malformed-output-unsupported-model",
+    "artifact-diff-retrieval"
+  ],
+  "deterministicConformance": {
+    "completePassingReportAccepted": true,
+    "missingCheckBlocked": true,
+    "credentialRouteBlockerTyped": true,
+    "failedPromotionPreservedActive": true,
+    "rollbackReusedExactAttestation": true,
+    "rollbackReranLiveProbe": true,
+    "missingAttestationBlocked": true,
+    "mutatedPreviousBinaryBlocked": true,
+    "installFilesystemBoundariesFaultInjected": 11,
+    "activationFilesystemBoundariesFaultInjected": 13,
+    "priorRuntimeRecoverableAfterEveryInjectedFailure": true,
+    "hostileAmbientCredentialsExcludedFromCandidate": true,
+    "hostileAmbientCredentialsExcludedFromPromotionRunner": true,
+    "explicitPromotionRouteCannotOverrideIsolatedHomes": true,
+    "malformedCrashLockRecovered": true,
+    "concurrentStaleLockRecovererBlocked": true,
+    "oversizedStreamCancelledBeforeFullBuffering": true
+  },
+  "realPinnedCandidate": {
+    "identityProtocolOperationProbe": "pass",
+    "fullPromotion": "not-run",
+    "reason": "No complete out-of-repository promotion runner or smoke configuration was available, and the required Codex broker was unavailable; activation failed closed with COMPATIBILITY_BLOCKED."
+  },
+  "containsCredentialsOrTranscripts": false
+}

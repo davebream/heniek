@@ -17,11 +17,15 @@ afterEach(async () => {
   await Promise.all(homes.splice(0).map((home) => rm(home, { recursive: true, force: true })));
 });
 
-function run(argv: readonly string[], configHome?: string) {
+function run(argv: readonly string[], configHome?: string, environment: NodeJS.ProcessEnv = {}) {
   return spawnSync(process.execPath, ["--import", "tsx", entrypoint, ...argv], {
     cwd: new URL("..", import.meta.url).pathname,
     encoding: "utf8",
-    env: configHome === undefined ? process.env : { ...process.env, XDG_CONFIG_HOME: configHome },
+    env: {
+      ...process.env,
+      ...(configHome === undefined ? {} : { XDG_CONFIG_HOME: configHome }),
+      ...environment,
+    },
   });
 }
 
@@ -273,8 +277,38 @@ describe("heniek CLI", () => {
     const result = run(["--help"]);
     expect(result.status).toBe(0);
     expect(result.stdout).toBe(
-      "Usage: heniek status [--json]\n       heniek codebase detect [ROOT...] [--json]\n       heniek codebase register [ROOT...] [--confirm-registration] [--json]\n       heniek stage start --task-file PATH --artifact-path PATH [--json]\n       heniek run status RUN_ID [--json]\n       heniek run answer RUN_ID INTERACTION_ID --answers-json JSON [--json]\n       heniek run resume RUN_ID [--input-artifact ARTIFACT_ID...] [--json]\n       heniek run cancel RUN_ID [--json]\n       heniek run result RUN_ID [--json]\n       heniek artifact get ARTIFACT_ID [--output PATH] [--json]\n       heniek doctor [--json]\n       heniek --help\n       heniek --version\n",
+      "Usage: heniek status [--json]\n       heniek codebase detect [ROOT...] [--json]\n       heniek codebase register [ROOT...] [--confirm-registration] [--json]\n       heniek stage start --task-file PATH --artifact-path PATH [--json]\n       heniek run status RUN_ID [--json]\n       heniek run answer RUN_ID INTERACTION_ID --answers-json JSON [--json]\n       heniek run resume RUN_ID [--input-artifact ARTIFACT_ID...] [--json]\n       heniek run cancel RUN_ID [--json]\n       heniek run result RUN_ID [--json]\n       heniek artifact get ARTIFACT_ID [--output PATH] [--json]\n       heniek runtime list [--json]\n       heniek runtime install claudexor VERSION [--json]\n       heniek runtime activate claudexor VERSION [--json]\n       heniek runtime upgrade claudexor VERSION [--json]\n       heniek runtime rollback claudexor [--json]\n       heniek runtime adopt claudexor --entry ABSOLUTE_PATH [--json]\n       heniek doctor [--json]\n       heniek --help\n       heniek --version\n",
     );
+    expect(result.stderr).toBe("");
+  });
+
+  it("lists an empty local runtime inventory without contacting the daemon", async () => {
+    const home = await mkdtemp(join(tmpdir(), "heniek-cli-runtime-"));
+    homes.push(home);
+    const result = run(["runtime", "list", "--json"], undefined, { HENIEK_HOME: home });
+    expect(result.status).toBe(0);
+    expect(JSON.parse(result.stdout)).toEqual({
+      schemaVersion: 1,
+      ok: true,
+      command: "runtime.list",
+      result: { schemaVersion: 1, active: null, previous: null, installed: [] },
+    });
+    expect(result.stderr).toBe("");
+  });
+
+  it("returns a stable typed error and nonzero exit for an invalid runtime version", async () => {
+    const home = await mkdtemp(join(tmpdir(), "heniek-cli-runtime-"));
+    homes.push(home);
+    const result = run(["runtime", "install", "claudexor", "latest", "--json"], undefined, {
+      HENIEK_HOME: home,
+    });
+    expect(result.status).toBe(8);
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      schemaVersion: 1,
+      ok: false,
+      command: "runtime.install",
+      error: { code: "RELEASE_MANIFEST_INVALID", retryable: false },
+    });
     expect(result.stderr).toBe("");
   });
 

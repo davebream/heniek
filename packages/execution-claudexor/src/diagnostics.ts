@@ -3,7 +3,7 @@ import { access, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { isAbsolute, join } from "node:path";
 import { promisify } from "node:util";
-import { CLAUDEXOR_ENGINE_SHA, CLAUDEXOR_ENGINE_VERSION } from "./protocol.js";
+import type { ClaudexorEngineIdentity } from "./protocol.js";
 
 const execFileAsync = promisify(execFile);
 const ISOLATED_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
@@ -141,33 +141,33 @@ export async function diagnoseSubscriptionRoute(options: {
 }
 
 export async function diagnoseRuntimeAvailability(
-  runtimeRoot: string | undefined,
+  runtimeEntryPath: string | undefined,
+  expectedEngine: ClaudexorEngineIdentity,
 ): Promise<ClaudexorDiagnostic> {
-  if (runtimeRoot === undefined || !isAbsolute(runtimeRoot)) {
+  if (runtimeEntryPath === undefined || !isAbsolute(runtimeEntryPath)) {
     return {
       category: "runtime",
       status: "fail",
       code: "CLAUDEXOR_RUNTIME_UNCONFIGURED",
-      message: "No absolute path to the prebuilt pinned Claudexor runtime is configured.",
-      remediation: `Configure an existing Claudexor ${CLAUDEXOR_ENGINE_VERSION}/${CLAUDEXOR_ENGINE_SHA} runtime; doctor never installs or upgrades it.`,
+      message: "No active Claudexor runtime entry is configured.",
+      remediation: `Activate Claudexor ${expectedEngine.version}/${expectedEngine.buildSha} with heniek runtime activate.`,
     };
   }
   try {
-    await access(join(runtimeRoot, "packages/cli/dist/claudexord.js"));
+    await access(runtimeEntryPath);
     return {
       category: "runtime",
       status: "pass",
       code: "CLAUDEXOR_RUNTIME_AVAILABLE",
-      message: `The configured prebuilt Claudexor ${CLAUDEXOR_ENGINE_VERSION} runtime is available.`,
+      message: `The active Claudexor ${expectedEngine.version} runtime entry is available.`,
     };
   } catch {
     return {
       category: "runtime",
       status: "fail",
       code: "CLAUDEXOR_RUNTIME_UNAVAILABLE",
-      message:
-        "The configured Claudexor runtime does not contain the expected prebuilt daemon entry.",
-      remediation: `Build the pinned runtime outside Heniek, then configure ${CLAUDEXOR_ENGINE_VERSION}/${CLAUDEXOR_ENGINE_SHA}.`,
+      message: "The active Claudexor runtime entry is unavailable.",
+      remediation: `Repair or roll back Claudexor ${expectedEngine.version}/${expectedEngine.buildSha}.`,
     };
   }
 }
