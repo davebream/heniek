@@ -19,6 +19,7 @@ export {
   CODEBASE_DETECT_V1_METHOD,
   CODEBASE_REGISTER_V1_METHOD,
   DOCTOR_V1_METHOD,
+  ENGINE_CATALOGUE_V1_METHOD,
   RUN_ANSWER_V1_METHOD,
   RUN_CANCEL_V1_METHOD,
   RUN_RESULT_V1_METHOD,
@@ -48,6 +49,7 @@ export const AUTHENTICATED_METHODS = [
   "run.result",
   "artifact.get",
   "doctor",
+  "engine.catalogue",
 ] as const;
 
 export interface MethodContext {

@@ -231,6 +231,47 @@ async function startFakeDaemon(homeRoot: string) {
               message: `${category} checked`,
             })),
           };
+        } else if (request.method === "engine.catalogue.v1") {
+          const observedAt = "2026-08-07T10:00:00.000Z";
+          const unknown = { support: "unknown", evidence: [], reasons: ["not-advertised"] };
+          result = {
+            schemaVersion: 1,
+            generatedAt: observedAt,
+            entries: ["claude", "codex", "cursor"].map((engine) => ({
+              engine,
+              accountId: engine === "claude" ? null : `${engine}-work`,
+              engineVersion: "1.0.0",
+              claudexorVersion: "3.1.2",
+              observedAt,
+              expiresAt: "2026-08-07T10:02:00.000Z",
+              freshness: "fresh",
+              discovery: "complete",
+              configured: true,
+              installation: "installed",
+              authentication: "authenticated",
+              compatibility: "compatible",
+              capacity: engine === "cursor" ? "unknown" : "available",
+              ready: true,
+              models: [
+                {
+                  id: `${engine}-model`,
+                  provenance: "api",
+                  efforts: ["high"],
+                  executionModes: engine === "claude" ? ["native", "external"] : ["external"],
+                },
+              ],
+              features: {
+                questions: unknown,
+                resume: unknown,
+                usage: unknown,
+                structuredOutput: unknown,
+                cancellation: unknown,
+                tools: [],
+              },
+              provenance: [{ source: "harness-inventory", observedAt }],
+              reasons: [],
+            })),
+          };
         } else {
           result = {
             schemaVersion: 1,
@@ -277,7 +318,7 @@ describe("heniek CLI", () => {
     const result = run(["--help"]);
     expect(result.status).toBe(0);
     expect(result.stdout).toBe(
-      "Usage: heniek status [--json]\n       heniek codebase detect [ROOT...] [--json]\n       heniek codebase register [ROOT...] [--confirm-registration] [--json]\n       heniek stage start --task-file PATH --artifact-path PATH [--json]\n       heniek run status RUN_ID [--json]\n       heniek run answer RUN_ID INTERACTION_ID --answers-json JSON [--json]\n       heniek run resume RUN_ID [--input-artifact ARTIFACT_ID...] [--json]\n       heniek run cancel RUN_ID [--json]\n       heniek run result RUN_ID [--json]\n       heniek artifact get ARTIFACT_ID [--output PATH] [--json]\n       heniek runtime list [--json]\n       heniek runtime install claudexor VERSION [--json]\n       heniek runtime activate claudexor VERSION [--json]\n       heniek runtime upgrade claudexor VERSION [--json]\n       heniek runtime rollback claudexor [--json]\n       heniek runtime adopt claudexor --entry ABSOLUTE_PATH [--json]\n       heniek doctor [--json]\n       heniek --help\n       heniek --version\n",
+      "Usage: heniek status [--json]\n       heniek codebase detect [ROOT...] [--json]\n       heniek codebase register [ROOT...] [--confirm-registration] [--json]\n       heniek stage start --task-file PATH --artifact-path PATH [--json]\n       heniek run status RUN_ID [--json]\n       heniek run answer RUN_ID INTERACTION_ID --answers-json JSON [--json]\n       heniek run resume RUN_ID [--input-artifact ARTIFACT_ID...] [--json]\n       heniek run cancel RUN_ID [--json]\n       heniek run result RUN_ID [--json]\n       heniek artifact get ARTIFACT_ID [--output PATH] [--json]\n       heniek engine list [--refresh] [--json]\n       heniek runtime list [--json]\n       heniek runtime install claudexor VERSION [--json]\n       heniek runtime activate claudexor VERSION [--json]\n       heniek runtime upgrade claudexor VERSION [--json]\n       heniek runtime rollback claudexor [--json]\n       heniek runtime adopt claudexor --entry ABSOLUTE_PATH [--json]\n       heniek doctor [--json]\n       heniek --help\n       heniek --version\n",
     );
     expect(result.stderr).toBe("");
   });
@@ -468,6 +509,30 @@ describe("heniek CLI", () => {
       expect(daemon.methods).toContain("run.answer.v1");
       expect(daemon.methods.filter((method) => method === "artifact.get.v1")).toHaveLength(3);
       expect(daemon.methods).toContain("doctor.v1");
+    } finally {
+      await daemon.close();
+    }
+  });
+
+  it("renders the engine capability matrix and stable JSON", async () => {
+    const home = await mkdtemp(join(tmpdir(), "heniek-cli-q015-test-"));
+    homes.push(home);
+    const daemon = await startFakeDaemon(home);
+    try {
+      const human = await runAsync(["engine", "list", "--refresh"], home);
+      expect(human.status).toBe(0);
+      expect(human.stdout).toContain("ENGINE  ACCOUNT");
+      expect(human.stdout).toContain("claude  native/-");
+      expect(human.stdout).toContain("cursor  cursor-work");
+      const json = await runAsync(["engine", "list", "--json"], home);
+      expect(json.status).toBe(0);
+      expect(JSON.parse(json.stdout)).toMatchObject({
+        schemaVersion: 1,
+        ok: true,
+        command: "engine.list",
+        result: { entries: [{ engine: "claude" }, { engine: "codex" }, { engine: "cursor" }] },
+      });
+      expect(daemon.methods.filter((method) => method === "engine.catalogue.v1")).toHaveLength(2);
     } finally {
       await daemon.close();
     }

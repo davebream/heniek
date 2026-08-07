@@ -11,6 +11,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@heniek/capability": "workspace:*",
     "@heniek/codebase": "workspace:*",
     "@heniek/config": "workspace:*",
     "@heniek/contracts": "workspace:*",

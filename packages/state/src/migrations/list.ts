@@ -414,6 +414,27 @@ Object.freeze(MIGRATION_0004_ARTIFACT);
 Object.freeze(MIGRATION_0007_STAGE_EXECUTION.statements);
 Object.freeze(MIGRATION_0007_STAGE_EXECUTION);
 
+const MIGRATION_0008_CAPABILITY_CACHE: Migration = {
+  version: 8,
+  name: "capability-cache",
+  statements: [
+    `CREATE TABLE capability_snapshot (
+      engine             TEXT NOT NULL,
+      account_key        TEXT NOT NULL,
+      engine_version_key TEXT NOT NULL,
+      claudexor_version  TEXT NOT NULL,
+      observed_at        TEXT NOT NULL,
+      expires_at         TEXT NOT NULL,
+      payload_json       TEXT NOT NULL CHECK (json_valid(payload_json)),
+      PRIMARY KEY (engine, account_key, engine_version_key, claudexor_version),
+      CHECK (engine IN ('claude','codex','cursor'))
+    ) STRICT`,
+    "CREATE INDEX capability_snapshot_latest ON capability_snapshot(engine, account_key, observed_at DESC)",
+  ],
+};
+Object.freeze(MIGRATION_0008_CAPABILITY_CACHE.statements);
+Object.freeze(MIGRATION_0008_CAPABILITY_CACHE);
+
 export const MIGRATIONS: readonly Migration[] = Object.freeze([
   MIGRATION_0001_JOURNAL,
   MIGRATION_0002_RUN_PROJECTION,
@@ -422,5 +443,6 @@ export const MIGRATIONS: readonly Migration[] = Object.freeze([
   MIGRATION_0005_CODEBASE_REGISTRATION,
   MIGRATION_0006_WORKSPACE_LIFECYCLE,
   MIGRATION_0007_STAGE_EXECUTION,
+  MIGRATION_0008_CAPABILITY_CACHE,
 ]);
 assertAppendOnly(MIGRATIONS);

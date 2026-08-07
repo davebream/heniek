@@ -31,6 +31,12 @@
 import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import {
+  type CapabilityDiscoverySource,
+  type ConfiguredCapabilityAccount,
+  createCapabilityService,
+  createStateCapabilitySnapshotStore,
+} from "@heniek/capability";
+import {
   createNodeFileSystem as createCodebaseFileSystem,
   createNodeGitPort,
   createNodeHashPort,
@@ -42,6 +48,7 @@ import {
 import type { ApplicationHome } from "@heniek/config";
 import {
   type ArtifactId,
+  type DoctorReportV1,
   type ExecutionBackend,
   type ExecutionBackendV2,
   InteractionAnswerSetV1,
@@ -54,6 +61,7 @@ import {
   createWorkspaceStateStore,
   type WorkspaceService,
 } from "@heniek/workspace";
+import type { Static } from "@sinclair/typebox";
 import { Value } from "@sinclair/typebox/value";
 import { mintConnectionAuthState } from "../auth/challenge.js";
 import {
@@ -63,6 +71,7 @@ import {
   removeCredential,
 } from "../auth/credential.js";
 import type { AuthenticatedCredential } from "../auth/verify.js";
+import { appendCapabilityDoctorChecks } from "../capability/doctor.js";
 import type { AcquireDeps, AcquireOptions } from "../lifecycle/acquire.js";
 import { acquireClaim } from "../lifecycle/acquire.js";
 import type { LockHandle } from "../lifecycle/guard.js";
@@ -82,6 +91,7 @@ import {
   DAEMON_STATUS_METHOD,
   DAEMON_STATUS_V1_METHOD,
   DOCTOR_V1_METHOD,
+  ENGINE_CATALOGUE_V1_METHOD,
   type MethodHandler,
   type MethodRegistry,
   RUN_ANSWER_V1_METHOD,
@@ -269,6 +279,11 @@ export interface StartDaemonDeps {
   readonly backend: ExecutionBackend;
   /** Q012 stage backend; omitted for legacy daemon/recovery consumers. */
   readonly backendV2?: ExecutionBackendV2;
+  /** Provider-neutral catalogue source. Raw Claudexor DTOs stay inside its adapter. */
+  readonly capability?: {
+    readonly source: CapabilityDiscoverySource;
+    readonly accounts: readonly ConfiguredCapabilityAccount[];
+  };
   /** Defaults to `1`. */
   readonly protocolVersion?: number;
   /**
@@ -472,6 +487,15 @@ export async function startDaemon(deps: StartDaemonDeps): Promise<StartDaemonOut
           instanceId,
           ids,
         });
+  const capabilityService =
+    deps.capability === undefined
+      ? undefined
+      : createCapabilityService({
+          accounts: deps.capability.accounts,
+          source: deps.capability.source,
+          store: createStateCapabilitySnapshotStore(workspaceDatabase),
+          clock: { now: () => new Date(clock.nowIso()) },
+        });
   await executionService?.observeAll();
   const startedAt = clock.nowIso();
   const reconciliation = reconcileResult?.reconciliation ?? EMPTY_RECONCILIATION;
@@ -633,40 +657,46 @@ export async function startDaemon(deps: StartDaemonDeps): Promise<StartDaemonOut
     if (typeof value !== "string" || value.length === 0) throw new Error(`invalid ${name}`);
     return value;
   };
-  const doctorHandler = async () =>
-    executionService === undefined
-      ? {
-          schemaVersion: 1,
-          health: "failed",
-          checks: [
-            {
-              category: "runtime",
-              status: "fail",
-              code: "CLAUDEXOR_BACKEND_UNCONFIGURED",
-              message: "No Claudexor execution backend is configured.",
-              remediation: "Configure the pinned Claudexor runtime and restart the daemon.",
-            },
-            {
-              category: "auth-route",
-              status: "fail",
-              code: "AUTH_ROUTE_UNAVAILABLE",
-              message: "Subscription-route attestation cannot run without a backend.",
-            },
-            {
-              category: "compatibility",
-              status: "fail",
-              code: "COMPATIBILITY_UNAVAILABLE",
-              message: "Claudexor compatibility cannot be checked without a backend.",
-            },
-            {
-              category: "cleanup",
-              status: "warn",
-              code: "CLEANUP_NOT_CHECKED",
-              message: "Execution cleanup checks were not run.",
-            },
-          ],
-        }
-      : executionService.doctor();
+  const doctorHandler = async () => {
+    const base: Static<typeof DoctorReportV1> =
+      executionService === undefined
+        ? {
+            schemaVersion: 1,
+            health: "failed",
+            checks: [
+              {
+                category: "runtime",
+                status: "fail",
+                code: "CLAUDEXOR_BACKEND_UNCONFIGURED",
+                message: "No Claudexor execution backend is configured.",
+                remediation: "Configure the pinned Claudexor runtime and restart the daemon.",
+              },
+              {
+                category: "auth-route",
+                status: "fail",
+                code: "AUTH_ROUTE_UNAVAILABLE",
+                message: "Subscription-route attestation cannot run without a backend.",
+              },
+              {
+                category: "compatibility",
+                status: "fail",
+                code: "COMPATIBILITY_UNAVAILABLE",
+                message: "Claudexor compatibility cannot be checked without a backend.",
+              },
+              {
+                category: "cleanup",
+                status: "warn",
+                code: "CLEANUP_NOT_CHECKED",
+                message: "Execution cleanup checks were not run.",
+              },
+            ],
+          }
+        : await executionService.doctor();
+    if (capabilityService === undefined) return base;
+    const catalogue = await capabilityService.catalogue().catch(() => undefined);
+    if (catalogue === undefined) return base;
+    return appendCapabilityDoctorChecks(base, catalogue);
+  };
   const entries: Array<readonly [string, MethodHandler]> = [
     [DAEMON_STATUS_METHOD, statusHandler],
     [DAEMON_STATUS_V1_METHOD, statusHandler],
@@ -676,6 +706,18 @@ export async function startDaemon(deps: StartDaemonDeps): Promise<StartDaemonOut
     [CODEBASE_REGISTER_V1_METHOD, registerHandler],
     [DOCTOR_V1_METHOD, doctorHandler],
   ];
+  if (capabilityService !== undefined) {
+    entries.push([
+      ENGINE_CATALOGUE_V1_METHOD,
+      async (params) => {
+        const input = recordParams(params);
+        if (input.schemaVersion !== 1 || typeof input.refresh !== "boolean") {
+          throw new Error("invalid capability catalogue request");
+        }
+        return capabilityService.catalogue({ refresh: input.refresh });
+      },
+    ]);
+  }
   if (executionService !== undefined) {
     entries.push(
       [

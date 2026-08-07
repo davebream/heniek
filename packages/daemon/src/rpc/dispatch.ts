@@ -17,6 +17,8 @@
 import {
   ARTIFACT_GET_SCHEMA_ID,
   ARTIFACT_GET_SCHEMA_SHA256,
+  CAPABILITY_CATALOGUE_SCHEMA_ID,
+  CAPABILITY_CATALOGUE_SCHEMA_SHA256,
   CODEBASE_DETECTION_SCHEMA_ID,
   CODEBASE_DETECTION_SCHEMA_SHA256,
   DOCTOR_SCHEMA_ID,
@@ -54,6 +56,7 @@ import {
   DAEMON_RECOVERY_V1_METHOD,
   DAEMON_STATUS_V1_METHOD,
   DOCTOR_V1_METHOD,
+  ENGINE_CATALOGUE_V1_METHOD,
   type MethodContext,
   type MethodRegistry,
   RPC_CANCEL_METHOD,
@@ -239,6 +242,11 @@ function negotiateResult(params: Record<string, unknown>) {
         schemaId: DOCTOR_SCHEMA_ID,
         sha256: DOCTOR_SCHEMA_SHA256,
         wireMethod: DOCTOR_V1_METHOD,
+      },
+      "engine.catalogue": {
+        schemaId: CAPABILITY_CATALOGUE_SCHEMA_ID,
+        sha256: CAPABILITY_CATALOGUE_SCHEMA_SHA256,
+        wireMethod: ENGINE_CATALOGUE_V1_METHOD,
       },
     }[name];
     if (available === undefined || !versions.includes(1)) {

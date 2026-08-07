@@ -30,5 +30,9 @@
   "7": {
     "structural": "79f1e157fa6c9637ec27f2f45a92384cb382bc214bb04e54098bb6d3ca0753d3",
     "declared": "113d35c7b6bb0cb9f148e457123e9482b26ff3e422da5aa99b5e83e4da819b66"
+  },
+  "8": {
+    "structural": "8add084e1b8a147774f37350a452acd20b6374e50189b3d9fffd157c2cf76775",
+    "declared": "0276fc3789592a9ce7b4da0f77160658863c85762cde0e2be71375f322f9e95b"
   }
 }

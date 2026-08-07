@@ -1,4 +1,5 @@
 export * from "./artifact/index.js";
+export * from "./capability/index.js";
 export * from "./cli/index.js";
 export * from "./codebase/index.js";
 export * from "./configuration/index.js";

@@ -7,6 +7,7 @@ import {
   cancelRunViaDaemon,
   detectCodebaseViaDaemon,
   fetchArtifactViaDaemon,
+  fetchCapabilityCatalogueViaDaemon,
   fetchDaemonStatus,
   fetchDoctorReportViaDaemon,
   fetchRunResultViaDaemon,
@@ -51,7 +52,7 @@ interface CliError {
 }
 
 function usage(): string {
-  return "Usage: heniek status [--json]\n       heniek codebase detect [ROOT...] [--json]\n       heniek codebase register [ROOT...] [--confirm-registration] [--json]\n       heniek stage start --task-file PATH --artifact-path PATH [--json]\n       heniek run status RUN_ID [--json]\n       heniek run answer RUN_ID INTERACTION_ID --answers-json JSON [--json]\n       heniek run resume RUN_ID [--input-artifact ARTIFACT_ID...] [--json]\n       heniek run cancel RUN_ID [--json]\n       heniek run result RUN_ID [--json]\n       heniek artifact get ARTIFACT_ID [--output PATH] [--json]\n       heniek runtime list [--json]\n       heniek runtime install claudexor VERSION [--json]\n       heniek runtime activate claudexor VERSION [--json]\n       heniek runtime upgrade claudexor VERSION [--json]\n       heniek runtime rollback claudexor [--json]\n       heniek runtime adopt claudexor --entry ABSOLUTE_PATH [--json]\n       heniek doctor [--json]\n       heniek --help\n       heniek --version";
+  return "Usage: heniek status [--json]\n       heniek codebase detect [ROOT...] [--json]\n       heniek codebase register [ROOT...] [--confirm-registration] [--json]\n       heniek stage start --task-file PATH --artifact-path PATH [--json]\n       heniek run status RUN_ID [--json]\n       heniek run answer RUN_ID INTERACTION_ID --answers-json JSON [--json]\n       heniek run resume RUN_ID [--input-artifact ARTIFACT_ID...] [--json]\n       heniek run cancel RUN_ID [--json]\n       heniek run result RUN_ID [--json]\n       heniek artifact get ARTIFACT_ID [--output PATH] [--json]\n       heniek engine list [--refresh] [--json]\n       heniek runtime list [--json]\n       heniek runtime install claudexor VERSION [--json]\n       heniek runtime activate claudexor VERSION [--json]\n       heniek runtime upgrade claudexor VERSION [--json]\n       heniek runtime rollback claudexor [--json]\n       heniek runtime adopt claudexor --entry ABSOLUTE_PATH [--json]\n       heniek doctor [--json]\n       heniek --help\n       heniek --version";
 }
 
 function exitCode(code: ErrorCode): number {
@@ -560,6 +561,56 @@ async function runDoctor(json: boolean): Promise<number> {
   }
 }
 
+async function runEngineList(refresh: boolean, json: boolean): Promise<number> {
+  try {
+    const catalogue = await fetchCapabilityCatalogueViaDaemon(applicationHome(), { refresh });
+    if (json) {
+      writeJson({ schemaVersion: 1, ok: true, command: "engine.list", result: catalogue });
+    } else {
+      const header = [
+        "ENGINE",
+        "ACCOUNT",
+        "INSTALL",
+        "AUTH",
+        "COMPAT",
+        "CAPACITY",
+        "READY",
+        "MODELS",
+        "FRESH",
+      ];
+      const rows = catalogue.entries.map((entry) => [
+        entry.engine,
+        entry.accountId ?? "native/-",
+        entry.installation,
+        entry.authentication,
+        entry.compatibility,
+        entry.capacity,
+        entry.ready ? "yes" : "no",
+        entry.models.map((model) => model.id).join(",") || "-",
+        entry.freshness,
+      ]);
+      const widths = header.map((value, index) =>
+        Math.max(value.length, ...rows.map((row) => row[index]?.length ?? 0)),
+      );
+      const render = (row: readonly string[]) =>
+        row
+          .map((value, index) => value.padEnd(widths[index] ?? value.length))
+          .join("  ")
+          .trimEnd();
+      process.stdout.write(`${render(header)}\n${rows.map(render).join("\n")}\n`);
+    }
+    return 0;
+  } catch (error) {
+    const failure = clientFailure(error, "Capability discovery failed.");
+    renderError(
+      { code: failure.code, message: failure.message, retryable: failure.retryable },
+      json,
+      "engine.list",
+    );
+    return exitCode(failure.code);
+  }
+}
+
 async function main(argv: readonly string[]): Promise<number> {
   const json = argv.includes("--json");
   if (argv.length === 1 && argv[0] === "--help") {
@@ -594,6 +645,16 @@ async function main(argv: readonly string[]): Promise<number> {
   if (argv[0] === "runtime") {
     const code = await runRuntime(argv, json);
     if (code !== 2) return code;
+  }
+
+  if (argv[0] === "engine" && argv[1] === "list") {
+    const options = argv.slice(2);
+    if (
+      options.every((option) => option === "--refresh" || option === "--json") &&
+      new Set(options).size === options.length
+    ) {
+      return runEngineList(argv.includes("--refresh"), json);
+    }
   }
 
   if (argv[0] === "doctor" && (argv.length === 1 || (argv.length === 2 && json))) {

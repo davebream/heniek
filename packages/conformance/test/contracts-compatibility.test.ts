@@ -76,6 +76,10 @@ const manifestPath = resolve(packageRoot, "../contracts/generated/manifest.json"
  * Q012 raised the count 37 → 50 by pure addition: the provider-neutral V2
  * execution contracts and the bounded stage/run/artifact/doctor RPC results.
  * Every previously pinned V1 digest below remains byte-identical.
+ *
+ * Q015 raised the count 57 → 60 by pure addition: the capability catalogue,
+ * catalogue request, and typed capability-selection failure. Every previously
+ * pinned digest remains byte-identical.
  */
 const EXPECTED_SCHEMAS: readonly {
   readonly schemaId: string;
@@ -112,6 +116,24 @@ const EXPECTED_SCHEMAS: readonly {
     schemaVersion: 1,
     sha256: "5de53f21b77c359b9b0c32c9ba197aab136b0cd8de3eed174f2a7aea0ab0fb8a",
     path: "generated/BackendExecutionHandle.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/CapabilityCatalogue/v1",
+    schemaVersion: 1,
+    sha256: "5fe61be4e0fb222028c0078740e0b407250dddb911855a5dc14e15ed3a55a54c",
+    path: "generated/CapabilityCatalogue.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/CapabilityCatalogueRequest/v1",
+    schemaVersion: 1,
+    sha256: "73ca0ffa12a40f501d7d20ee11c96a5f6058d560a579c1f0c7c5bfac983de6e9",
+    path: "generated/CapabilityCatalogueRequest.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/CapabilitySelectionError/v1",
+    schemaVersion: 1,
+    sha256: "1138fa35fe1661715fdf3a1359d59b216324d131c0e0ab57ac105575538965d5",
+    path: "generated/CapabilitySelectionError.v1.schema.json",
   },
   {
     schemaId: "heniek://contract/CheckFailure/v1",
@@ -428,7 +450,7 @@ const EXPECTED_SCHEMAS: readonly {
 ];
 
 describe("packages/contracts generated manifest is unchanged (AC4)", () => {
-  it("manifest.json lists exactly the 57 known schemas with their recorded sha256", async () => {
+  it("manifest.json lists exactly the 60 known schemas with their recorded sha256", async () => {
     const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
     expect(manifest).toEqual({
       schemaVersion: "heniek.contracts-manifest.v1",

@@ -109,6 +109,7 @@ describe("AC-1's second leg (Phase 4 fix cycle 1, Q2): the package barrel's exac
         "readEvents",
         "readEventsForRun",
         "readIdentity",
+        "readLatestCapabilitySnapshot",
         "readPendingInteractions",
         "readRunProjection",
         "readStageArtifacts",
@@ -122,6 +123,7 @@ describe("AC-1's second leg (Phase 4 fix cycle 1, Q2): the package barrel's exac
         "schemaFingerprint",
         "stageArtifactAliasKey",
         "updateStageExecutionStatus",
+        "writeCapabilitySnapshot",
       ].sort(),
     );
     expect(runtimeExports).not.toContain("commitStateChangeInternal");

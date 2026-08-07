@@ -333,4 +333,20 @@ CREATE TABLE backend_artifact_import
     CHECK (byte_length IS NULL OR byte_length >= 0)
 ) STRICT;
 
-PRAGMA user_version = 7;
+CREATE TABLE capability_snapshot
+(
+    engine             TEXT NOT NULL,
+    account_key        TEXT NOT NULL,
+    engine_version_key TEXT NOT NULL,
+    claudexor_version  TEXT NOT NULL,
+    observed_at        TEXT NOT NULL,
+    expires_at         TEXT NOT NULL,
+    payload_json       TEXT NOT NULL CHECK (json_valid(payload_json)),
+    PRIMARY KEY (engine, account_key, engine_version_key, claudexor_version),
+    CHECK (engine IN ('claude','codex','cursor'))
+) STRICT;
+
+CREATE INDEX capability_snapshot_latest
+ON capability_snapshot (engine, account_key, observed_at DESC);
+
+PRAGMA user_version = 8;

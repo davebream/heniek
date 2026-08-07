@@ -9,6 +9,8 @@ import {
 } from "@heniek/daemon";
 import {
   buildSignedRequest,
+  CAPABILITY_CATALOGUE_SCHEMA_ID,
+  CAPABILITY_CATALOGUE_SCHEMA_SHA256,
   CODEBASE_DETECTION_SCHEMA_ID,
   CODEBASE_DETECTION_SCHEMA_SHA256,
 } from "@heniek/protocol";
@@ -26,6 +28,50 @@ function connection() {
 }
 
 describe("Q009 negotiation and cancellation", () => {
+  it("negotiates the authenticated engine catalogue method and schema", async () => {
+    const auth = connection();
+    const deps = {
+      registry: createMethodRegistry([
+        [
+          "engine.catalogue.v1",
+          () => ({ schemaVersion: 1, generatedAt: "2026-08-07T10:00:00.000Z", entries: [] }),
+        ],
+      ]),
+      credential,
+      macProvider: createHmacSha256MacProvider(),
+      instanceId: "daemon-1",
+      protocolVersion: 1,
+      isDraining: () => false,
+    };
+    await dispatchFrame(deps, auth, request('{"jsonrpc":"2.0","id":1,"method":"daemon.hello"}'));
+    const negotiation = buildSignedRequest(credential, auth.challenge, 2, "daemon.negotiate", 1, {
+      schemaVersion: 1,
+      transportVersions: [1],
+      requiredMethods: [
+        {
+          name: "engine.catalogue",
+          methodVersions: [1],
+          resultSchemas: [
+            {
+              schemaId: CAPABILITY_CATALOGUE_SCHEMA_ID,
+              sha256: CAPABILITY_CATALOGUE_SCHEMA_SHA256,
+            },
+          ],
+        },
+      ],
+    });
+    expect(JSON.parse(await dispatchFrame(deps, auth, request(negotiation))).result).toMatchObject({
+      compatibility: "compatible",
+      methods: [
+        {
+          name: "engine.catalogue",
+          wireMethod: "engine.catalogue.v1",
+          resultSchemaSha256: CAPABILITY_CATALOGUE_SCHEMA_SHA256,
+        },
+      ],
+    });
+  });
+
   it("negotiates and authenticates the versioned Codebase detection method", async () => {
     const auth = connection();
     const deps = {
