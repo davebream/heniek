@@ -61,8 +61,15 @@ for (const [schemaId, schema] of entries) {
   // reach `generated/` and fail only for the first consumer.
   ajv.compile(schema);
 
-  const record = schema as unknown as { properties: { schemaVersion: { const: number } } };
-  const schemaVersion = record.properties.schemaVersion.const;
+  const record = schema as unknown as {
+    properties?: { schemaVersion?: { const?: number } };
+    anyOf?: readonly { properties?: { schemaVersion?: { const?: number } } }[];
+  };
+  const schemaVersion =
+    record.properties?.schemaVersion?.const ?? record.anyOf?.[0]?.properties?.schemaVersion?.const;
+  if (schemaVersion === undefined) {
+    throw new Error(`Registered contract is missing a schemaVersion discriminator: ${schemaId}`);
+  }
   const fileName = fileNameFor(schemaId, schemaVersion);
   const content = canonicalJson(schema);
   const path = resolve(generatedRoot, fileName);

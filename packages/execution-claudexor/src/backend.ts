@@ -5,7 +5,9 @@ import type {
   BackendArtifactV1,
   BackendExecutionId,
   ExecutionBackendV2,
+  ExecutionEventV1,
   ExecutionRequestV2,
+  ExecutionRequestV3,
   ExecutionResultV2,
   ExecutionStatus,
   InteractionAnswerSetV1,
@@ -41,6 +43,14 @@ export interface ClaudexorBackendOptions {
 }
 
 export interface ClaudexorExecutionBackend extends ExecutionBackendV2 {
+  /** Internal primitive used by the subscription-only profile adapter. */
+  startProfile(
+    request: Static<typeof ExecutionRequestV3>,
+  ): Promise<Static<typeof import("@heniek/contracts").BackendExecutionHandleV1>>;
+  /** Internal primitive used by the subscription-only profile adapter. */
+  resumeProfile(executionId: string, inputArtifactRefs: ArtifactId[]): Promise<void>;
+  /** Normalized, replayable lifecycle facts; raw SSE payloads never escape. */
+  events(executionId: string, after?: string): AsyncIterable<Static<typeof ExecutionEventV1>>;
   diagnoseCompatibility(): Promise<readonly ClaudexorDiagnostic[]>;
   diagnoseRuntime(): Promise<ClaudexorDiagnostic>;
   diagnoseAuthRoute(): Promise<ClaudexorDiagnostic>;
@@ -108,6 +118,81 @@ function encodedArtifactPath(path: string): string {
     .join("/");
 }
 
+type ResolvedProfile = Static<typeof ExecutionRequestV3>["profile"];
+
+function subscriptionClaudeProfile(profile: ResolvedProfile, operation: string): string {
+  if (
+    profile.engine !== "claude" ||
+    profile.executionMode !== "external" ||
+    profile.billing !== "subscription" ||
+    typeof profile.accountId !== "string" ||
+    profile.accountId.length === 0
+  ) {
+    throw new ClaudexorControlError(400, "unsupported_profile", operation);
+  }
+  return profile.accountId;
+}
+
+function statusFromEvent(value: unknown): ExecutionStatus | undefined {
+  const summary = isRecord(field(value, "summary"))
+    ? field(value, "summary")
+    : isRecord(value)
+      ? value
+      : undefined;
+  const state = field(summary, "state");
+  if (typeof state !== "string") return undefined;
+  try {
+    return mapStatus({ summary });
+  } catch {
+    return undefined;
+  }
+}
+
+function retryAfterMs(value: unknown): number | undefined {
+  const rateLimit = field(field(value, "payload"), "rate_limit");
+  if (!isRecord(rateLimit)) return undefined;
+  const candidate = field(rateLimit, "retry_after_ms") ?? field(rateLimit, "retryAfterMs");
+  return typeof candidate === "number" && Number.isSafeInteger(candidate) && candidate >= 0
+    ? candidate
+    : undefined;
+}
+
+function hasRateLimit(value: unknown): boolean {
+  return isRecord(field(field(value, "payload"), "rate_limit"));
+}
+
+function hasContextCapacityExhaustion(value: unknown): boolean {
+  const facts = field(value, "outcomeFacts") ?? field(field(value, "summary"), "outcomeFacts");
+  return field(facts, "reason") === "context_capacity_exhausted";
+}
+
+interface ParsedSseEvent {
+  readonly id: string;
+  readonly event: string;
+  readonly data: unknown;
+}
+
+function parseSse(text: string): readonly ParsedSseEvent[] {
+  const result: ParsedSseEvent[] = [];
+  for (const frame of text.replace(/\r\n/g, "\n").split("\n\n")) {
+    let id: string | undefined;
+    let event: string | undefined;
+    const data: string[] = [];
+    for (const line of frame.split("\n")) {
+      if (line.startsWith("id:")) id = line.slice(3).trim();
+      else if (line.startsWith("event:")) event = line.slice(6).trim();
+      else if (line.startsWith("data:")) data.push(line.slice(5).trimStart());
+    }
+    if (id === undefined || id.length === 0 || event === undefined || data.length === 0) continue;
+    try {
+      result.push({ id, event, data: JSON.parse(data.join("\n")) });
+    } catch {
+      // A malformed or non-JSON provider frame is not a public event.
+    }
+  }
+  return result;
+}
+
 export function createClaudexorExecutionBackend(
   options: ClaudexorBackendOptions,
 ): ClaudexorExecutionBackend {
@@ -115,6 +200,7 @@ export function createClaudexorExecutionBackend(
   const timeoutMilliseconds = options.timeoutMilliseconds ?? 60_000;
   const baseUrl = options.baseUrl.replace(/\/$/, "");
   let handshakeComplete = false;
+  const profiles = new Map<string, ResolvedProfile>();
 
   async function callJson(
     method: string,
@@ -153,6 +239,20 @@ export function createClaudexorExecutionBackend(
     return new Uint8Array(await response.arrayBuffer());
   }
 
+  async function callText(
+    path: string,
+    operation: string,
+    extraHeaders: Record<string, string> = {},
+  ): Promise<string> {
+    const response = await request(`${baseUrl}${path}`, {
+      method: "GET",
+      headers: { ...claudexorHeaders(options.token), ...extraHeaders },
+      signal: AbortSignal.timeout(timeoutMilliseconds),
+    });
+    if (!response.ok) throw new ClaudexorControlError(response.status, "remote_error", operation);
+    return response.text();
+  }
+
   async function handshake(): Promise<void> {
     if (handshakeComplete) return;
     parseHandshake(
@@ -185,6 +285,7 @@ export function createClaudexorExecutionBackend(
     prompt: string,
     keySource: string,
     limits?: { readonly maxDurationMs?: number; readonly maxTurns?: number },
+    profile?: ResolvedProfile,
   ): Promise<void> {
     const body: Record<string, unknown> = {
       prompt,
@@ -197,6 +298,13 @@ export function createClaudexorExecutionBackend(
       authPreference: "auto",
       access: "workspace_write",
     };
+    if (profile !== undefined) {
+      const accountId = subscriptionClaudeProfile(profile, "createTurn");
+      body.authPreference = "subscription";
+      body.credentialProfileId = accountId;
+      body.model = profile.model;
+      body.effort = profile.effort;
+    }
     if (limits?.maxTurns !== undefined) body.maxTurns = limits.maxTurns;
     if (limits?.maxDurationMs !== undefined) {
       body.maxSeconds = Math.max(1, Math.ceil(limits.maxDurationMs / 1_000));
@@ -287,6 +395,43 @@ export function createClaudexorExecutionBackend(
       return { schemaVersion: 1, executionId: executionId as BackendExecutionId };
     },
 
+    async startProfile(input: Static<typeof ExecutionRequestV3>) {
+      const accountId = subscriptionClaudeProfile(input.profile, "startProfile");
+      await handshake();
+      const created = await callJson(
+        "POST",
+        "/v2/threads",
+        "createThread",
+        {
+          title: `Heniek ${input.runId}`,
+          scope: { kind: "project", root: input.workingDirectory, context: "auto" },
+          workspace: "in_place",
+          authPreference: "subscription",
+          credentialProfileId: accountId,
+          primaryHarness: "claude",
+          eligibleHarnesses: ["claude"],
+          access: "workspace_write",
+        },
+        {
+          "Idempotency-Key": idempotencyKey(
+            "thread",
+            `${input.runId}:${input.profile.fingerprint}`,
+          ),
+        },
+      );
+      const executionId = requiredString(created, "id", "createThread");
+      await createTurn(
+        executionId,
+        `${input.prompt}\n\nWrite the requested final artifact to ${input.artifactPath}. ` +
+          "Do not write outside the current workspace. Finish with a concise summary.",
+        `${input.runId}:${input.stageId}:${input.profile.fingerprint}:initial`,
+        input.limits,
+        input.profile,
+      );
+      profiles.set(executionId, input.profile);
+      return { schemaVersion: 1, executionId: executionId as BackendExecutionId };
+    },
+
     async status(executionId: string) {
       const value = await run(executionId);
       return value === null ? "queued" : mapStatus(value);
@@ -363,6 +508,22 @@ export function createClaudexorExecutionBackend(
       );
     },
 
+    async resumeProfile(executionId: string, inputArtifactRefs: ArtifactId[]) {
+      const profile = profiles.get(executionId);
+      if (profile === undefined) {
+        throw new ClaudexorControlError(409, "profile_context_unavailable", "resume");
+      }
+      await createTurn(
+        executionId,
+        inputArtifactRefs.length === 0
+          ? "Continue the stage from the current workspace state."
+          : `Continue the stage using these Heniek input artifact references: ${inputArtifactRefs.join(", ")}.`,
+        `${executionId}:${profile.fingerprint}:resume:${inputArtifactRefs.join(",")}`,
+        undefined,
+        profile,
+      );
+    },
+
     async result(executionId: string): Promise<Static<typeof ExecutionResultV2>> {
       const value = await run(executionId);
       if (value === null) throw new ClaudexorControlError(409, "run_not_started", "result");
@@ -427,6 +588,43 @@ export function createClaudexorExecutionBackend(
         `/v2/runs/${encodeURIComponent(id)}/produced/${encodedArtifactPath(artifact.id)}`,
         "readProduced",
       );
+    },
+
+    async *events(executionId: string, after?: string) {
+      const id = await headRunId(executionId);
+      if (id === null) return;
+      const text = await callText(
+        `/v2/runs/${encodeURIComponent(id)}/events`,
+        "events",
+        after === undefined ? {} : { "Last-Event-ID": after },
+      );
+      for (const event of parseSse(text)) {
+        const status = statusFromEvent(event.data);
+        if (status !== undefined) {
+          yield { schemaVersion: 1, cursor: event.id, kind: "status", status } satisfies Static<
+            typeof ExecutionEventV1
+          >;
+          continue;
+        }
+        if (hasRateLimit(event.data)) {
+          const retry = retryAfterMs(event.data);
+          yield {
+            schemaVersion: 1,
+            cursor: event.id,
+            kind: "rate_limited",
+            ...(retry === undefined ? {} : { retryAfterMs: retry }),
+          } satisfies Static<typeof ExecutionEventV1>;
+          continue;
+        }
+        if (hasContextCapacityExhaustion(event.data)) {
+          yield {
+            schemaVersion: 1,
+            cursor: event.id,
+            kind: "context_pressure",
+            pressure: "capacity_exhausted",
+          } satisfies Static<typeof ExecutionEventV1>;
+        }
+      }
     },
 
     async diagnoseCompatibility() {

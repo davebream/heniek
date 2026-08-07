@@ -80,6 +80,9 @@ const manifestPath = resolve(packageRoot, "../contracts/generated/manifest.json"
  * Q015 raised the count 57 → 60 by pure addition: the capability catalogue,
  * catalogue request, and typed capability-selection failure. Every previously
  * pinned digest remains byte-identical.
+ *
+ * Q016 raises the count 60 → 61 by adding the provider-neutral V3 execution
+ * event contract. Existing V1/V2 contracts remain byte-identical.
  */
 const EXPECTED_SCHEMAS: readonly {
   readonly schemaId: string;
@@ -230,6 +233,12 @@ const EXPECTED_SCHEMAS: readonly {
     schemaVersion: 1,
     sha256: "1645c1a617331955c3a515bd3942e423e71e3fbc460093092fc149b0cee6e56c",
     path: "generated/DoctorReport.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/ExecutionEvent/v1",
+    schemaVersion: 1,
+    sha256: "a6869c7f7081c5a272a36b834463080fe1fe92e6ef6717c705ad870023bc79ca",
+    path: "generated/ExecutionEvent.v1.schema.json",
   },
   {
     schemaId: "heniek://contract/ExecutionRequest/v1",
@@ -450,7 +459,7 @@ const EXPECTED_SCHEMAS: readonly {
 ];
 
 describe("packages/contracts generated manifest is unchanged (AC4)", () => {
-  it("manifest.json lists exactly the 60 known schemas with their recorded sha256", async () => {
+  it("manifest.json lists exactly the 61 known schemas with their recorded sha256", async () => {
     const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
     expect(manifest).toEqual({
       schemaVersion: "heniek.contracts-manifest.v1",

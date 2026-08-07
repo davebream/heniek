@@ -1,6 +1,7 @@
 import { Ajv } from "ajv";
 import { describe, expect, it } from "vitest";
 import {
+  ExecutionEventV1,
   ExecutionRequestV1,
   ExecutionRequestV2,
   ExecutionRequestV3,
@@ -116,5 +117,28 @@ describe("profile contracts", () => {
     expect(ExecutionRequestV1.properties.schemaVersion.const).toBe(1);
     expect(ExecutionRequestV2.properties.schemaVersion.const).toBe(2);
     expect(ExecutionRequestV3.properties.schemaVersion.const).toBe(3);
+  });
+
+  it("keeps profile lifecycle events provider-neutral and cursor-resumable", () => {
+    const validate = ajv.compile(ExecutionEventV1);
+    expect(
+      validate({ schemaVersion: 1, cursor: "41", kind: "rate_limited", retryAfterMs: 1_200 }),
+    ).toBe(true);
+    expect(
+      validate({
+        schemaVersion: 1,
+        cursor: "42",
+        kind: "context_pressure",
+        pressure: "capacity_exhausted",
+      }),
+    ).toBe(true);
+    expect(
+      validate({
+        schemaVersion: 1,
+        cursor: "43",
+        kind: "rate_limited",
+        claudeRateLimit: { raw: "do-not-leak" },
+      }),
+    ).toBe(false);
   });
 });

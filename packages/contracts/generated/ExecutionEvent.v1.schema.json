@@ -1,0 +1,116 @@
+{
+  "$id": "heniek://contract/ExecutionEvent/v1",
+  "anyOf": [
+    {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "cursor",
+        "kind",
+        "status"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1,
+          "type": "number"
+        },
+        "cursor": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "kind": {
+          "const": "status",
+          "type": "string"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "const": "queued",
+              "type": "string"
+            },
+            {
+              "const": "running",
+              "type": "string"
+            },
+            {
+              "const": "waiting_on_user",
+              "type": "string"
+            },
+            {
+              "const": "recovery_required",
+              "type": "string"
+            },
+            {
+              "const": "succeeded",
+              "type": "string"
+            },
+            {
+              "const": "failed",
+              "type": "string"
+            },
+            {
+              "const": "cancelled",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "cursor",
+        "kind"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1,
+          "type": "number"
+        },
+        "cursor": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "kind": {
+          "const": "rate_limited",
+          "type": "string"
+        },
+        "retryAfterMs": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      }
+    },
+    {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "cursor",
+        "kind",
+        "pressure"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1,
+          "type": "number"
+        },
+        "cursor": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "kind": {
+          "const": "context_pressure",
+          "type": "string"
+        },
+        "pressure": {
+          "const": "capacity_exhausted",
+          "type": "string"
+        }
+      }
+    }
+  ]
+}

@@ -146,6 +146,12 @@
       "path": "generated/DoctorReport.v1.schema.json"
     },
     {
+      "schemaId": "heniek://contract/ExecutionEvent/v1",
+      "schemaVersion": 1,
+      "sha256": "a6869c7f7081c5a272a36b834463080fe1fe92e6ef6717c705ad870023bc79ca",
+      "path": "generated/ExecutionEvent.v1.schema.json"
+    },
+    {
       "schemaId": "heniek://contract/ExecutionRequest/v1",
       "schemaVersion": 1,
       "sha256": "0642730af967d4a595cf4855a738e975b8577f6e18c6c1cb4e75a08be0edb02e",
