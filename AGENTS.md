@@ -7,6 +7,7 @@ Heniek is a local-first multi-engine Codebase and epic orchestrator.
 - Preserve every v1 commitment and acceptance criterion in
   `docs/product/product-spec-v0.2.md`.
 - Windmill, predecessor automation tooling, and TAKT are not runtime dependencies.
+  They are defined in `docs/reference/development-references.md`.
 - Claudexor is replaceable and may be called only through its versioned `/v2`
   control API.
 - Provider payloads and DTOs stay inside execution-backend adapters.

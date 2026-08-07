@@ -1,0 +1,36 @@
+version: 2
+
+updates:
+  # Repository-level security updates are already enabled; this adds the
+  # scheduled version updates that would otherwise never be proposed.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # A solo maintainer should review one batched pull request per week, not
+      # one per package. Production and development updates stay separate so a
+      # runtime bump is never buried in tooling churn.
+      production-dependencies:
+        dependency-type: production
+        update-types:
+          - minor
+          - patch
+      development-dependencies:
+        dependency-type: development
+        update-types:
+          - minor
+          - patch
+
+  # Keeps the SHA-pinned workflow steps current once the pins stop being
+  # human-readable tags.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      github-actions:
+        patterns:
+          - "*"

@@ -5,6 +5,15 @@ packages:
 allowBuilds:
   esbuild: true
 
+# ajv pins fast-uri <3.1.5, which is vulnerable to host confusion via a
+# backslash authority introducer (GHSA-7p8r-x3mc-p8w7). ajv's own range cannot
+# reach the patched release, so Dependabot reports security_update_not_possible.
+# Drop this override once ajv ships a version that resolves fast-uri >=3.1.5.
+# Constrained to ^3.1.5 rather than >=3.1.5: ajv declares fast-uri ^3.0.1, so an
+# unbounded range resolves fast-uri 4.x and silently violates that peer range.
+overrides:
+  fast-uri: "^3.1.5"
+
 catalog:
   "@sinclair/typebox": 0.34.52
   "@types/node": 24.10.1
