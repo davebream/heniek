@@ -1,5 +1,7 @@
 import { Type } from "@sinclair/typebox";
+import { ProfileId } from "../execution-backend/ids.js";
 import { versioned } from "../kernel/index.js";
+import { AccountId, RoleId, WorkerId } from "./ids.js";
 
 /**
  * A diagnostic record, as a **plain, unregistered** TypeBox object inlined
@@ -126,3 +128,151 @@ export const ResolvedConfigurationV1 = versioned("ResolvedConfiguration", 1, {
   ),
   diagnostics: Type.Array(Diagnostic),
 });
+
+export const ProfileEngine = Type.Union([
+  Type.Literal("claude"),
+  Type.Literal("codex"),
+  Type.Literal("cursor"),
+]);
+
+export const ProfileExecutionMode = Type.Union([Type.Literal("native"), Type.Literal("external")]);
+
+export const ProfileQuestionMode = Type.Union([
+  Type.Literal("parent-mediated"),
+  Type.Literal("direct"),
+]);
+
+export const ProfileOverridableField = Type.Union([
+  Type.Literal("engine"),
+  Type.Literal("account"),
+  Type.Literal("billing"),
+  Type.Literal("model"),
+  Type.Literal("effort"),
+  Type.Literal("executor"),
+  Type.Literal("focus"),
+  Type.Literal("max_duration"),
+  Type.Literal("workspace_strategy"),
+]);
+
+const ConfigurationName = Type.String({
+  minLength: 1,
+  pattern: "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+});
+
+const Duration = Type.String({ pattern: "^[1-9][0-9]*(?:ms|s|m|h|d)$" });
+
+const SafeRelativePath = Type.String({
+  minLength: 1,
+  pattern: "^(?!/)(?!.*[\\\\])(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\u0000).+$",
+});
+
+const AccountConfiguration = Type.Object(
+  {
+    engine: ProfileEngine,
+    billing: Type.Literal("subscription"),
+  },
+  { additionalProperties: false },
+);
+
+const WorkerConfiguration = Type.Object(
+  {
+    engine: ProfileEngine,
+    executor: ProfileExecutionMode,
+    account: Type.Optional(AccountId),
+    model: Type.String({ minLength: 1 }),
+    effort: Type.String({ minLength: 1 }),
+  },
+  { additionalProperties: false },
+);
+
+const RoleConfiguration = Type.Object(
+  {
+    instructions: SafeRelativePath,
+    artifact_contract: Type.String({ minLength: 1 }),
+  },
+  { additionalProperties: false },
+);
+
+const ProfileConfiguration = Type.Object(
+  {
+    worker: WorkerId,
+    role: RoleId,
+    questions: ProfileQuestionMode,
+    overridable: Type.Optional(Type.Array(ProfileOverridableField, { uniqueItems: true })),
+    focus: Type.Optional(Type.String({ minLength: 1 })),
+    max_duration: Type.Optional(Duration),
+    workspace_strategy: Type.Optional(Type.String({ minLength: 1 })),
+  },
+  { additionalProperties: false },
+);
+
+/**
+ * The post-layer-merge shape for §9's named configuration. Human-authored
+ * YAML does not carry `schemaVersion`; the configuration package adds it only
+ * while validating the merged value against this public compatibility
+ * contract.
+ */
+export const ProfileConfigurationV1 = versioned("ProfileConfiguration", 1, {
+  accounts: Type.Optional(
+    Type.Record(ConfigurationName, AccountConfiguration, { additionalProperties: false }),
+  ),
+  workers: Type.Optional(
+    Type.Record(ConfigurationName, WorkerConfiguration, { additionalProperties: false }),
+  ),
+  roles: Type.Optional(
+    Type.Record(ConfigurationName, RoleConfiguration, { additionalProperties: false }),
+  ),
+  profiles: Type.Optional(
+    Type.Record(ConfigurationName, ProfileConfiguration, { additionalProperties: false }),
+  ),
+});
+
+const ResolvedProfileProvenanceEntry = Type.Object(
+  {
+    layer: ConfigurationLayer,
+    sourcePath: Type.Optional(Type.String()),
+    value: ConfigurationValue,
+  },
+  { additionalProperties: false },
+);
+
+const ResolvedProfileProvenance = Type.Object(
+  {
+    field: Type.String({ minLength: 1 }),
+    pointer: Type.String({ minLength: 1 }),
+    layer: ConfigurationLayer,
+    sourcePath: Type.Optional(Type.String()),
+    value: ConfigurationValue,
+    overridden: Type.Array(ResolvedProfileProvenanceEntry),
+  },
+  { additionalProperties: false },
+);
+
+export const ResolvedProfileFields = {
+  profileId: ProfileId,
+  workerId: WorkerId,
+  roleId: RoleId,
+  engine: ProfileEngine,
+  accountId: Type.Optional(AccountId),
+  billing: Type.Optional(Type.Literal("subscription")),
+  model: Type.String({ minLength: 1 }),
+  effort: Type.String({ minLength: 1 }),
+  executionMode: ProfileExecutionMode,
+  questions: ProfileQuestionMode,
+  instructionsPath: SafeRelativePath,
+  artifactContract: Type.String({ minLength: 1 }),
+  focus: Type.Optional(Type.String({ minLength: 1 })),
+  maxDurationMs: Type.Optional(Type.Integer({ minimum: 1 })),
+  workspaceStrategy: Type.Optional(Type.String({ minLength: 1 })),
+  provenance: Type.Array(ResolvedProfileProvenance),
+  fingerprint: Type.String({ pattern: "^sha256:[a-f0-9]{64}$" }),
+} as const;
+
+/** Registered standalone compatibility contract. */
+export const ResolvedProfileV1 = versioned("ResolvedProfile", 1, ResolvedProfileFields);
+
+/** Unregistered inline shape for embedding without a nested duplicate `$id`. */
+export const ResolvedProfileSchema = Type.Object(
+  { schemaVersion: Type.Literal(1), ...ResolvedProfileFields },
+  { additionalProperties: false },
+);

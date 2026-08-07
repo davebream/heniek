@@ -1,5 +1,6 @@
 import { Type } from "@sinclair/typebox";
 import { ArtifactId } from "../artifact/index.js";
+import { ResolvedProfileSchema } from "../configuration/index.js";
 import { InteractionId, InteractionQuestionId } from "../interaction/index.js";
 import { versioned } from "../kernel/index.js";
 import { RepositoryId, WorkspaceId } from "../run/index.js";
@@ -99,6 +100,19 @@ export const ExecutionRequestV2 = versioned("ExecutionRequest", 2, {
   artifactPath: Type.String({ minLength: 1 }),
   inputArtifactRefs: Type.Array(ArtifactId),
   limits: ExecutionLimits,
+});
+
+/** Q014's additive request contract: V2's provider-neutral inputs plus a fully sourced profile. */
+export const ExecutionRequestV3 = versioned("ExecutionRequest", 3, {
+  runId: Type.String({ minLength: 1 }),
+  stageId: StageId,
+  workspaceId: WorkspaceId,
+  workingDirectory: Type.String({ minLength: 1 }),
+  prompt: Type.String({ minLength: 1 }),
+  artifactPath: Type.String({ minLength: 1 }),
+  inputArtifactRefs: Type.Array(ArtifactId),
+  limits: ExecutionLimits,
+  profile: ResolvedProfileSchema,
 });
 
 export const BackendExecutionHandleV1 = versioned("BackendExecutionHandle", 1, {
