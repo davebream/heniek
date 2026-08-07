@@ -1,0 +1,235 @@
+{
+  "capabilityMatrix": [
+    {
+      "accountId": "claude-main",
+      "effort": "xhigh",
+      "engine": "claude",
+      "executionMode": "external",
+      "fingerprint": "sha256:3c416248414edb9da87e8f2ab3ba2e9e5e0679ee5e9989fa4fabbb658be598ed",
+      "model": "opus",
+      "profileId": "claude-external"
+    },
+    {
+      "effort": "high",
+      "engine": "claude",
+      "executionMode": "native",
+      "fingerprint": "sha256:3a4ad60a46296f0e632f2d94b1f52e6947a83c1f23227ee5efb2dc8cc6626bff",
+      "model": "opus",
+      "profileId": "claude-native"
+    },
+    {
+      "accountId": "codex-main",
+      "effort": "ultra",
+      "engine": "codex",
+      "executionMode": "external",
+      "fingerprint": "sha256:e9c1f86ad47d790c5697121f1536b6a05d43d5503e6f2461390002f67e739114",
+      "model": "gpt-5.6-sol",
+      "profileId": "codex"
+    },
+    {
+      "accountId": "cursor-main",
+      "effort": "high",
+      "engine": "cursor",
+      "executionMode": "external",
+      "fingerprint": "sha256:4905b3ab2235b706e37bffc4f33baafea751ff9d9d5241b75465e0a80e4fa309",
+      "model": "grok-4.5",
+      "profileId": "cursor"
+    }
+  ],
+  "snapshots": {
+    "claudeExternal": {
+      "accountId": "claude-main",
+      "artifactContract": "design.v1",
+      "billing": "subscription",
+      "effort": "xhigh",
+      "engine": "claude",
+      "executionMode": "external",
+      "fingerprint": "sha256:3c416248414edb9da87e8f2ab3ba2e9e5e0679ee5e9989fa4fabbb658be598ed",
+      "instructionsPath": "roles/designer.md",
+      "model": "opus",
+      "profileId": "claude-external",
+      "provenance": [
+        {
+          "field": "accountId",
+          "layer": "global-defaults",
+          "overridden": [],
+          "pointer": "/workers/opus-external/account",
+          "sourcePath": "/config/profiles/defaults.yaml",
+          "value": "claude-main"
+        },
+        {
+          "field": "artifactContract",
+          "layer": "global-defaults",
+          "overridden": [],
+          "pointer": "/roles/designer/artifact_contract",
+          "sourcePath": "/config/profiles/defaults.yaml",
+          "value": "design.v1"
+        },
+        {
+          "field": "billing",
+          "layer": "global-defaults",
+          "overridden": [],
+          "pointer": "/accounts/claude-main/billing",
+          "sourcePath": "/config/profiles/defaults.yaml",
+          "value": "subscription"
+        },
+        {
+          "field": "effort",
+          "layer": "global-defaults",
+          "overridden": [],
+          "pointer": "/workers/opus-external/effort",
+          "sourcePath": "/config/profiles/defaults.yaml",
+          "value": "xhigh"
+        },
+        {
+          "field": "engine",
+          "layer": "global-defaults",
+          "overridden": [],
+          "pointer": "/workers/opus-external/engine",
+          "sourcePath": "/config/profiles/defaults.yaml",
+          "value": "claude"
+        },
+        {
+          "field": "executionMode",
+          "layer": "global-defaults",
+          "overridden": [],
+          "pointer": "/workers/opus-external/executor",
+          "sourcePath": "/config/profiles/defaults.yaml",
+          "value": "external"
+        },
+        {
+          "field": "instructionsPath",
+          "layer": "global-defaults",
+          "overridden": [],
+          "pointer": "/roles/designer/instructions",
+          "sourcePath": "/config/profiles/defaults.yaml",
+          "value": "roles/designer.md"
+        },
+        {
+          "field": "model",
+          "layer": "global-defaults",
+          "overridden": [],
+          "pointer": "/workers/opus-external/model",
+          "sourcePath": "/config/profiles/defaults.yaml",
+          "value": "opus"
+        },
+        {
+          "field": "questions",
+          "layer": "global-defaults",
+          "overridden": [],
+          "pointer": "/profiles/claude-external/questions",
+          "sourcePath": "/config/profiles/defaults.yaml",
+          "value": "parent-mediated"
+        },
+        {
+          "field": "roleId",
+          "layer": "global-defaults",
+          "overridden": [],
+          "pointer": "/profiles/claude-external/role",
+          "sourcePath": "/config/profiles/defaults.yaml",
+          "value": "designer"
+        },
+        {
+          "field": "workerId",
+          "layer": "global-defaults",
+          "overridden": [],
+          "pointer": "/profiles/claude-external/worker",
+          "sourcePath": "/config/profiles/defaults.yaml",
+          "value": "opus-external"
+        }
+      ],
+      "questions": "parent-mediated",
+      "roleId": "designer",
+      "schemaVersion": 1,
+      "workerId": "opus-external"
+    },
+    "claudeNative": {
+      "artifactContract": "design.v1",
+      "effort": "high",
+      "engine": "claude",
+      "executionMode": "native",
+      "fingerprint": "sha256:3a4ad60a46296f0e632f2d94b1f52e6947a83c1f23227ee5efb2dc8cc6626bff",
+      "instructionsPath": "roles/designer.md",
+      "model": "opus",
+      "profileId": "claude-native",
+      "provenance": [
+        {
+          "field": "artifactContract",
+          "layer": "global-defaults",
+          "overridden": [],
+          "pointer": "/roles/designer/artifact_contract",
+          "sourcePath": "/config/profiles/defaults.yaml",
+          "value": "design.v1"
+        },
+        {
+          "field": "effort",
+          "layer": "global-defaults",
+          "overridden": [],
+          "pointer": "/workers/opus-native/effort",
+          "sourcePath": "/config/profiles/defaults.yaml",
+          "value": "high"
+        },
+        {
+          "field": "engine",
+          "layer": "global-defaults",
+          "overridden": [],
+          "pointer": "/workers/opus-native/engine",
+          "sourcePath": "/config/profiles/defaults.yaml",
+          "value": "claude"
+        },
+        {
+          "field": "executionMode",
+          "layer": "global-defaults",
+          "overridden": [],
+          "pointer": "/workers/opus-native/executor",
+          "sourcePath": "/config/profiles/defaults.yaml",
+          "value": "native"
+        },
+        {
+          "field": "instructionsPath",
+          "layer": "global-defaults",
+          "overridden": [],
+          "pointer": "/roles/designer/instructions",
+          "sourcePath": "/config/profiles/defaults.yaml",
+          "value": "roles/designer.md"
+        },
+        {
+          "field": "model",
+          "layer": "global-defaults",
+          "overridden": [],
+          "pointer": "/workers/opus-native/model",
+          "sourcePath": "/config/profiles/defaults.yaml",
+          "value": "opus"
+        },
+        {
+          "field": "questions",
+          "layer": "global-defaults",
+          "overridden": [],
+          "pointer": "/profiles/claude-native/questions",
+          "sourcePath": "/config/profiles/defaults.yaml",
+          "value": "parent-mediated"
+        },
+        {
+          "field": "roleId",
+          "layer": "global-defaults",
+          "overridden": [],
+          "pointer": "/profiles/claude-native/role",
+          "sourcePath": "/config/profiles/defaults.yaml",
+          "value": "designer"
+        },
+        {
+          "field": "workerId",
+          "layer": "global-defaults",
+          "overridden": [],
+          "pointer": "/profiles/claude-native/worker",
+          "sourcePath": "/config/profiles/defaults.yaml",
+          "value": "opus-native"
+        }
+      ],
+      "questions": "parent-mediated",
+      "roleId": "designer",
+      "schemaVersion": 1,
+      "workerId": "opus-native"
+    }
+  }
+}

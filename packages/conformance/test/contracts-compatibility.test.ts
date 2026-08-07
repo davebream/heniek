@@ -222,6 +222,12 @@ const EXPECTED_SCHEMAS: readonly {
     path: "generated/ExecutionRequest.v2.schema.json",
   },
   {
+    schemaId: "heniek://contract/ExecutionRequest/v3",
+    schemaVersion: 3,
+    sha256: "92153ef4e245c38a292945edcd361b21060c595c91a1d783f33c55d3f1507246",
+    path: "generated/ExecutionRequest.v3.schema.json",
+  },
+  {
     schemaId: "heniek://contract/ExecutionResult/v1",
     schemaVersion: 1,
     sha256: "7aabaff4e3b8450036a27c1c25ac299cd5d22a03b5feb7c2ea05657513ac7942",
@@ -282,6 +288,12 @@ const EXPECTED_SCHEMAS: readonly {
     path: "generated/PendingInteraction.v2.schema.json",
   },
   {
+    schemaId: "heniek://contract/ProfileConfiguration/v1",
+    schemaVersion: 1,
+    sha256: "dce7d5cd0d6eba0941613e3727dc086b8c7cdbf0cc7268e609c9ac3ac0ae0ac4",
+    path: "generated/ProfileConfiguration.v1.schema.json",
+  },
+  {
     schemaId: "heniek://contract/PullRequest/v1",
     schemaVersion: 1,
     sha256: "07c6c0fead0ade0271932b7f60262d84644c3097fed4462ca374f9a22496c0ef",
@@ -298,6 +310,12 @@ const EXPECTED_SCHEMAS: readonly {
     schemaVersion: 1,
     sha256: "ab0ae9b99bb0e98c56e93665a92f049d86c3f43949f02764b0501b45e563fbd1",
     path: "generated/ResolvedConfiguration.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/ResolvedProfile/v1",
+    schemaVersion: 1,
+    sha256: "716c3c94cb8b50448e441086633aba0fd117952fb92ab11584ebbcf4bf0d3056",
+    path: "generated/ResolvedProfile.v1.schema.json",
   },
   {
     schemaId: "heniek://contract/RpcCancelRequest/v1",
@@ -410,7 +428,7 @@ const EXPECTED_SCHEMAS: readonly {
 ];
 
 describe("packages/contracts generated manifest is unchanged (AC4)", () => {
-  it("manifest.json lists exactly the 54 known schemas with their recorded sha256", async () => {
+  it("manifest.json lists exactly the 57 known schemas with their recorded sha256", async () => {
     const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
     expect(manifest).toEqual({
       schemaVersion: "heniek.contracts-manifest.v1",

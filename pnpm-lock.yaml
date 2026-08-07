@@ -125,9 +125,15 @@ importers:
 
   packages/config:
     dependencies:
+      '@heniek/contracts':
+        specifier: workspace:*
+        version: link:../contracts
       '@heniek/secrets':
         specifier: workspace:*
         version: link:../secrets
+      '@sinclair/typebox':
+        specifier: 'catalog:'
+        version: 0.34.52
       ajv:
         specifier: 'catalog:'
         version: 8.20.0

@@ -1,0 +1,229 @@
+{
+  "$id": "heniek://contract/ProfileConfiguration/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "accounts": {
+      "additionalProperties": false,
+      "type": "object",
+      "patternProperties": {
+        "^[a-zA-Z0-9][a-zA-Z0-9._-]*$": {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "engine",
+            "billing"
+          ],
+          "properties": {
+            "engine": {
+              "anyOf": [
+                {
+                  "const": "claude",
+                  "type": "string"
+                },
+                {
+                  "const": "codex",
+                  "type": "string"
+                },
+                {
+                  "const": "cursor",
+                  "type": "string"
+                }
+              ]
+            },
+            "billing": {
+              "const": "subscription",
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "workers": {
+      "additionalProperties": false,
+      "type": "object",
+      "patternProperties": {
+        "^[a-zA-Z0-9][a-zA-Z0-9._-]*$": {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "engine",
+            "executor",
+            "model",
+            "effort"
+          ],
+          "properties": {
+            "engine": {
+              "anyOf": [
+                {
+                  "const": "claude",
+                  "type": "string"
+                },
+                {
+                  "const": "codex",
+                  "type": "string"
+                },
+                {
+                  "const": "cursor",
+                  "type": "string"
+                }
+              ]
+            },
+            "executor": {
+              "anyOf": [
+                {
+                  "const": "native",
+                  "type": "string"
+                },
+                {
+                  "const": "external",
+                  "type": "string"
+                }
+              ]
+            },
+            "account": {
+              "minLength": 1,
+              "description": "Opaque AccountId.",
+              "type": "string"
+            },
+            "model": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "effort": {
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "roles": {
+      "additionalProperties": false,
+      "type": "object",
+      "patternProperties": {
+        "^[a-zA-Z0-9][a-zA-Z0-9._-]*$": {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "instructions",
+            "artifact_contract"
+          ],
+          "properties": {
+            "instructions": {
+              "minLength": 1,
+              "pattern": "^(?!/)(?!.*[\\\\])(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\u0000).+$",
+              "type": "string"
+            },
+            "artifact_contract": {
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "profiles": {
+      "additionalProperties": false,
+      "type": "object",
+      "patternProperties": {
+        "^[a-zA-Z0-9][a-zA-Z0-9._-]*$": {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "worker",
+            "role",
+            "questions"
+          ],
+          "properties": {
+            "worker": {
+              "minLength": 1,
+              "description": "Opaque WorkerId.",
+              "type": "string"
+            },
+            "role": {
+              "minLength": 1,
+              "description": "Opaque RoleId.",
+              "type": "string"
+            },
+            "questions": {
+              "anyOf": [
+                {
+                  "const": "parent-mediated",
+                  "type": "string"
+                },
+                {
+                  "const": "direct",
+                  "type": "string"
+                }
+              ]
+            },
+            "overridable": {
+              "uniqueItems": true,
+              "type": "array",
+              "items": {
+                "anyOf": [
+                  {
+                    "const": "engine",
+                    "type": "string"
+                  },
+                  {
+                    "const": "account",
+                    "type": "string"
+                  },
+                  {
+                    "const": "billing",
+                    "type": "string"
+                  },
+                  {
+                    "const": "model",
+                    "type": "string"
+                  },
+                  {
+                    "const": "effort",
+                    "type": "string"
+                  },
+                  {
+                    "const": "executor",
+                    "type": "string"
+                  },
+                  {
+                    "const": "focus",
+                    "type": "string"
+                  },
+                  {
+                    "const": "max_duration",
+                    "type": "string"
+                  },
+                  {
+                    "const": "workspace_strategy",
+                    "type": "string"
+                  }
+                ]
+              }
+            },
+            "focus": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "max_duration": {
+              "pattern": "^[1-9][0-9]*(?:ms|s|m|h|d)$",
+              "type": "string"
+            },
+            "workspace_strategy": {
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  }
+}
