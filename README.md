@@ -1,5 +1,9 @@
 # Heniek
 
+[![quality](https://github.com/davebream/heniek/actions/workflows/quality.yml/badge.svg?branch=main)](https://github.com/davebream/heniek/actions/workflows/quality.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Node.js 24](https://img.shields.io/badge/node-24-brightgreen.svg)](.node-version)
+
 Heniek is a local-first control plane for durable software work performed by
 coding-agent CLIs. It models one or more Git repositories as a Codebase, runs
 task pipelines through replaceable execution backends, and keeps orchestration
