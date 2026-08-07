@@ -86,6 +86,11 @@ const manifestPath = resolve(packageRoot, "../contracts/generated/manifest.json"
  *
  * Q017 raises the count 61 → 63 by adding structured execution events and
  * normalized result usage/diff fields. Existing contracts remain byte-identical.
+ *
+ * Q019 raises the count 63 → 66 by pure addition: `ExecutionTelemetry/v1`,
+ * `ExecutionEvent/v3`, and `ExecutionResult/v4`. All 63 prior hashes remain
+ * byte-identical; the new event and result reference the standalone telemetry
+ * schema instead of duplicating its definition.
  */
 const EXPECTED_SCHEMAS: readonly {
   readonly schemaId: string;
@@ -250,6 +255,12 @@ const EXPECTED_SCHEMAS: readonly {
     path: "generated/ExecutionEvent.v2.schema.json",
   },
   {
+    schemaId: "heniek://contract/ExecutionEvent/v3",
+    schemaVersion: 3,
+    sha256: "b655478dec94642c6746fc061f475c296a03db91a1065bc7d6c6f174a0cf2d08",
+    path: "generated/ExecutionEvent.v3.schema.json",
+  },
+  {
     schemaId: "heniek://contract/ExecutionRequest/v1",
     schemaVersion: 1,
     sha256: "0642730af967d4a595cf4855a738e975b8577f6e18c6c1cb4e75a08be0edb02e",
@@ -284,6 +295,18 @@ const EXPECTED_SCHEMAS: readonly {
     schemaVersion: 3,
     sha256: "7f6227929dc19b70dcdfcc48fa02be162c06c5d2a0960bceb72cb24e761a33b1",
     path: "generated/ExecutionResult.v3.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/ExecutionResult/v4",
+    schemaVersion: 4,
+    sha256: "95fb520c52f22d554a1d05d959297a89555ab08e8abefefe5d600791a587be93",
+    path: "generated/ExecutionResult.v4.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/ExecutionTelemetry/v1",
+    schemaVersion: 1,
+    sha256: "ebf92b2b848a42cedb66191b4fe8b00a9aaea6d32182e1409f5f0b8123f0a306",
+    path: "generated/ExecutionTelemetry.v1.schema.json",
   },
   {
     schemaId: "heniek://contract/ExternalStageResult/v1",
@@ -474,7 +497,7 @@ const EXPECTED_SCHEMAS: readonly {
 ];
 
 describe("packages/contracts generated manifest is unchanged (AC4)", () => {
-  it("manifest.json lists exactly the 61 known schemas with their recorded sha256", async () => {
+  it("manifest.json lists exactly the 66 known schemas with their recorded sha256", async () => {
     const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
     expect(manifest).toEqual({
       schemaVersion: "heniek.contracts-manifest.v1",

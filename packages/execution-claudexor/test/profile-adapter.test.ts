@@ -95,7 +95,7 @@ const cursorInput: Static<typeof ExecutionRequestV3> = {
   },
 };
 
-describe("ExecutionBackendV4 profile conformance", () => {
+describe("ExecutionBackendV5 profile conformance", () => {
   it("uses only the named subscription profile and normalizes replayable lifecycle events", async () => {
     const calls: { method: string; path: string; body: unknown; headers: Headers }[] = [];
     const fetch: typeof globalThis.fetch = async (url, init = {}) => {
@@ -173,23 +173,28 @@ describe("ExecutionBackendV4 profile conformance", () => {
     const events = [];
     for await (const event of adapter.events(handle.executionId, "40")) events.push(event);
 
-    expect(events).toEqual([
-      { schemaVersion: 2, cursor: "41", kind: "status", status: "running" },
-      { schemaVersion: 2, cursor: "42", kind: "rate_limited", retryAfterMs: 1_200 },
+    expect(events).toMatchObject([
+      { schemaVersion: 3, cursor: "41", kind: "status", status: "running" },
+      { schemaVersion: 3, cursor: "42", kind: "rate_limited", retryAfterMs: 1_200 },
       {
-        schemaVersion: 2,
+        schemaVersion: 3,
         cursor: "43",
-        kind: "context_pressure",
-        pressure: "capacity_exhausted",
+        kind: "telemetry",
+        telemetry: {
+          engine: "claude",
+          context: {
+            pressure: { state: "exhausted", confidence: "exact", basis: "capacity_signal" },
+          },
+        },
       },
       {
-        schemaVersion: 2,
+        schemaVersion: 3,
         cursor: "44",
         kind: "tool_call",
         tool: { name: "shell", kind: "command", useId: "tool-1" },
       },
       {
-        schemaVersion: 2,
+        schemaVersion: 3,
         cursor: "45",
         kind: "tool_result",
         tool: {
@@ -200,20 +205,21 @@ describe("ExecutionBackendV4 profile conformance", () => {
           exitCode: 0,
         },
       },
-      { schemaVersion: 2, cursor: "46", kind: "file_change", path: "src/example.ts" },
+      { schemaVersion: 3, cursor: "46", kind: "file_change", path: "src/example.ts" },
       {
-        schemaVersion: 2,
+        schemaVersion: 3,
         cursor: "47",
-        kind: "usage",
-        usage: {
-          inputUnits: 12,
-          outputUnits: 34,
-          cachedInputUnits: 5,
-          costUsd: 0.01,
-          estimated: true,
+        kind: "telemetry",
+        telemetry: {
+          usage: {
+            inputUnits: { availability: "available", value: 12, confidence: "exact" },
+            outputUnits: { availability: "available", value: 34, confidence: "exact" },
+            cachedInputUnits: { availability: "available", value: 5, confidence: "exact" },
+            costUsd: { availability: "available", value: 0.01, confidence: "estimated" },
+          },
         },
       },
-      { schemaVersion: 2, cursor: "48", kind: "error" },
+      { schemaVersion: 3, cursor: "48", kind: "error" },
     ]);
     const creates = calls.filter((call) => call.path === "/v2/threads");
     const turns = calls.filter((call) => call.path.endsWith("/turns"));
@@ -352,12 +358,21 @@ describe("ExecutionBackendV4 profile conformance", () => {
       status: "succeeded",
       summary: "Codex done.",
       sessionId: "codex-session-1",
-      usage: {
-        inputUnits: 12,
-        outputUnits: 34,
-        cachedInputUnits: 5,
-        costUsd: 0.01,
-        estimated: true,
+      telemetry: {
+        engine: "codex",
+        session: {
+          providerSessionId: {
+            availability: "available",
+            value: "codex-session-1",
+            confidence: "exact",
+          },
+        },
+        usage: {
+          inputUnits: { availability: "available", value: 12, confidence: "exact" },
+          outputUnits: { availability: "available", value: 34, confidence: "exact" },
+          cacheReadUnits: { availability: "available", value: 5, confidence: "exact" },
+          costUsd: { availability: "available", value: 0.01, confidence: "estimated" },
+        },
       },
       diff: { files: 1, additions: 2, deletions: 3 },
     });
@@ -366,7 +381,7 @@ describe("ExecutionBackendV4 profile conformance", () => {
       code: "CODEX_NATIVE_SESSION_ATTESTED",
     });
 
-    expect(events).toEqual([{ schemaVersion: 2, cursor: "1", kind: "status", status: "running" }]);
+    expect(events).toEqual([{ schemaVersion: 3, cursor: "1", kind: "status", status: "running" }]);
     const creates = calls.filter((call) => call.path === "/v2/threads");
     const turns = calls.filter((call) => call.path.endsWith("/turns"));
     expect(creates[0]?.body).toMatchObject({
@@ -514,14 +529,21 @@ describe("ExecutionBackendV4 profile conformance", () => {
       status: "succeeded",
       summary: "Cursor done.",
       sessionId: "cursor-session-1",
-      usage: { inputUnits: 29_985, outputUnits: 33, cachedInputUnits: 5_957 },
+      telemetry: {
+        engine: "cursor",
+        usage: {
+          inputUnits: { availability: "available", value: 29_985, confidence: "exact" },
+          outputUnits: { availability: "available", value: 33, confidence: "exact" },
+          cacheReadUnits: { availability: "available", value: 5_957, confidence: "exact" },
+        },
+      },
     });
     await expect(adapter.diagnoseAuthRoute()).resolves.toMatchObject({
       status: "pass",
       code: "CURSOR_NATIVE_SESSION_ATTESTED",
     });
 
-    expect(events).toEqual([{ schemaVersion: 2, cursor: "1", kind: "status", status: "running" }]);
+    expect(events).toEqual([{ schemaVersion: 3, cursor: "1", kind: "status", status: "running" }]);
     const creates = calls.filter((call) => call.path === "/v2/threads");
     const turns = calls.filter((call) => call.path.endsWith("/turns"));
     expect(creates[0]?.body).toMatchObject({

@@ -3,10 +3,13 @@ import { describe, expect, it } from "vitest";
 import {
   ExecutionEventV1,
   ExecutionEventV2,
+  ExecutionEventV3,
   ExecutionRequestV1,
   ExecutionRequestV2,
   ExecutionRequestV3,
   ExecutionResultV3,
+  ExecutionResultV4,
+  ExecutionTelemetryV1,
   ProfileConfigurationV1,
   ResolvedProfileV1,
 } from "../src/index.js";
@@ -38,6 +41,41 @@ const RESOLVED_PROFILE = {
     },
   ],
   fingerprint: `sha256:${"a".repeat(64)}`,
+} as const;
+
+const UNAVAILABLE = { availability: "unavailable", reason: "not_reported" } as const;
+const TELEMETRY = {
+  schemaVersion: 1,
+  engine: "codex",
+  executionMode: "external",
+  evidenceRefs: ["fixture:codex-telemetry"],
+  session: {
+    providerSessionId: {
+      availability: "available",
+      value: "session-fixture",
+      confidence: "exact",
+    },
+  },
+  usage: {
+    inputUnits: { availability: "available", value: 12, confidence: "exact" },
+    outputUnits: { availability: "available", value: 34, confidence: "exact" },
+    cachedInputUnits: UNAVAILABLE,
+    cacheReadUnits: { availability: "available", value: 5, confidence: "exact" },
+    cacheWriteUnits: UNAVAILABLE,
+    totalUnits: UNAVAILABLE,
+    costUsd: { availability: "available", value: 0.01, confidence: "estimated" },
+  },
+  timing: { wallDurationMs: UNAVAILABLE, apiDurationMs: UNAVAILABLE },
+  context: {
+    usedUnits: { availability: "available", value: 80, confidence: "exact" },
+    windowUnits: { availability: "available", value: 100, confidence: "exact" },
+    utilization: { availability: "available", value: 0.8, confidence: "exact" },
+    pressure: {
+      state: "measured",
+      utilization: { availability: "available", value: 0.8, confidence: "exact" },
+      basis: "usage_ratio",
+    },
+  },
 } as const;
 
 describe("profile contracts", () => {
@@ -185,6 +223,81 @@ describe("profile contracts", () => {
         summary: "Finished.",
         artifacts: [],
         usage: { inputUnits: 12, outputUnits: 34 },
+        diff: { files: 1, additions: 2, deletions: 3 },
+      }),
+    ).toBe(true);
+  });
+
+  it("versions truthful telemetry and the additive V5 event/result boundary", () => {
+    const validateTelemetry = ajv.compile(ExecutionTelemetryV1);
+    expect(validateTelemetry(TELEMETRY)).toBe(true);
+    for (const reason of [
+      "not_reported",
+      "unsupported",
+      "invalid",
+      "contradictory",
+      "overflow",
+      "counter_reset",
+    ]) {
+      expect(
+        validateTelemetry({
+          ...TELEMETRY,
+          usage: {
+            ...TELEMETRY.usage,
+            inputUnits: { availability: "unavailable", reason },
+          },
+        }),
+      ).toBe(true);
+    }
+    for (const pressure of [
+      {
+        state: "measured",
+        utilization: { availability: "available", value: 0.8, confidence: "estimated" },
+        basis: "reported_ratio",
+      },
+      { state: "exhausted", confidence: "exact", basis: "capacity_signal" },
+      { state: "unavailable", reason: "not_reported" },
+    ]) {
+      expect(
+        validateTelemetry({
+          ...TELEMETRY,
+          context: { ...TELEMETRY.context, pressure },
+        }),
+      ).toBe(true);
+    }
+    expect(
+      validateTelemetry({
+        ...TELEMETRY,
+        usage: { ...TELEMETRY.usage, codexInputTokens: { value: 12 } },
+      }),
+    ).toBe(false);
+    expect(
+      validateTelemetry({
+        ...TELEMETRY,
+        usage: {
+          ...TELEMETRY.usage,
+          inputUnits: {
+            availability: "available",
+            value: Number.MAX_SAFE_INTEGER + 1,
+            confidence: "exact",
+          },
+        },
+      }),
+    ).toBe(false);
+
+    const validateEvent = ajv.compile(ExecutionEventV3);
+    expect(
+      validateEvent({ schemaVersion: 3, cursor: "47", kind: "telemetry", telemetry: TELEMETRY }),
+    ).toBe(true);
+
+    const validateResult = ajv.compile(ExecutionResultV4);
+    expect(
+      validateResult({
+        schemaVersion: 4,
+        status: "succeeded",
+        summary: "Finished.",
+        artifacts: [],
+        telemetry: TELEMETRY,
         diff: { files: 1, additions: 2, deletions: 3 },
       }),
     ).toBe(true);
