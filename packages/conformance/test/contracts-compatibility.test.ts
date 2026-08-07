@@ -83,6 +83,9 @@ const manifestPath = resolve(packageRoot, "../contracts/generated/manifest.json"
  *
  * Q016 raises the count 60 → 61 by adding the provider-neutral V3 execution
  * event contract. Existing V1/V2 contracts remain byte-identical.
+ *
+ * Q017 raises the count 61 → 63 by adding structured execution events and
+ * normalized result usage/diff fields. Existing contracts remain byte-identical.
  */
 const EXPECTED_SCHEMAS: readonly {
   readonly schemaId: string;
@@ -241,6 +244,12 @@ const EXPECTED_SCHEMAS: readonly {
     path: "generated/ExecutionEvent.v1.schema.json",
   },
   {
+    schemaId: "heniek://contract/ExecutionEvent/v2",
+    schemaVersion: 2,
+    sha256: "88cdadffd6b9c04a32411c66ae376fe8adfe411d88f7c9f749bef69571de8fe7",
+    path: "generated/ExecutionEvent.v2.schema.json",
+  },
+  {
     schemaId: "heniek://contract/ExecutionRequest/v1",
     schemaVersion: 1,
     sha256: "0642730af967d4a595cf4855a738e975b8577f6e18c6c1cb4e75a08be0edb02e",
@@ -269,6 +278,12 @@ const EXPECTED_SCHEMAS: readonly {
     schemaVersion: 2,
     sha256: "1a16ecaf34af5f4f8d3c3c58fa250fdd6a4dd2a26ea0bef5213d160f45174d68",
     path: "generated/ExecutionResult.v2.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/ExecutionResult/v3",
+    schemaVersion: 3,
+    sha256: "7f6227929dc19b70dcdfcc48fa02be162c06c5d2a0960bceb72cb24e761a33b1",
+    path: "generated/ExecutionResult.v3.schema.json",
   },
   {
     schemaId: "heniek://contract/ExternalStageResult/v1",
