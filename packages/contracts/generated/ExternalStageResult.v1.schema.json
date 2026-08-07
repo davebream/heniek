@@ -1,0 +1,25 @@
+{
+  "$id": "heniek://contract/ExternalStageResult/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "summary",
+    "artifactPath"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "summary": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "artifactPath": {
+      "minLength": 1,
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\u0000).+$",
+      "type": "string"
+    }
+  }
+}

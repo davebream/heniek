@@ -1,0 +1,120 @@
+{
+  "$id": "heniek://contract/CliStatusError/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "ok",
+    "command",
+    "error"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "ok": {
+      "const": false,
+      "type": "boolean"
+    },
+    "command": {
+      "const": "status",
+      "type": "string"
+    },
+    "error": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "code",
+        "message",
+        "retryable"
+      ],
+      "properties": {
+        "code": {
+          "anyOf": [
+            {
+              "const": "USAGE_ERROR",
+              "type": "string"
+            },
+            {
+              "const": "DAEMON_UNAVAILABLE",
+              "type": "string"
+            },
+            {
+              "const": "AUTHENTICATION_FAILED",
+              "type": "string"
+            },
+            {
+              "const": "INCOMPATIBLE_PROTOCOL",
+              "type": "string"
+            },
+            {
+              "const": "REQUEST_CANCELLED",
+              "type": "string"
+            },
+            {
+              "const": "RPC_FAILURE",
+              "type": "string"
+            }
+          ]
+        },
+        "message": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "retryable": {
+          "type": "boolean"
+        }
+      }
+    },
+    "observed": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "health"
+      ],
+      "properties": {
+        "health": {
+          "anyOf": [
+            {
+              "const": "unavailable",
+              "type": "string"
+            },
+            {
+              "const": "unauthorized",
+              "type": "string"
+            },
+            {
+              "const": "incompatible",
+              "type": "string"
+            },
+            {
+              "const": "failed",
+              "type": "string"
+            }
+          ]
+        },
+        "daemonVersion": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "schemaCompatibility": {
+          "anyOf": [
+            {
+              "const": "exact",
+              "type": "string"
+            },
+            {
+              "const": "compatible",
+              "type": "string"
+            },
+            {
+              "const": "incompatible",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

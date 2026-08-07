@@ -1,0 +1,34 @@
+{
+  "0": {
+    "structural": "41c3d5746587057736cd8715974ef2bf1f865b2aec1f4c93a5f929825c715a86",
+    "declared": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "1": {
+    "structural": "a4e193ffb726c25ad1f59e617465e41a220814618dc722f175861f2838084e34",
+    "declared": "16aa08086f7c6d5748beb61bbfbf9cae3c3ee424917ca2847f1709ed803f3a65"
+  },
+  "2": {
+    "structural": "e14d2fe279a8a1c80ce548e02aadb2fea5b378645a7cfdbeebc045e40fc079fb",
+    "declared": "86599659b66b2564a36a612e677b15f1a6f7f510ab48ff9a8a74a962a967873c"
+  },
+  "3": {
+    "structural": "1e4e39af945e0eaf7d5ebf07339b7463f0eb570d4e7289baef6bd154dfde0349",
+    "declared": "8be5e2a27ff92c9adca800ec1014d43442fba8995c378989cc5b8a1e3839f062"
+  },
+  "4": {
+    "structural": "53e5f214ab9b4e417a62c50839b2377f067ac9876b0cb243fdfe219edad98800",
+    "declared": "2217ee9dbfda4b68091e323783d26048ef42ef8a4c8bfdbd7a50cb6173f4d2c2"
+  },
+  "5": {
+    "structural": "a7861b84c2635fda22ecb35c8ee758ec6873ce5a77f8857fd8d06f586c2ebc7a",
+    "declared": "a1d55a1615761adc317b5cdb7ab83229ef66ce9e360f6f04984abd943e2d18ca"
+  },
+  "6": {
+    "structural": "af532ca05356fc6ef0ca302ba37fde9452a9a78054c26503345accc6c01a1d60",
+    "declared": "aab1048e97ed655d17551f7abe27b94496eef1806aa316c1de19157a951cefd1"
+  },
+  "7": {
+    "structural": "79f1e157fa6c9637ec27f2f45a92384cb382bc214bb04e54098bb6d3ca0753d3",
+    "declared": "113d35c7b6bb0cb9f148e457123e9482b26ff3e422da5aa99b5e83e4da819b66"
+  }
+}

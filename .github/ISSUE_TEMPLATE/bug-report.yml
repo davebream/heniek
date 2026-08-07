@@ -1,0 +1,90 @@
+name: Bug report
+description: Report reproducible behavior that does not match the current alpha.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Heniek is an unsupported public alpha. Search existing issues first and report one problem per issue.
+
+        **Security:** do not include secrets, private repository contents, or unredacted doctor output. Use [private vulnerability reporting](https://github.com/davebream/heniek/security/advisories/new) for suspected vulnerabilities.
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Preflight
+      options:
+        - label: I searched existing issues and did not find the same bug.
+          required: true
+        - label: This report contains no credentials, secrets, private repository contents, or unredacted diagnostics.
+          required: true
+        - label: I understand that this alpha has no support or response-time commitment.
+          required: true
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What failed, and what were you trying to accomplish?
+      placeholder: A concise description that stands on its own.
+    validations:
+      required: true
+
+  - type: input
+    id: commit
+    attributes:
+      label: Heniek commit
+      description: The full commit SHA from the source checkout you used.
+      placeholder: 40-character commit SHA
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include OS/architecture, Node.js, pnpm, Heniek, Claudexor, and engine versions that are relevant.
+      placeholder: |
+        OS/architecture:
+        Node.js:
+        pnpm:
+        Claudexor:
+        Engine:
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Give ordered steps using synthetic or public data. Redact paths and values that expose private information.
+      placeholder: |
+        1. Configure ...
+        2. Run ...
+        3. Observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What should have happened?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What happened instead? Include only the smallest relevant, redacted excerpt.
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional redacted context
+      description: Optional links, logs, screenshots, or diagnostics. Verify every attachment is safe to publish.

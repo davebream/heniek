@@ -1,0 +1,34 @@
+node_modules/
+.turbo/
+coverage/
+dist/
+*.tsbuildinfo
+.DS_Store
+.env
+.env.*
+!.env.example
+
+# Heniek state belongs in the resolved application home, never this repository.
+.heniek/
+
+# Private predecessor tooling
+.kombajn/
+
+# Agent, factory, and editor overlay files. Automation runs with a home
+# directory overlaid on the checkout root, so an unscoped `git add` would
+# otherwise sweep control artifacts into the repository.
+.factory/
+.serena/
+.claude/*
+!.claude/branch-policy
+.bash_profile
+.bashrc
+.profile
+.zprofile
+.zshrc
+.gitconfig
+.gitmodules
+.ripgreprc
+.mcp.json
+.idea
+.vscode

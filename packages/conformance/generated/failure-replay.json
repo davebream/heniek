@@ -1,0 +1,104 @@
+{
+  "seed": 12648430,
+  "events": [
+    {
+      "step": 0,
+      "atMs": 1767225600000,
+      "actor": "execution-backend",
+      "action": "start",
+      "outcome": "ok",
+      "detail": {
+        "runId": "backend-run-00c0ffee-0004"
+      }
+    },
+    {
+      "step": 1,
+      "atMs": 1767225600000,
+      "actor": "execution-backend",
+      "action": "status",
+      "outcome": "fault",
+      "detail": {
+        "fault": "disconnect",
+        "runId": "backend-run-00c0ffee-0004"
+      }
+    },
+    {
+      "step": 2,
+      "atMs": 1767225600000,
+      "actor": "execution-backend",
+      "action": "status",
+      "outcome": "ok",
+      "detail": {
+        "runId": "backend-run-00c0ffee-0004",
+        "status": "running"
+      }
+    },
+    {
+      "step": 3,
+      "atMs": 1767225600000,
+      "actor": "execution-backend",
+      "action": "status",
+      "outcome": "ok",
+      "detail": {
+        "fault": "crash",
+        "runId": "backend-run-00c0ffee-0004",
+        "status": "recovery_required"
+      }
+    },
+    {
+      "step": 4,
+      "atMs": 1767225600000,
+      "actor": "execution-backend",
+      "action": "result",
+      "outcome": "fault",
+      "detail": {
+        "fault": "conflict",
+        "runId": "backend-run-00c0ffee-0004"
+      }
+    },
+    {
+      "step": 5,
+      "atMs": 1767225600000,
+      "actor": "execution-backend",
+      "action": "resume",
+      "outcome": "ok",
+      "detail": {
+        "inputArtifactRefs": [],
+        "runId": "backend-run-00c0ffee-0004"
+      }
+    },
+    {
+      "step": 6,
+      "atMs": 1767225600000,
+      "actor": "execution-backend",
+      "action": "status",
+      "outcome": "fault",
+      "detail": {
+        "fault": "rate_limit",
+        "runId": "backend-run-00c0ffee-0004"
+      }
+    },
+    {
+      "step": 7,
+      "atMs": 1767225600000,
+      "actor": "execution-backend",
+      "action": "status",
+      "outcome": "ok",
+      "detail": {
+        "runId": "backend-run-00c0ffee-0004",
+        "status": "succeeded"
+      }
+    },
+    {
+      "step": 8,
+      "atMs": 1767225600000,
+      "actor": "execution-backend",
+      "action": "result",
+      "outcome": "fault",
+      "detail": {
+        "fault": "malformed_response",
+        "runId": "backend-run-00c0ffee-0004"
+      }
+    }
+  ]
+}

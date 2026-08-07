@@ -1,0 +1,28 @@
+{
+  "name": "@heniek/daemon",
+  "version": "0.0.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@heniek/codebase": "workspace:*",
+    "@heniek/config": "workspace:*",
+    "@heniek/contracts": "workspace:*",
+    "@heniek/protocol": "workspace:*",
+    "@heniek/secrets": "workspace:*",
+    "@heniek/state": "workspace:*",
+    "@heniek/workspace": "workspace:*",
+    "@sinclair/typebox": "catalog:"
+  },
+  "devDependencies": {
+    "@heniek/execution-claudexor": "workspace:*",
+    "tsx": "catalog:",
+    "vitest": "catalog:"
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "transportVersion": 1,
+  "methods": [
+    {
+      "name": "daemon.status",
+      "methodVersion": 1,
+      "wireMethod": "daemon.status.v1",
+      "resultSchemaId": "heniek://contract/DaemonRecoveryResult/v1",
+      "resultSchemaSha256": "8c4099c58b018a809e8708451e33ccdc4e24fa74fb65865d35953af9f3672e9a"
+    },
+    {
+      "name": "daemon.recovery",
+      "methodVersion": 1,
+      "wireMethod": "daemon.recovery.v1",
+      "resultSchemaId": "heniek://contract/DaemonStatus/v1",
+      "resultSchemaSha256": "a91375e3509ceb2663a96e656d18e32c722085a1cb574328159cee7ff4fef854"
+    }
+  ],
+  "errors": {
+    "draining": -32000,
+    "unauthorized": -32001,
+    "requestCancelled": -32002,
+    "protocolNotNegotiated": -32003
+  }
+}

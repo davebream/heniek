@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a vulnerability privately
+    url: https://github.com/davebream/heniek/security/advisories/new
+    about: Do not disclose suspected vulnerabilities, secrets, or unredacted diagnostics in a public issue.
+  - name: Read the contribution guide
+    url: https://github.com/davebream/heniek/blob/main/CONTRIBUTING.md
+    about: Check the alpha contribution policy before proposing implementation work.

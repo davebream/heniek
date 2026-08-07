@@ -1,0 +1,21 @@
+{
+  "name": "@heniek/workspace",
+  "version": "0.0.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@heniek/contracts": "workspace:*",
+    "@heniek/state": "workspace:*"
+  },
+  "devDependencies": {
+    "tsx": "catalog:",
+    "vitest": "catalog:"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

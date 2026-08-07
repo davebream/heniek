@@ -1,0 +1,31 @@
+{
+  "name": "heniek",
+  "version": "0.0.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "packageManager": "pnpm@11.13.0",
+  "engines": {
+    "node": "24.x",
+    "pnpm": ">=11.13.0"
+  },
+  "scripts": {
+    "backlog:check": "tsx scripts/backlog/generate.ts --check",
+    "backlog:generate": "tsx scripts/backlog/generate.ts",
+    "check": "pnpm format:check && pnpm backlog:check && pnpm generate:check && pnpm conformance:check && pnpm typecheck && pnpm test",
+    "conformance:check": "pnpm --filter @heniek/conformance generate:check",
+    "format": "biome check --write .",
+    "format:check": "biome ci .",
+    "generate:check": "pnpm --filter @heniek/contracts generate:check",
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.6",
+    "@types/node": "catalog:",
+    "tsx": "catalog:",
+    "turbo": "2.10.7",
+    "typescript": "7.0.2",
+    "vitest": "catalog:"
+  }
+}

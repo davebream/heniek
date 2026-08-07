@@ -1,0 +1,77 @@
+{
+  "$id": "heniek://contract/ArtifactRef/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "artifactId",
+    "path",
+    "contentHash",
+    "createdAt",
+    "name",
+    "byteLength",
+    "mediaType",
+    "contentSchemaId",
+    "producer",
+    "sourceLineage"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "artifactId": {
+      "minLength": 1,
+      "description": "Opaque ArtifactId.",
+      "type": "string"
+    },
+    "path": {
+      "minLength": 1,
+      "description": "Output-only, derived from contentHash as `blobs/sha256/<contentHash>`. A caller-supplied value that disagrees with the derived path is refused (design D8).",
+      "type": "string"
+    },
+    "contentHash": {
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "sha256, hex-encoded",
+      "type": "string"
+    },
+    "createdAt": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "name": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "byteLength": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "mediaType": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "contentSchemaId": {
+      "minLength": 1,
+      "pattern": "^heniek://contract/[A-Za-z][A-Za-z0-9]*/v[1-9][0-9]*$",
+      "description": "A schema identifier that embeds a version, e.g. `heniek://contract/<Name>/v<N>` — this is how the ref preserves the content's schema version. Pattern-constrained so a non-version-bearing id is rejected by construction.",
+      "type": "string"
+    },
+    "producer": {
+      "minLength": 1,
+      "description": "Opaque identity of the worker/profile that produced the artifact (an engine, profile or tool identity, e.g. `heniek-cli@0.0.0`) — not a run or stage id.",
+      "type": "string"
+    },
+    "sourceLineage": {
+      "maxItems": 64,
+      "uniqueItems": true,
+      "description": "Bounded so a single ref has a computable maximum size under the event-payload cap.",
+      "type": "array",
+      "items": {
+        "minLength": 1,
+        "description": "Opaque ArtifactId.",
+        "type": "string"
+      }
+    }
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "$id": "heniek://contract/InteractionAnswer/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "interactionId",
+    "answer",
+    "answeredAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "interactionId": {
+      "minLength": 1,
+      "description": "Opaque InteractionId.",
+      "type": "string"
+    },
+    "answer": {},
+    "answeredAt": {
+      "format": "date-time",
+      "type": "string"
+    }
+  }
+}

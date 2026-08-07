@@ -1,0 +1,231 @@
+{
+  "$id": "heniek://contract/InstructionSnapshot/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "snapshotSha256",
+    "capturedAt",
+    "readiness",
+    "sources",
+    "diagnostics"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "snapshotSha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "capturedAt": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "readiness": {
+      "anyOf": [
+        {
+          "const": "ready",
+          "type": "string"
+        },
+        {
+          "const": "blocked",
+          "type": "string"
+        }
+      ]
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "sourceId",
+          "kind",
+          "provider",
+          "location",
+          "scope",
+          "precedence",
+          "contentSha256"
+        ],
+        "properties": {
+          "sourceId": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "const": "shared",
+                "type": "string"
+              },
+              {
+                "const": "provider-native",
+                "type": "string"
+              },
+              {
+                "const": "orchestrator",
+                "type": "string"
+              },
+              {
+                "const": "profile-role",
+                "type": "string"
+              },
+              {
+                "const": "stage",
+                "type": "string"
+              }
+            ]
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "const": "claude",
+                "type": "string"
+              },
+              {
+                "const": "codex",
+                "type": "string"
+              },
+              {
+                "const": "cursor",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "location": {
+            "additionalProperties": false,
+            "type": "object",
+            "required": [
+              "kind",
+              "repositoryId",
+              "path"
+            ],
+            "properties": {
+              "kind": {
+                "anyOf": [
+                  {
+                    "const": "repository",
+                    "type": "string"
+                  },
+                  {
+                    "const": "application-home",
+                    "type": "string"
+                  }
+                ]
+              },
+              "repositoryId": {
+                "anyOf": [
+                  {
+                    "minLength": 1,
+                    "description": "Opaque RepositoryId.",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "path": {
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          },
+          "scope": {
+            "type": "string"
+          },
+          "precedence": {
+            "minimum": 1,
+            "maximum": 5,
+            "type": "integer"
+          },
+          "contentSha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          }
+        }
+      }
+    },
+    "diagnostics": {
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "code",
+          "classification",
+          "message",
+          "topic",
+          "anchors"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "const": 1,
+            "type": "number"
+          },
+          "code": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "classification": {
+            "anyOf": [
+              {
+                "const": "additive",
+                "type": "string"
+              },
+              {
+                "const": "incompatible",
+                "type": "string"
+              },
+              {
+                "const": "indeterminate",
+                "type": "string"
+              }
+            ]
+          },
+          "message": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "topic": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "anchors": {
+            "minItems": 2,
+            "type": "array",
+            "items": {
+              "additionalProperties": false,
+              "type": "object",
+              "required": [
+                "sourceId",
+                "startLine",
+                "endLine"
+              ],
+              "properties": {
+                "sourceId": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "startLine": {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "endLine": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

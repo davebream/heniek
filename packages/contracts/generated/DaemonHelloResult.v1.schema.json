@@ -1,0 +1,40 @@
+{
+  "$id": "heniek://contract/DaemonHelloResult/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "protocolVersion",
+    "instanceId",
+    "challenge",
+    "macAlgorithm",
+    "keyId"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "protocolVersion": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "instanceId": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "challenge": {
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "32 bytes, hex-encoded",
+      "type": "string"
+    },
+    "macAlgorithm": {
+      "const": "hmac-sha256",
+      "type": "string"
+    },
+    "keyId": {
+      "minLength": 1,
+      "type": "string"
+    }
+  }
+}

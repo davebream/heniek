@@ -1,0 +1,148 @@
+{
+  "$id": "heniek://contract/StageRunStatusResult/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "runId",
+    "stageId",
+    "status",
+    "interactions"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "runId": {
+      "minLength": 1,
+      "description": "Opaque RunId.",
+      "type": "string"
+    },
+    "stageId": {
+      "minLength": 1,
+      "description": "Opaque StageId.",
+      "type": "string"
+    },
+    "status": {
+      "anyOf": [
+        {
+          "const": "queued",
+          "type": "string"
+        },
+        {
+          "const": "running",
+          "type": "string"
+        },
+        {
+          "const": "waiting_on_user",
+          "type": "string"
+        },
+        {
+          "const": "waiting_for_parent_session",
+          "type": "string"
+        },
+        {
+          "const": "recovery_required",
+          "type": "string"
+        },
+        {
+          "const": "succeeded",
+          "type": "string"
+        },
+        {
+          "const": "failed",
+          "type": "string"
+        },
+        {
+          "const": "cancelled",
+          "type": "string"
+        }
+      ]
+    },
+    "interactions": {
+      "type": "array",
+      "items": {
+        "$id": "heniek://contract/PendingInteraction/v2",
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "id",
+          "questions",
+          "requestedAt"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "const": 2,
+            "type": "number"
+          },
+          "id": {
+            "minLength": 1,
+            "description": "Opaque InteractionId.",
+            "type": "string"
+          },
+          "questions": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "additionalProperties": false,
+              "type": "object",
+              "required": [
+                "id",
+                "prompt",
+                "options",
+                "multiSelect"
+              ],
+              "properties": {
+                "id": {
+                  "minLength": 1,
+                  "description": "Opaque InteractionQuestionId.",
+                  "type": "string"
+                },
+                "prompt": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "header": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "options": {
+                  "type": "array",
+                  "items": {
+                    "additionalProperties": false,
+                    "type": "object",
+                    "required": [
+                      "label"
+                    ],
+                    "properties": {
+                      "label": {
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "description": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "multiSelect": {
+                  "type": "boolean"
+                }
+              }
+            }
+          },
+          "requestedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "timeoutAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

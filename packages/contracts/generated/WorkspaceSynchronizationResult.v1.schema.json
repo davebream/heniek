@@ -1,0 +1,153 @@
+{
+  "$id": "heniek://contract/WorkspaceSynchronizationResult/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "workspaceId",
+    "strategy",
+    "outcome",
+    "previousBaseSha",
+    "observedBaseSha",
+    "previousHeadSha",
+    "checkoutHeadSha",
+    "cleanliness",
+    "reason",
+    "recordedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "workspaceId": {
+      "minLength": 1,
+      "description": "Opaque WorkspaceId.",
+      "type": "string"
+    },
+    "strategy": {
+      "anyOf": [
+        {
+          "const": "notify",
+          "type": "string"
+        },
+        {
+          "const": "rebase-before-build",
+          "type": "string"
+        },
+        {
+          "const": "recreate-before-build",
+          "type": "string"
+        }
+      ]
+    },
+    "outcome": {
+      "anyOf": [
+        {
+          "const": "up-to-date",
+          "type": "string"
+        },
+        {
+          "const": "notified",
+          "type": "string"
+        },
+        {
+          "const": "rebased",
+          "type": "string"
+        },
+        {
+          "const": "recreated",
+          "type": "string"
+        },
+        {
+          "const": "blocked",
+          "type": "string"
+        },
+        {
+          "const": "recovery-required",
+          "type": "string"
+        }
+      ]
+    },
+    "previousBaseSha": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "observedBaseSha": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "previousHeadSha": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "checkoutHeadSha": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "cleanliness": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "state",
+        "entries",
+        "sha256"
+      ],
+      "properties": {
+        "state": {
+          "anyOf": [
+            {
+              "const": "clean",
+              "type": "string"
+            },
+            {
+              "const": "dirty",
+              "type": "string"
+            }
+          ]
+        },
+        "entries": {
+          "type": "array",
+          "items": {
+            "additionalProperties": false,
+            "type": "object",
+            "required": [
+              "status",
+              "path"
+            ],
+            "properties": {
+              "status": {
+                "minLength": 2,
+                "maxLength": 2,
+                "type": "string"
+              },
+              "path": {
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          }
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        }
+      }
+    },
+    "reason": {
+      "anyOf": [
+        {
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "recordedAt": {
+      "format": "date-time",
+      "type": "string"
+    }
+  }
+}

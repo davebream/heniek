@@ -1,0 +1,102 @@
+{
+  "$id": "heniek://contract/DaemonNegotiationResult/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "compatibility",
+    "selectedTransportVersion",
+    "contractManifestVersion",
+    "methods",
+    "reasons"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "compatibility": {
+      "anyOf": [
+        {
+          "const": "compatible",
+          "type": "string"
+        },
+        {
+          "const": "incompatible",
+          "type": "string"
+        }
+      ]
+    },
+    "selectedTransportVersion": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "contractManifestVersion": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "methods": {
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "methodVersion",
+          "wireMethod",
+          "resultSchemaId",
+          "resultSchemaSha256"
+        ],
+        "properties": {
+          "name": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "methodVersion": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "wireMethod": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "resultSchemaId": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "resultSchemaSha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "type": "string"
+          }
+        }
+      }
+    },
+    "reasons": {
+      "uniqueItems": true,
+      "type": "array",
+      "items": {
+        "anyOf": [
+          {
+            "const": "NO_COMMON_TRANSPORT",
+            "type": "string"
+          },
+          {
+            "const": "METHOD_UNAVAILABLE",
+            "type": "string"
+          },
+          {
+            "const": "RESULT_SCHEMA_UNAVAILABLE",
+            "type": "string"
+          }
+        ]
+      }
+    }
+  }
+}

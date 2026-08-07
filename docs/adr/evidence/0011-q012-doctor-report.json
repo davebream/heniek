@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "health": "failed",
+  "checks": [
+    {
+      "category": "runtime",
+      "status": "fail",
+      "code": "CLAUDEXOR_RUNTIME_UNCONFIGURED",
+      "message": "No absolute path to the prebuilt pinned Claudexor runtime is configured.",
+      "remediation": "Configure an existing Claudexor 3.1.2/bb5efee24132aa3d65e417040df201e08da44c8c runtime; doctor never installs or upgrades it."
+    },
+    {
+      "category": "auth-route",
+      "status": "fail",
+      "code": "SUBSCRIPTION_CARRIER_MISSING",
+      "message": "The approved Claude subscription carrier is unavailable.",
+      "remediation": "Provide CLAUDE_CODE_OAUTH_TOKEN; API-key fallback is not supported."
+    },
+    {
+      "category": "compatibility",
+      "status": "fail",
+      "code": "CLAUDEXOR_INCOMPATIBLE",
+      "message": "Claudexor handshake or operation compatibility failed.",
+      "remediation": "Start pinned Claudexor 3.1.2 and verify its local control endpoint."
+    },
+    {
+      "category": "cleanup",
+      "status": "pass",
+      "code": "EXECUTION_STATE_CLEAN",
+      "message": "No stale process/lease witnesses, missing handles, partial imports, or unfinalized terminal executions were found."
+    }
+  ],
+  "capturedAt": "2026-08-06",
+  "captureContext": "Q012 implementation workspace with no configured real Claudexor runtime or subscription carrier",
+  "containsSecrets": false
+}

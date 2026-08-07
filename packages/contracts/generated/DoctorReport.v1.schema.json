@@ -1,0 +1,96 @@
+{
+  "$id": "heniek://contract/DoctorReport/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "health",
+    "checks"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "health": {
+      "anyOf": [
+        {
+          "const": "healthy",
+          "type": "string"
+        },
+        {
+          "const": "degraded",
+          "type": "string"
+        },
+        {
+          "const": "failed",
+          "type": "string"
+        }
+      ]
+    },
+    "checks": {
+      "minItems": 4,
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "category",
+          "status",
+          "code",
+          "message"
+        ],
+        "properties": {
+          "category": {
+            "anyOf": [
+              {
+                "const": "runtime",
+                "type": "string"
+              },
+              {
+                "const": "auth-route",
+                "type": "string"
+              },
+              {
+                "const": "compatibility",
+                "type": "string"
+              },
+              {
+                "const": "cleanup",
+                "type": "string"
+              }
+            ]
+          },
+          "status": {
+            "anyOf": [
+              {
+                "const": "pass",
+                "type": "string"
+              },
+              {
+                "const": "warn",
+                "type": "string"
+              },
+              {
+                "const": "fail",
+                "type": "string"
+              }
+            ]
+          },
+          "code": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "message": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "remediation": {
+            "minLength": 1,
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

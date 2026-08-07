@@ -1,0 +1,27 @@
+{
+  "$id": "heniek://contract/CheckFailure/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "name",
+    "summary"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "name": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "summary": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "logExcerpt": {
+      "type": "string"
+    }
+  }
+}
