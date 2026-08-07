@@ -26,5 +26,9 @@
   "7": {
     "name": "stage-execution",
     "statementHash": "a8516aafa28aac56a9af9ed049d3d9982555509fde782d178eccd93eef350357"
+  },
+  "8": {
+    "name": "capability-cache",
+    "statementHash": "ac47d1b1d9ea4a40ab03ba7b9380554659fe52baa019a7bff8f19db857bd81bb"
   }
 }
