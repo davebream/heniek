@@ -19,7 +19,8 @@ Heniek is a local-first multi-engine Codebase and epic orchestrator.
 - Use `workspace:*` for internal dependencies and `catalog:` for shared
   third-party dependencies.
 - Treat checked-in generated schemas as public compatibility artifacts.
-- Never add a license or publish a package without an explicit product decision.
+- MIT is the selected license for the local Heniek product. Relicensing or
+  publishing any package still requires an explicit product decision.
 
 ## Validation
 
