@@ -58,6 +58,7 @@ export interface ClaudexorExecutionBackend extends ExecutionBackendV2 {
   diagnoseRuntime(): Promise<ClaudexorDiagnostic>;
   diagnoseAuthRoute(): Promise<ClaudexorDiagnostic>;
   diagnoseCodexAuthRoute(): Promise<ClaudexorDiagnostic>;
+  diagnoseCursorAuthRoute(): Promise<ClaudexorDiagnostic>;
 }
 
 export class ClaudexorControlError extends Error {
@@ -123,7 +124,15 @@ function encodedArtifactPath(path: string): string {
 }
 
 type ResolvedProfile = Static<typeof ExecutionRequestV3>["profile"];
-type ProfileHarness = "claude" | "codex";
+type ProfileHarness = "claude" | "codex" | "cursor";
+
+/** Harnesses whose subscription route is a Claudexor-owned native session. */
+const NATIVE_SESSION_HARNESSES = ["codex", "cursor"] as const;
+type NativeSessionHarness = (typeof NATIVE_SESSION_HARNESSES)[number];
+
+function isNativeSessionHarness(harness: ProfileHarness): harness is NativeSessionHarness {
+  return (NATIVE_SESSION_HARNESSES as readonly ProfileHarness[]).includes(harness);
+}
 
 interface SubscriptionProfileRoute {
   readonly harness: ProfileHarness;
@@ -134,7 +143,7 @@ function subscriptionProfileRoute(
   profile: ResolvedProfile,
   operation: string,
 ): SubscriptionProfileRoute {
-  if (profile.engine !== "claude" && profile.engine !== "codex") {
+  if (profile.engine !== "claude" && profile.engine !== "codex" && profile.engine !== "cursor") {
     throw new ClaudexorControlError(400, "unsupported_profile", operation);
   }
   if (
@@ -145,11 +154,17 @@ function subscriptionProfileRoute(
   ) {
     throw new ClaudexorControlError(400, "unsupported_profile", operation);
   }
-  // Codex's selected ChatGPT session belongs to Claudexor, not to a Heniek
-  // account label. A resolved Heniek account may still identify the user's
-  // profile, but must never be forwarded as a Claudexor credential-profile
-  // id when the route is `native_session`.
+  // Codex's selected ChatGPT session and Cursor's keychain-backed login both
+  // belong to Claudexor, not to a Heniek account label. A resolved Heniek
+  // account may still identify the user's profile, but must never be forwarded
+  // as a Claudexor credential-profile id when the route is `native_session`.
+  //
+  // For Cursor this is not merely a naming preference: Claudexor's INV-135
+  // treats a cursor credential profile as *exactly* an API key and refuses any
+  // other transport, so forwarding an account id here would silently move the
+  // run onto the metered API-key route that §10.4's billing guard forbids.
   if (profile.engine === "codex") return { harness: "codex" };
+  if (profile.engine === "cursor") return { harness: "cursor" };
   const accountId = profile.accountId;
   if (typeof accountId !== "string" || accountId.length === 0) {
     throw new ClaudexorControlError(400, "unsupported_profile", operation);
@@ -388,14 +403,23 @@ export function createClaudexorExecutionBackend(
     handshakeComplete = true;
   }
 
-  async function codexNativeSessionAttested(): Promise<boolean> {
-    const response = await callJson("POST", "/v2/harnesses/codex/auth-readiness", "authReadiness", {
-      authRequest: "subscription",
-      source: "native_session",
-    });
+  /**
+   * Attest one harness's Claudexor-owned native subscription session.
+   *
+   * Every one of the six comparisons is load-bearing: Claudexor echoes the
+   * request back, so checking only `readiness` would accept an answer about a
+   * different harness or a different auth source than the one asked for.
+   */
+  async function nativeSessionAttested(harness: NativeSessionHarness): Promise<boolean> {
+    const response = await callJson(
+      "POST",
+      `/v2/harnesses/${encodeURIComponent(harness)}/auth-readiness`,
+      "authReadiness",
+      { authRequest: "subscription", source: "native_session" },
+    );
     const readiness = field(response, "readiness");
     return (
-      field(response, "harnessId") === "codex" &&
+      field(response, "harnessId") === harness &&
       field(response, "authRequest") === "subscription" &&
       field(response, "requestedSource") === "native_session" &&
       field(readiness, "source") === "native_session" &&
@@ -404,9 +428,9 @@ export function createClaudexorExecutionBackend(
     );
   }
 
-  async function requireCodexNativeSession(): Promise<void> {
-    if (!(await codexNativeSessionAttested())) {
-      throw new ClaudexorControlError(409, "codex_native_session_unattested", "authReadiness");
+  async function requireNativeSession(harness: NativeSessionHarness): Promise<void> {
+    if (!(await nativeSessionAttested(harness))) {
+      throw new ClaudexorControlError(409, `${harness}_native_session_unattested`, "authReadiness");
     }
   }
 
@@ -547,7 +571,7 @@ export function createClaudexorExecutionBackend(
     async startProfile(input: Static<typeof ExecutionRequestV3>) {
       const route = subscriptionProfileRoute(input.profile, "startProfile");
       await handshake();
-      if (route.harness === "codex") await requireCodexNativeSession();
+      if (isNativeSessionHarness(route.harness)) await requireNativeSession(route.harness);
       const created = await callJson(
         "POST",
         "/v2/threads",
@@ -665,7 +689,12 @@ export function createClaudexorExecutionBackend(
       if (profile === undefined) {
         throw new ClaudexorControlError(409, "profile_context_unavailable", "resume");
       }
-      if (profile.engine === "codex") await requireCodexNativeSession();
+      // Re-attest before every resume: the session can be revoked or expire
+      // between the original turn and the follow-up one.
+      const resumeRoute = subscriptionProfileRoute(profile, "resume");
+      if (isNativeSessionHarness(resumeRoute.harness)) {
+        await requireNativeSession(resumeRoute.harness);
+      }
       await createTurn(
         executionId,
         inputArtifactRefs.length === 0
@@ -699,10 +728,15 @@ export function createClaudexorExecutionBackend(
       return {
         schemaVersion: 3,
         status,
+        // Trimmed, not just non-empty: Q018 observed Cursor terminate a run as
+        // `subtype: "success"` with an empty `result` and no assistant frame at
+        // all. A whitespace-only final would satisfy `minLength: 1` while
+        // carrying no summary, so it falls through to the typed default rather
+        // than surfacing a blank one.
         summary:
-          typeof rawSummary === "string" && rawSummary.length > 0
+          typeof rawSummary === "string" && rawSummary.trim().length > 0
             ? rawSummary
-            : typeof rawError === "string" && rawError.length > 0
+            : typeof rawError === "string" && rawError.trim().length > 0
               ? rawError
               : `Claudexor execution ${status}.`,
         ...(typeof sessionId === "string" && sessionId.length > 0 ? { sessionId } : {}),
@@ -954,7 +988,7 @@ export function createClaudexorExecutionBackend(
       return (async () => {
         try {
           await handshake();
-          if (!(await codexNativeSessionAttested())) {
+          if (!(await nativeSessionAttested("codex"))) {
             throw new Error("unattested");
           }
           return {
@@ -970,6 +1004,35 @@ export function createClaudexorExecutionBackend(
             code: "CODEX_NATIVE_SESSION_UNATTESTED",
             message: "Claudexor did not attest a native Codex ChatGPT subscription session.",
             remediation: "Sign in to Codex through Claudexor and rerun heniek doctor.",
+          };
+        }
+      })();
+    },
+
+    diagnoseCursorAuthRoute() {
+      return (async () => {
+        try {
+          await handshake();
+          if (!(await nativeSessionAttested("cursor"))) {
+            throw new Error("unattested");
+          }
+          return {
+            category: "auth-route" as const,
+            status: "pass" as const,
+            code: "CURSOR_NATIVE_SESSION_ATTESTED",
+            message: "Claudexor attested a native Cursor subscription session.",
+          };
+        } catch {
+          return {
+            category: "auth-route" as const,
+            status: "fail" as const,
+            code: "CURSOR_NATIVE_SESSION_UNATTESTED",
+            message: "Claudexor did not attest a native Cursor subscription session.",
+            // Cursor's login is keychain-backed and read through the daemon's
+            // own HOME, so a daemon started with a scratch HOME reports this
+            // even when the user is genuinely signed in.
+            remediation:
+              "Sign in with `cursor-agent login`, ensure the Claudexor daemon runs under your real HOME, then rerun heniek doctor.",
           };
         }
       })();

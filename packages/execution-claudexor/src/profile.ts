@@ -33,9 +33,13 @@ export interface ClaudeProfileExecutionAdapter extends ProfileExecutionAdapter {
 
 export interface CodexProfileExecutionAdapter extends ProfileExecutionAdapter {}
 
+export interface CursorProfileExecutionAdapter extends ProfileExecutionAdapter {}
+
+type ProfileEngine = "claude" | "codex" | "cursor";
+
 function createProfileExecutionAdapter(
   options: ClaudexorBackendOptions,
-  engine: "claude" | "codex",
+  engine: ProfileEngine,
 ): ProfileExecutionAdapter {
   const backend = createClaudexorExecutionBackend(options);
   return {
@@ -65,8 +69,16 @@ function createProfileExecutionAdapter(
       backend.events(executionId, after),
     diagnoseCompatibility: () => backend.diagnoseCompatibility(),
     diagnoseRuntime: () => backend.diagnoseRuntime(),
-    diagnoseAuthRoute: () =>
-      engine === "claude" ? backend.diagnoseAuthRoute() : backend.diagnoseCodexAuthRoute(),
+    diagnoseAuthRoute: () => {
+      switch (engine) {
+        case "claude":
+          return backend.diagnoseAuthRoute();
+        case "codex":
+          return backend.diagnoseCodexAuthRoute();
+        case "cursor":
+          return backend.diagnoseCursorAuthRoute();
+      }
+    },
   };
 }
 
@@ -84,4 +96,17 @@ export function createCodexProfileExecutionAdapter(
   options: ClaudexorBackendOptions,
 ): CodexProfileExecutionAdapter {
   return createProfileExecutionAdapter(options, "codex");
+}
+
+/**
+ * Cursor runs through Claudexor's native, keychain-backed Cursor login. Heniek
+ * never reads the session material and never names a credential profile:
+ * Claudexor treats a cursor credential profile as exactly an API key, so
+ * supplying one would move the run onto the metered route that §10.4's billing
+ * guard forbids.
+ */
+export function createCursorProfileExecutionAdapter(
+  options: ClaudexorBackendOptions,
+): CursorProfileExecutionAdapter {
+  return createProfileExecutionAdapter(options, "cursor");
 }

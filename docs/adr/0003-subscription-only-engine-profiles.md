@@ -1,6 +1,6 @@
 # 3. Subscription-only Claude Code and Codex engine profiles under a hostile ambient environment
 
-- Status: accepted; Codex broker decision superseded by Q017
+- Status: accepted; Codex broker decision superseded by Q017; Cursor scope gap closed by Q018
 - Date: 2026-08-01
 - Issue: davebream/heniek#5 (Q004, `T0-evidence`, milestone M0)
 - Spec anchors: §9.1 Accounts, §10.4 Billing guard, §27.4 Secrets and logs
@@ -17,6 +17,17 @@ ChatGPT login. Heniek now selects that route directly through its replaceable
 execution backend and never requires, launches, or distributes a
 `heniek-codex` credential runner. The old broker observations remain below as
 an audit record for Q004; they must not be used as current runtime guidance.
+
+### Q018 supersession — Cursor is a native Claudexor session
+
+This ADR recorded Cursor as out of scope and referred to a `heniek-cursor` credential runner. Q018
+closed that gap the same way Q017 closed Codex's: Claudexor's `/v2` API attests a Cursor
+`native_session` backed by the user's keychain-stored login, and Heniek selects that route directly
+through its replaceable execution backend. It never requires, launches, or distributes a
+`heniek-cursor` credential runner, and it deliberately forwards no credential-profile id, because
+Claudexor treats a Cursor credential profile as exactly an API key — the metered route §10.4
+forbids. See [ADR 17](0017-cursor-cli-execution-and-profile-adapter.md). The Cursor scope note
+below remains as an audit record for Q004.
 
 §9.1 commits Heniek to running each external engine on a named subscription credential, and
 forbids a `subscription_only` run from ever silently falling back to an API key. §10.4 requires the

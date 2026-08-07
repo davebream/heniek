@@ -25,7 +25,12 @@ const PINNED_COMPATIBILITY: Record<
 > = {
   claude: { state: "compatible", resume: "supported", cancellation: "supported" },
   codex: { state: "compatible", resume: "supported", cancellation: "supported" },
-  cursor: { state: "compatible", resume: "unknown", cancellation: "unknown" },
+  // Q018 spike, against Cursor CLI 2026.06.12-01-15-52-7244546 and the pinned
+  // Claudexor: `--resume <sessionId>` continues the SAME session rather than
+  // forking one, and cancellation terminates the run. Cursor's own detached
+  // `worker-server` process outlives a cancelled run by design; that is a
+  // process-cleanup caveat recorded in the ADR, not a cancellation failure.
+  cursor: { state: "compatible", resume: "supported", cancellation: "supported" },
 };
 
 export interface ClaudexorCapabilityAdapterOptions {
@@ -289,8 +294,13 @@ export function createClaudexorCapabilityAdapter(
           const native = harnessAccounts.find(
             (item) => engineId(first(item, "harness_id", "harnessId")) === target.engine,
           );
+          // Codex and Cursor both authenticate through a Claudexor-owned native
+          // session rather than a named credential profile, so their readiness
+          // is probed for every configured account, not only account-less ones.
           const nativeSessionRoute =
-            (target.engine === "claude" && target.accountId === null) || target.engine === "codex";
+            (target.engine === "claude" && target.accountId === null) ||
+            target.engine === "codex" ||
+            target.engine === "cursor";
           const readinessResult =
             target.configured && nativeSessionRoute
               ? await Promise.allSettled([

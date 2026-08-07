@@ -87,10 +87,10 @@
       ],
       "features": {
         "questions": "unsupported",
-        "resume": "unknown",
+        "resume": "supported",
         "usage": "unknown",
         "structuredOutput": "unsupported",
-        "cancellation": "unknown",
+        "cancellation": "supported",
         "tools": [
           { "name": "read-files", "support": "supported" },
           { "name": "browser", "support": "unsupported" },
