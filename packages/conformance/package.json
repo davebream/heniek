@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@heniek/contracts": "workspace:*",
+    "@heniek/telemetry": "workspace:*",
     "@sinclair/typebox": "catalog:",
     "ajv": "catalog:",
     "ajv-formats": "catalog:"

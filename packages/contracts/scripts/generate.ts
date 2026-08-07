@@ -47,6 +47,12 @@ if (entries.length === 0) {
 const ajv = new Ajv({ strict: true, allErrors: true });
 addFormats(ajv);
 
+// Register the complete graph before compiling any one schema. Q019 is the
+// first contract family to share a versioned child by `$ref`; compiling each
+// root in isolation would reject a valid reference solely because its sibling
+// had not been registered yet.
+for (const [schemaId, schema] of entries) ajv.addSchema(schema, schemaId);
+
 const outputs = new Map<string, string>();
 const manifestEntries: {
   schemaId: string;
@@ -59,7 +65,9 @@ for (const [schemaId, schema] of entries) {
   // Fails loudly here — under the same strict/format config the test suite
   // and downstream consumers use — rather than letting a broken schema
   // reach `generated/` and fail only for the first consumer.
-  ajv.compile(schema);
+  if (ajv.getSchema(schemaId) === undefined) {
+    throw new Error(`Registered contract did not compile: ${schemaId}`);
+  }
 
   const record = schema as unknown as {
     properties?: { schemaVersion?: { const?: number } };
