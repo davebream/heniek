@@ -1,12 +1,22 @@
 # 3. Subscription-only Claude Code and Codex engine profiles under a hostile ambient environment
 
-- Status: accepted
+- Status: accepted; Codex broker decision superseded by Q017
 - Date: 2026-08-01
 - Issue: davebream/heniek#5 (Q004, `T0-evidence`, milestone M0)
 - Spec anchors: §9.1 Accounts, §10.4 Billing guard, §27.4 Secrets and logs
 - Evidence: [`evidence/0003-subscription-isolation-matrix.md`](evidence/0003-subscription-isolation-matrix.md)
 
 ## Context
+
+### Q017 supersession — Codex is a native Claudexor session
+
+The Codex-specific broker assumption in this ADR is historical evidence from
+Q004, not a requirement for Heniek users. Q017 verified Claudexor's versioned
+`/v2` control API attests a Codex `native_session` backed by the user's saved
+ChatGPT login. Heniek now selects that route directly through its replaceable
+execution backend and never requires, launches, or distributes a
+`heniek-codex` credential runner. The old broker observations remain below as
+an audit record for Q004; they must not be used as current runtime guidance.
 
 §9.1 commits Heniek to running each external engine on a named subscription credential, and
 forbids a `subscription_only` run from ever silently falling back to an API key. §10.4 requires the
