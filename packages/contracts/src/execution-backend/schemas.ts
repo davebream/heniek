@@ -2,9 +2,10 @@ import { Type } from "@sinclair/typebox";
 import { ArtifactId } from "../artifact/index.js";
 import { ResolvedProfileSchema } from "../configuration/index.js";
 import { InteractionId, InteractionQuestionId } from "../interaction/index.js";
-import { versioned } from "../kernel/index.js";
+import { SCHEMA_REGISTRY, versioned } from "../kernel/index.js";
 import { RepositoryId, WorkspaceId } from "../run/index.js";
 import { BackendArtifactId, BackendExecutionId, ProfileId, StageId } from "./ids.js";
+import { ExecutionStatus } from "./state.js";
 
 /**
  * §22, verbatim shape with IDs branded. `profile: ResolvedProfile` becomes
@@ -118,6 +119,52 @@ export const ExecutionRequestV3 = versioned("ExecutionRequest", 3, {
 export const BackendExecutionHandleV1 = versioned("BackendExecutionHandle", 1, {
   executionId: BackendExecutionId,
 });
+
+/**
+ * A deliberately small, replayable lifecycle feed for profile-aware
+ * execution. It reports only facts which can be translated without exposing
+ * a harness event or transcript payload. Broader usage/context telemetry is
+ * intentionally deferred to Q019.
+ */
+const EXECUTION_EVENT_SCHEMA_ID = "heniek://contract/ExecutionEvent/v1";
+
+export const ExecutionEventV1 = Type.Union(
+  [
+    Type.Object(
+      {
+        schemaVersion: Type.Literal(1),
+        cursor: Type.String({ minLength: 1 }),
+        kind: Type.Literal("status"),
+        status: ExecutionStatus.schema,
+      },
+      { additionalProperties: false },
+    ),
+    Type.Object(
+      {
+        schemaVersion: Type.Literal(1),
+        cursor: Type.String({ minLength: 1 }),
+        kind: Type.Literal("rate_limited"),
+        retryAfterMs: Type.Optional(Type.Integer({ minimum: 0 })),
+      },
+      { additionalProperties: false },
+    ),
+    Type.Object(
+      {
+        schemaVersion: Type.Literal(1),
+        cursor: Type.String({ minLength: 1 }),
+        kind: Type.Literal("context_pressure"),
+        pressure: Type.Literal("capacity_exhausted"),
+      },
+      { additionalProperties: false },
+    ),
+  ],
+  { $id: EXECUTION_EVENT_SCHEMA_ID },
+);
+
+if (SCHEMA_REGISTRY.has(EXECUTION_EVENT_SCHEMA_ID)) {
+  throw new Error(`Duplicate contract schema id: ${EXECUTION_EVENT_SCHEMA_ID}`);
+}
+SCHEMA_REGISTRY.set(EXECUTION_EVENT_SCHEMA_ID, ExecutionEventV1);
 
 const InteractionOptionV1 = Type.Object(
   {

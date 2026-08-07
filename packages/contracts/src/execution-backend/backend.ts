@@ -4,8 +4,10 @@ import type { InteractionId } from "../interaction/index.js";
 import type {
   BackendArtifactV1,
   BackendExecutionHandleV1,
+  ExecutionEventV1,
   ExecutionRequestV1,
   ExecutionRequestV2,
+  ExecutionRequestV3,
   ExecutionResultV1,
   ExecutionResultV2,
   InteractionAnswerSetV1,
@@ -48,4 +50,24 @@ export interface ExecutionBackendV2 {
   cancel(executionId: string): Promise<void>;
   artifacts(executionId: string): Promise<Static<typeof BackendArtifactV1>[]>;
   readArtifact(executionId: string, artifactId: string): Promise<Uint8Array>;
+}
+
+/**
+ * Q016's profile-aware execution boundary. V2 remains available unchanged
+ * for the Q012 vertical slice; callers opt into V3 only after resolving a
+ * named profile through the capability-gated configuration path.
+ */
+export interface ExecutionBackendV3 {
+  start(
+    request: Static<typeof ExecutionRequestV3>,
+  ): Promise<Static<typeof BackendExecutionHandleV1>>;
+  status(executionId: string): Promise<ExecutionStatus>;
+  interactions(executionId: string): Promise<Static<typeof PendingInteractionV2>[]>;
+  answer(executionId: string, answer: Static<typeof InteractionAnswerSetV1>): Promise<void>;
+  resume(executionId: string, inputArtifactRefs: ArtifactId[]): Promise<void>;
+  result(executionId: string): Promise<Static<typeof ExecutionResultV2>>;
+  cancel(executionId: string): Promise<void>;
+  artifacts(executionId: string): Promise<Static<typeof BackendArtifactV1>[]>;
+  readArtifact(executionId: string, artifactId: string): Promise<Uint8Array>;
+  events(executionId: string, after?: string): AsyncIterable<Static<typeof ExecutionEventV1>>;
 }

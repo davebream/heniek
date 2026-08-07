@@ -11,6 +11,7 @@ export const REQUIRED_OPERATIONS = [
   "GET /v2/threads/:id",
   "POST /v2/threads/:id/turns",
   "GET /v2/runs/:id",
+  "GET /v2/runs/:id/events",
   "POST /v2/runs/:id/interactions/:id/answer",
   "POST /v2/runs/:id/control",
   "GET /v2/runs/:id/produced",
