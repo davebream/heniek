@@ -1,0 +1,103 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-07T10:00:00.000Z",
+  "entries": [
+    {
+      "engine": "claude",
+      "accountId": null,
+      "engineVersion": "1.2.3",
+      "claudexorVersion": "3.1.2",
+      "discovery": "complete",
+      "configured": true,
+      "installation": "installed",
+      "authentication": "authenticated",
+      "compatibility": "compatible",
+      "capacity": "available",
+      "ready": true,
+      "models": [
+        {
+          "id": "claude-sonnet",
+          "provenance": "manifest",
+          "efforts": ["low", "high"],
+          "executionModes": ["native"]
+        }
+      ],
+      "features": {
+        "questions": "supported",
+        "resume": "supported",
+        "usage": "supported",
+        "structuredOutput": "supported",
+        "cancellation": "supported",
+        "tools": [
+          { "name": "read-files", "support": "supported" },
+          { "name": "browser", "support": "supported" },
+          { "name": "tool-lists", "support": "supported" },
+          { "name": "mcp-injection", "support": "supported" }
+        ]
+      }
+    },
+    {
+      "engine": "codex",
+      "accountId": "codex-work",
+      "engineVersion": "2.3.4",
+      "claudexorVersion": "3.1.2",
+      "discovery": "complete",
+      "configured": true,
+      "installation": "installed",
+      "authentication": "authenticated",
+      "compatibility": "compatible",
+      "capacity": "available",
+      "ready": true,
+      "models": [
+        {
+          "id": "gpt-5-codex",
+          "provenance": "api",
+          "efforts": ["medium", "high"],
+          "executionModes": ["external"]
+        }
+      ],
+      "features": {
+        "questions": "unsupported",
+        "resume": "supported",
+        "usage": "supported",
+        "structuredOutput": "supported",
+        "cancellation": "supported",
+        "tools": [
+          { "name": "read-files", "support": "supported" },
+          { "name": "browser", "support": "supported" },
+          { "name": "tool-lists", "support": "supported" },
+          { "name": "mcp-injection", "support": "supported" }
+        ]
+      }
+    },
+    {
+      "engine": "cursor",
+      "accountId": "cursor-work",
+      "engineVersion": "3.4.5",
+      "claudexorVersion": "3.1.2",
+      "discovery": "complete",
+      "configured": true,
+      "installation": "installed",
+      "authentication": "authenticated",
+      "compatibility": "compatible",
+      "capacity": "unknown",
+      "ready": true,
+      "models": [
+        { "id": "cursor-auto", "provenance": "api", "efforts": [], "executionModes": ["external"] }
+      ],
+      "features": {
+        "questions": "unsupported",
+        "resume": "unknown",
+        "usage": "unknown",
+        "structuredOutput": "unsupported",
+        "cancellation": "unknown",
+        "tools": [
+          { "name": "read-files", "support": "supported" },
+          { "name": "browser", "support": "unsupported" },
+          { "name": "tool-lists", "support": "unsupported" },
+          { "name": "mcp-injection", "support": "unsupported" }
+        ]
+      }
+    }
+  ]
+}

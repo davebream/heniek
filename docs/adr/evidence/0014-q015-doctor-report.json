@@ -1,0 +1,102 @@
+{
+  "schemaVersion": 1,
+  "health": "healthy",
+  "checks": [
+    {
+      "category": "runtime",
+      "status": "pass",
+      "code": "CLAUDEXOR_RUNTIME_OK",
+      "message": "Pinned Claudexor runtime is available."
+    },
+    {
+      "category": "auth-route",
+      "status": "pass",
+      "code": "AUTH_ROUTE_OK",
+      "message": "Subscription route is available."
+    },
+    {
+      "category": "compatibility",
+      "status": "pass",
+      "code": "COMPATIBILITY_OK",
+      "message": "Pinned API is compatible."
+    },
+    {
+      "category": "cleanup",
+      "status": "pass",
+      "code": "CLEANUP_OK",
+      "message": "No cleanup issues."
+    },
+    {
+      "category": "runtime",
+      "status": "pass",
+      "code": "ENGINE_CLAUDE_RUNTIME_INSTALLED",
+      "message": "claude runtime is installed."
+    },
+    {
+      "category": "auth-route",
+      "status": "pass",
+      "code": "ENGINE_CLAUDE_AUTH_AUTHENTICATED",
+      "message": "claude authentication is authenticated."
+    },
+    {
+      "category": "compatibility",
+      "status": "pass",
+      "code": "ENGINE_CLAUDE_COMPATIBILITY_COMPATIBLE",
+      "message": "claude compatibility is compatible."
+    },
+    {
+      "category": "runtime",
+      "status": "pass",
+      "code": "ENGINE_CLAUDE_READINESS_READY",
+      "message": "claude is ready; capacity is available."
+    },
+    {
+      "category": "runtime",
+      "status": "pass",
+      "code": "ENGINE_CODEX_RUNTIME_INSTALLED",
+      "message": "codex/codex-work runtime is installed."
+    },
+    {
+      "category": "auth-route",
+      "status": "pass",
+      "code": "ENGINE_CODEX_AUTH_AUTHENTICATED",
+      "message": "codex/codex-work authentication is authenticated."
+    },
+    {
+      "category": "compatibility",
+      "status": "pass",
+      "code": "ENGINE_CODEX_COMPATIBILITY_COMPATIBLE",
+      "message": "codex/codex-work compatibility is compatible."
+    },
+    {
+      "category": "runtime",
+      "status": "pass",
+      "code": "ENGINE_CODEX_READINESS_READY",
+      "message": "codex/codex-work is ready; capacity is available."
+    },
+    {
+      "category": "runtime",
+      "status": "pass",
+      "code": "ENGINE_CURSOR_RUNTIME_INSTALLED",
+      "message": "cursor/cursor-work runtime is installed."
+    },
+    {
+      "category": "auth-route",
+      "status": "pass",
+      "code": "ENGINE_CURSOR_AUTH_AUTHENTICATED",
+      "message": "cursor/cursor-work authentication is authenticated."
+    },
+    {
+      "category": "compatibility",
+      "status": "pass",
+      "code": "ENGINE_CURSOR_COMPATIBILITY_COMPATIBLE",
+      "message": "cursor/cursor-work compatibility is compatible."
+    },
+    {
+      "category": "runtime",
+      "status": "pass",
+      "code": "ENGINE_CURSOR_READINESS_READY",
+      "message": "cursor/cursor-work is ready; capacity is unknown."
+    }
+  ]
+}
