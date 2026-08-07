@@ -1,0 +1,34 @@
+{
+  "schemaVersion": "heniek.q013-runtime-inventory-evidence.v1",
+  "capturedAt": "2026-08-07T10:42:00.000Z",
+  "runtime": {
+    "engine": "claudexor",
+    "sourceMode": "managed",
+    "entryPath": "<redacted-absolute-path>",
+    "version": "3.1.2",
+    "buildSha": "bb5efee24132aa3d65e417040df201e08da44c8c",
+    "binarySha256": "009b785070d73b434ef9ff1c8f5b072dc49c70fe7df47c51a578eac75eb4bb5a",
+    "archiveSha256": "28b54f20723b866eefdba1ebcbc4311da5c03f0828e72073947087ba092a6a4e"
+  },
+  "inventoryBeforePromotion": {
+    "active": null,
+    "previous": null,
+    "installedVersions": ["3.1.2"]
+  },
+  "promotionAttempt": {
+    "liveIdentityProtocolOperationProbe": "pass",
+    "fullSuite": "blocked",
+    "errorCode": "COMPATIBILITY_BLOCKED",
+    "reason": "A complete local promotion runner was not configured."
+  },
+  "inventoryAfterBlockedPromotion": {
+    "active": null,
+    "previous": null,
+    "installedVersions": ["3.1.2"]
+  },
+  "redaction": {
+    "machinePaths": true,
+    "credentials": true,
+    "transcripts": true
+  }
+}

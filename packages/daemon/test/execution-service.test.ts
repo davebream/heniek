@@ -492,8 +492,12 @@ describe.skipIf(!realClaudeEnabled)("Q012 real Claude vertical [opt-in]", () => 
     const setup = await fixture();
     const backend = createClaudexorExecutionBackend({
       baseUrl: upstream.baseUrl,
+      expectedEngine: {
+        version: "3.1.2",
+        buildSha: "bb5efee24132aa3d65e417040df201e08da44c8c",
+      },
       token: upstream.token,
-      runtimeRoot,
+      runtimeEntryPath: join(runtimeRoot, "packages/cli/dist/claudexord.js"),
       environment: isolatedEnvironment,
     });
     let db = setup.db;

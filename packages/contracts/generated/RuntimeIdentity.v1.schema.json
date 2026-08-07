@@ -1,0 +1,56 @@
+{
+  "$id": "heniek://contract/RuntimeIdentity/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "engine",
+    "sourceMode",
+    "entryPath",
+    "version",
+    "buildSha",
+    "binarySha256"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "engine": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "sourceMode": {
+      "anyOf": [
+        {
+          "const": "managed",
+          "type": "string"
+        },
+        {
+          "const": "external",
+          "type": "string"
+        }
+      ]
+    },
+    "entryPath": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "version": {
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "type": "string"
+    },
+    "buildSha": {
+      "pattern": "^[0-9a-f]{40}$",
+      "type": "string"
+    },
+    "binarySha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "archiveSha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    }
+  }
+}

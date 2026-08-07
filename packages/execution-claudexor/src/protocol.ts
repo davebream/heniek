@@ -23,6 +23,11 @@ export interface ClaudexorHandshake {
   readonly engine: { readonly version: string; readonly sha: string };
 }
 
+export interface ClaudexorEngineIdentity {
+  readonly version: string;
+  readonly buildSha: string;
+}
+
 export class ClaudexorCompatibilityError extends Error {
   constructor(
     readonly code: string,
@@ -47,7 +52,10 @@ function text(value: unknown, field: string): string {
   return value;
 }
 
-export function parseHandshake(value: unknown): ClaudexorHandshake {
+export function parseHandshake(
+  value: unknown,
+  expectedEngine: ClaudexorEngineIdentity,
+): ClaudexorHandshake {
   const body = record(value, "handshake");
   const engine = record(body.engine, "handshake.engine");
   if (body.compatible !== true) {
@@ -75,10 +83,10 @@ export function parseHandshake(value: unknown): ClaudexorHandshake {
   }
   const version = text(engine.version, "handshake.engine.version");
   const sha = text(engine.sha, "handshake.engine.sha");
-  if (version !== CLAUDEXOR_ENGINE_VERSION || sha !== CLAUDEXOR_ENGINE_SHA) {
+  if (version !== expectedEngine.version || sha !== expectedEngine.buildSha) {
     throw new ClaudexorCompatibilityError(
       "ENGINE_PIN_MISMATCH",
-      `Claudexor is not the required pinned build ${CLAUDEXOR_ENGINE_VERSION}.`,
+      `Claudexor is not the selected build ${expectedEngine.version}/${expectedEngine.buildSha}.`,
     );
   }
   return { protocolMajor: CLAUDEXOR_PROTOCOL_MAJOR, operationsPath, engine: { version, sha } };

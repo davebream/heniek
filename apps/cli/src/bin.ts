@@ -17,6 +17,16 @@ import {
   startStageViaDaemon,
 } from "@heniek/client";
 import { readApplicationHomeSource, resolveApplicationHome } from "@heniek/config";
+import {
+  ClaudexorRuntimeError,
+  type ClaudexorRuntimeErrorCode,
+  createBlockedCompatibilityGate,
+  createClaudexorRuntimeManager,
+  createClaudexorRuntimeProbe,
+  createCommandCompatibilityGate,
+  type RuntimeIdentity,
+  type RuntimeMutationResult,
+} from "@heniek/runtime-claudexor";
 
 const VERSION = "0.0.0";
 
@@ -26,7 +36,8 @@ type ErrorCode =
   | "AUTHENTICATION_FAILED"
   | "INCOMPATIBLE_PROTOCOL"
   | "REQUEST_CANCELLED"
-  | "RPC_FAILURE";
+  | "RPC_FAILURE"
+  | ClaudexorRuntimeErrorCode;
 
 interface CliError {
   readonly code: ErrorCode;
@@ -40,7 +51,7 @@ interface CliError {
 }
 
 function usage(): string {
-  return "Usage: heniek status [--json]\n       heniek codebase detect [ROOT...] [--json]\n       heniek codebase register [ROOT...] [--confirm-registration] [--json]\n       heniek stage start --task-file PATH --artifact-path PATH [--json]\n       heniek run status RUN_ID [--json]\n       heniek run answer RUN_ID INTERACTION_ID --answers-json JSON [--json]\n       heniek run resume RUN_ID [--input-artifact ARTIFACT_ID...] [--json]\n       heniek run cancel RUN_ID [--json]\n       heniek run result RUN_ID [--json]\n       heniek artifact get ARTIFACT_ID [--output PATH] [--json]\n       heniek doctor [--json]\n       heniek --help\n       heniek --version";
+  return "Usage: heniek status [--json]\n       heniek codebase detect [ROOT...] [--json]\n       heniek codebase register [ROOT...] [--confirm-registration] [--json]\n       heniek stage start --task-file PATH --artifact-path PATH [--json]\n       heniek run status RUN_ID [--json]\n       heniek run answer RUN_ID INTERACTION_ID --answers-json JSON [--json]\n       heniek run resume RUN_ID [--input-artifact ARTIFACT_ID...] [--json]\n       heniek run cancel RUN_ID [--json]\n       heniek run result RUN_ID [--json]\n       heniek artifact get ARTIFACT_ID [--output PATH] [--json]\n       heniek runtime list [--json]\n       heniek runtime install claudexor VERSION [--json]\n       heniek runtime activate claudexor VERSION [--json]\n       heniek runtime upgrade claudexor VERSION [--json]\n       heniek runtime rollback claudexor [--json]\n       heniek runtime adopt claudexor --entry ABSOLUTE_PATH [--json]\n       heniek doctor [--json]\n       heniek --help\n       heniek --version";
 }
 
 function exitCode(code: ErrorCode): number {
@@ -57,6 +68,8 @@ function exitCode(code: ErrorCode): number {
       return 6;
     case "RPC_FAILURE":
       return 7;
+    default:
+      return 8;
   }
 }
 
@@ -82,6 +95,107 @@ function applicationHome() {
   return resolveApplicationHome(
     readApplicationHomeSource(process.env, process.platform, process.env.HOME ?? ""),
   );
+}
+
+function runtimeManager() {
+  const promotionCommand = process.env.HENIEK_CLAUDEXOR_PROMOTION_COMMAND;
+  const gate =
+    promotionCommand === undefined || promotionCommand.length === 0
+      ? createBlockedCompatibilityGate()
+      : createCommandCompatibilityGate({ command: promotionCommand });
+  return createClaudexorRuntimeManager({
+    home: applicationHome(),
+    gate,
+    probe: createClaudexorRuntimeProbe(),
+  });
+}
+
+function renderRuntimeIdentity(label: string, identity: RuntimeIdentity | null): void {
+  if (identity === null) {
+    process.stdout.write(`${label}: none\n`);
+    return;
+  }
+  process.stdout.write(
+    `${label}: ${identity.version} ${identity.buildSha} (${identity.sourceMode})\n` +
+      `  entry: ${identity.entryPath}\n` +
+      `  binary sha256: ${identity.binarySha256}\n` +
+      (identity.archiveSha256 === undefined ? "" : `  archive sha256: ${identity.archiveSha256}\n`),
+  );
+}
+
+async function runRuntime(argv: readonly string[], jsonOutput: boolean): Promise<number> {
+  const commandArgs = argv.filter((argument) => argument !== "--json");
+  const operation = commandArgs[1] ?? "unknown";
+  const command = `runtime.${operation}`;
+  try {
+    const manager = runtimeManager();
+    if (operation === "list" && commandArgs.length === 2) {
+      const inventory = await manager.inventory();
+      if (jsonOutput) writeJson({ schemaVersion: 1, ok: true, command, result: inventory });
+      else {
+        renderRuntimeIdentity("active", inventory.active);
+        renderRuntimeIdentity("previous", inventory.previous);
+        if (inventory.installed.length === 0) process.stdout.write("installed: none\n");
+        else {
+          process.stdout.write("installed:\n");
+          for (const identity of inventory.installed) renderRuntimeIdentity("-", identity);
+        }
+      }
+      return 0;
+    }
+
+    let result: RuntimeMutationResult;
+    if (
+      (operation === "install" || operation === "activate" || operation === "upgrade") &&
+      commandArgs.length === 4 &&
+      commandArgs[2] === "claudexor"
+    ) {
+      const version = commandArgs[3] as string;
+      result =
+        operation === "install"
+          ? await manager.install(version)
+          : operation === "activate"
+            ? await manager.activate(version)
+            : await manager.upgrade(version);
+    } else if (
+      operation === "rollback" &&
+      commandArgs.length === 3 &&
+      commandArgs[2] === "claudexor"
+    ) {
+      result = await manager.rollback();
+    } else if (
+      operation === "adopt" &&
+      commandArgs.length === 5 &&
+      commandArgs[2] === "claudexor" &&
+      commandArgs[3] === "--entry"
+    ) {
+      result = await manager.adopt(commandArgs[4] as string);
+    } else {
+      return 2;
+    }
+
+    if (jsonOutput) writeJson({ schemaVersion: 1, ok: true, command, result });
+    else {
+      process.stdout.write(`Claudexor runtime ${result.action} succeeded.\n`);
+      renderRuntimeIdentity("active", result.activeAfter);
+    }
+    return 0;
+  } catch (error) {
+    const failure: CliError =
+      error instanceof ClaudexorRuntimeError
+        ? {
+            code: error.code,
+            message: error.message,
+            retryable: error.code === "RUNTIME_BUSY",
+          }
+        : {
+            code: "RUNTIME_INTEGRITY_FAILED",
+            message: "The local Claudexor runtime operation failed.",
+            retryable: false,
+          };
+    renderError(failure, jsonOutput, command);
+    return exitCode(failure.code);
+  }
 }
 
 function renderDetection(detection: CodebaseDetectionResult): void {
@@ -474,6 +588,11 @@ async function main(argv: readonly string[]): Promise<number> {
 
   if (argv[0] === "artifact" && argv[1] === "get") {
     const code = await runArtifactGet(argv, json);
+    if (code !== 2) return code;
+  }
+
+  if (argv[0] === "runtime") {
+    const code = await runRuntime(argv, json);
     if (code !== 2) return code;
   }
 

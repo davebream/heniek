@@ -8,5 +8,6 @@ export * from "./forge-backend/index.js";
 export * from "./interaction/index.js";
 export * from "./kernel/index.js";
 export * from "./run/index.js";
+export * from "./runtime/index.js";
 export * from "./task-source/index.js";
 export * from "./workspace/index.js";
