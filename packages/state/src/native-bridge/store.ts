@@ -870,6 +870,7 @@ export interface ClaimedNativeStage {
   readonly dispatchRevision: number;
   readonly runId: string;
   readonly stageId: string;
+  readonly repositoryId: string;
   readonly attemptId: string;
   readonly attemptOrdinal: number;
   readonly profileId: string;
@@ -978,9 +979,9 @@ export function pollNativeBridge(
 
     const claimable = handle
       .prepare(
-        `SELECT run_id, stage_id, profile_id, prompt, artifact_path, instructions_path,
-                artifact_contract, model, effort, focus, questions, permissions_json,
-                limits_json, hard_deadline_at, attempt_count
+        `SELECT run_id, stage_id, repository_id, profile_id, prompt, artifact_path,
+                instructions_path, artifact_contract, model, effort, focus, questions,
+                permissions_json, limits_json, hard_deadline_at, attempt_count
            FROM native_stage
           WHERE codebase_id = ? AND state = 'waiting_for_parent'
           ORDER BY created_at, run_id
@@ -1038,6 +1039,7 @@ export function pollNativeBridge(
         dispatchRevision: 1,
         runId,
         stageId,
+        repositoryId: toText(row.repository_id, "native_stage.repository_id"),
         attemptId,
         attemptOrdinal,
         profileId: toText(row.profile_id, "native_stage.profile_id"),
