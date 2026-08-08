@@ -2,9 +2,12 @@ import type {
   BackendArtifactV1,
   BackendExecutionHandleV1,
   ExecutionBackendV6,
+  ExecutionBackendV7,
   ExecutionEventV3,
   ExecutionRequestV3,
+  ExecutionRequestV4,
   ExecutionResultV4,
+  ExecutionResultV5,
   ExecutionResumeRequestV1,
   ExecutionStatus,
   InteractionAnswerSetV1,
@@ -37,6 +40,12 @@ export interface CursorProfileExecutionAdapter extends ProfileExecutionAdapter {
 
 type ProfileEngine = "claude" | "codex" | "cursor";
 
+export interface ScheduledProfileExecutionAdapter extends ExecutionBackendV7 {
+  diagnoseCompatibility(): ReturnType<ClaudexorExecutionBackend["diagnoseCompatibility"]>;
+  diagnoseRuntime(): ReturnType<ClaudexorExecutionBackend["diagnoseRuntime"]>;
+  diagnoseAuthRoute(): ReturnType<ClaudexorExecutionBackend["diagnoseAuthRoute"]>;
+}
+
 function createProfileExecutionAdapter(
   options: ClaudexorBackendOptions,
   engine: ProfileEngine,
@@ -60,6 +69,52 @@ function createProfileExecutionAdapter(
       backend.resumeProfile(request),
     result: (executionId: string): Promise<Static<typeof ExecutionResultV4>> =>
       backend.resultProfile(executionId),
+    cancel: (executionId: string): Promise<void> => backend.cancel(executionId),
+    artifacts: (executionId: string): Promise<Static<typeof BackendArtifactV1>[]> =>
+      backend.artifacts(executionId),
+    readArtifact: (executionId: string, artifactId: string): Promise<Uint8Array> =>
+      backend.readArtifact(executionId, artifactId),
+    events: (executionId: string, after?: string): AsyncIterable<Static<typeof ExecutionEventV3>> =>
+      backend.events(executionId, after),
+    diagnoseCompatibility: () => backend.diagnoseCompatibility(),
+    diagnoseRuntime: () => backend.diagnoseRuntime(),
+    diagnoseAuthRoute: () => {
+      switch (engine) {
+        case "claude":
+          return backend.diagnoseAuthRoute();
+        case "codex":
+          return backend.diagnoseCodexAuthRoute();
+        case "cursor":
+          return backend.diagnoseCursorAuthRoute();
+      }
+    },
+  };
+}
+
+/** Q021 adapter over the pinned Claudexor v3.1.2 `/v2` compatibility surface. */
+export function createScheduledProfileExecutionAdapter(
+  options: ClaudexorBackendOptions,
+  engine: ProfileEngine,
+): ScheduledProfileExecutionAdapter {
+  const backend = createClaudexorExecutionBackend(options);
+  return {
+    start: async (
+      request: Static<typeof ExecutionRequestV4>,
+    ): Promise<Static<typeof BackendExecutionHandleV1>> => {
+      if (request.profile.engine !== engine) {
+        throw new ClaudexorControlError(400, "unsupported_profile", "startScheduled");
+      }
+      return backend.startScheduled(request);
+    },
+    status: (executionId: string): Promise<ExecutionStatus> => backend.status(executionId),
+    interactions: (executionId: string): Promise<Static<typeof PendingInteractionV2>[]> =>
+      backend.interactions(executionId),
+    answer: (executionId: string, answer: Static<typeof InteractionAnswerSetV1>): Promise<void> =>
+      backend.answer(executionId, answer),
+    resume: (request: Static<typeof ExecutionResumeRequestV1>): Promise<void> =>
+      backend.resumeProfile(request),
+    result: (executionId: string): Promise<Static<typeof ExecutionResultV5>> =>
+      backend.resultScheduled(executionId),
     cancel: (executionId: string): Promise<void> => backend.cancel(executionId),
     artifacts: (executionId: string): Promise<Static<typeof BackendArtifactV1>[]> =>
       backend.artifacts(executionId),

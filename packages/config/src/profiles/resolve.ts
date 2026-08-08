@@ -1,5 +1,9 @@
 import { createHash } from "node:crypto";
-import { ProfileConfigurationV1, type ResolvedProfileV1 } from "@heniek/contracts";
+import {
+  ProfileConfigurationV2,
+  type ResolvedProfileV1,
+  type ResolvedProfileV2,
+} from "@heniek/contracts";
 import { redactJson } from "@heniek/secrets";
 import type { Static } from "@sinclair/typebox";
 import { Ajv, type ErrorObject } from "ajv";
@@ -22,22 +26,25 @@ import {
   type ExecutionMode,
   PROFILE_OVERRIDE_FIELDS,
   type ProfileCapabilityRow,
+  type ProfileChainResolutionResult,
   type ProfileInvocationOverrides,
   type ProfileOverrideField,
   type ProfileResolutionResult,
   type ResolvedProfile,
+  type ResolvedProfileV2Snapshot,
   type ResolveProfileInput,
 } from "./types.js";
 
-type ProfileCatalog = Static<typeof ProfileConfigurationV1>;
+type ProfileCatalog = Static<typeof ProfileConfigurationV2>;
 type ProfileDefinition = NonNullable<ProfileCatalog["profiles"]>[string];
 type AccountDefinition = NonNullable<ProfileCatalog["accounts"]>[string];
 
 type ResolvedProfileContract = Static<typeof ResolvedProfileV1>;
+type ResolvedProfileContractV2 = Static<typeof ResolvedProfileV2>;
 type ProfileProvenance = ResolvedProfileContract["provenance"][number];
 
 const ajv = new Ajv({ allErrors: true, strict: true });
-const validateProfileCatalog = ajv.compile(ProfileConfigurationV1);
+const validateProfileCatalog = ajv.compile(ProfileConfigurationV2);
 const DURATION_PATTERN = /^[1-9][0-9]*(?:ms|s|m|h|d)$/;
 const ENGINE_VALUES = new Set<Engine>(["claude", "codex", "cursor"]);
 const EXECUTION_MODE_VALUES = new Set<ExecutionMode>(["native", "external"]);
@@ -98,7 +105,7 @@ function catalogSchemaDiagnostics(
 }
 
 function profileCatalog(values: JsonObject): JsonObject {
-  const result: Record<string, JsonValue> = { schemaVersion: 1 };
+  const result: Record<string, JsonValue> = { schemaVersion: 2 };
   for (const section of ["accounts", "workers", "roles", "profiles"] as const) {
     if (Object.hasOwn(values, section)) {
       result[section] = values[section] as JsonValue;
@@ -692,6 +699,144 @@ export function resolveProfile(input: ResolveProfileInput): ProfileResolutionRes
   return deepFreeze({
     ok: true,
     profile: resolvedProfile,
+    diagnostics: finalizedDiagnostics(diagnostics),
+  });
+}
+
+function resolvedProfileV2(
+  input: ResolveProfileInput,
+  profile: ResolvedProfile,
+  diagnostics: Diagnostic[],
+): ResolvedProfileV2Snapshot | undefined {
+  const documents = input.documents.filter((document) => document.layer !== "invocation-override");
+  const base = resolveConfiguration({
+    documents,
+    policy: HENIEK_BUILT_IN_CONFIGURATION_POLICY,
+  });
+  const candidate = profileCatalog(base.values);
+  if (!validateProfileCatalog(candidate)) return undefined;
+  const catalog = candidate as ProfileCatalog;
+  const definition = catalog.profiles?.[input.profileId];
+  if (definition === undefined) return undefined;
+  const fallbackProfileIds = [...(definition.fallbacks ?? [])];
+  if (fallbackProfileIds.includes(input.profileId as never)) {
+    diagnostics.push(
+      createDiagnostic(
+        "profile.fallback-self-reference",
+        "error",
+        `Profile ${quotedDiagnosticValue(input.profileId)} cannot fall back to itself.`,
+        { pointer: joinPointer(pointer("profiles", input.profileId), "fallbacks") },
+      ),
+    );
+    return undefined;
+  }
+  const account =
+    profile.accountId === undefined ? undefined : catalog.accounts?.[profile.accountId];
+  const permissions = definition.permissions ?? {
+    workspace: "read-write" as const,
+    identifiers: [],
+  };
+  const provenance: ResolvedProfileContractV2["provenance"] = [...profile.provenance];
+  const appendProvenance = (field: string, sourcePointer: string, value: JsonValue): void => {
+    const found = semanticProvenance(base.provenance, field, sourcePointer, value, false);
+    provenance.push(
+      found ?? {
+        field,
+        pointer: sourcePointer,
+        layer: "built-in-defaults",
+        value,
+        overridden: [],
+      },
+    );
+  };
+  const profilePointer = pointer("profiles", input.profileId);
+  appendProvenance(
+    "fallbackProfileIds",
+    joinPointer(profilePointer, "fallbacks"),
+    fallbackProfileIds,
+  );
+  appendProvenance(
+    "onCapacity",
+    joinPointer(profilePointer, "on_capacity"),
+    definition.on_capacity ?? "queue",
+  );
+  appendProvenance(
+    "permissions",
+    joinPointer(profilePointer, "permissions"),
+    permissions as unknown as JsonValue,
+  );
+  if (profile.accountId !== undefined) {
+    const accountPointer = pointer("accounts", profile.accountId);
+    appendProvenance(
+      "accountMaxConcurrentRuns",
+      joinPointer(accountPointer, "max_concurrent_runs"),
+      account?.max_concurrent_runs ?? 1,
+    );
+    appendProvenance(
+      "accountQueueStrategy",
+      joinPointer(joinPointer(accountPointer, "queue"), "strategy"),
+      account?.queue?.strategy ?? "priority-fifo",
+    );
+  }
+  provenance.sort((left, right) =>
+    left.field < right.field ? -1 : left.field > right.field ? 1 : 0,
+  );
+  const semantics = {
+    ...profile,
+    schemaVersion: 2 as const,
+    fallbackProfileIds,
+    onCapacity: definition.on_capacity ?? ("queue" as const),
+    permissions,
+    ...(profile.accountId === undefined
+      ? {}
+      : {
+          accountMaxConcurrentRuns: account?.max_concurrent_runs ?? 1,
+          accountQueueStrategy: account?.queue?.strategy ?? ("priority-fifo" as const),
+        }),
+  };
+  const {
+    fingerprint: _oldFingerprint,
+    provenance: _oldProvenance,
+    ...fingerprintFields
+  } = semantics;
+  void _oldFingerprint;
+  void _oldProvenance;
+  return deepFreeze({
+    ...semantics,
+    provenance,
+    fingerprint: fingerprintFor(fingerprintFields as unknown as JsonObject),
+  } as ResolvedProfileV2Snapshot);
+}
+
+/** Resolve a primary profile plus its flat configured fallback list. */
+export function resolveProfileChain(input: ResolveProfileInput): ProfileChainResolutionResult {
+  const diagnostics: Diagnostic[] = [];
+  const primaryResult = resolveProfile(input);
+  diagnostics.push(...primaryResult.diagnostics);
+  if (!primaryResult.ok) return { ok: false, diagnostics: finalizedDiagnostics(diagnostics) };
+  const primary = resolvedProfileV2(input, primaryResult.profile, diagnostics);
+  if (primary === undefined || hasErrors(diagnostics)) {
+    return { ok: false, diagnostics: finalizedDiagnostics(diagnostics) };
+  }
+  const fallbacks: ResolvedProfileV2Snapshot[] = [];
+  for (const profileId of primary.fallbackProfileIds) {
+    const fallbackInput: ResolveProfileInput = {
+      profileId,
+      documents: input.documents,
+      capabilities: input.capabilities,
+    };
+    const fallbackResult = resolveProfile(fallbackInput);
+    diagnostics.push(...fallbackResult.diagnostics);
+    if (!fallbackResult.ok) continue;
+    const fallback = resolvedProfileV2(fallbackInput, fallbackResult.profile, diagnostics);
+    if (fallback !== undefined) fallbacks.push(fallback);
+  }
+  if (hasErrors(diagnostics) || fallbacks.length !== primary.fallbackProfileIds.length) {
+    return { ok: false, diagnostics: finalizedDiagnostics(diagnostics) };
+  }
+  return deepFreeze({
+    ok: true,
+    chain: { schemaVersion: 1, primary, fallbacks },
     diagnostics: finalizedDiagnostics(diagnostics),
   });
 }

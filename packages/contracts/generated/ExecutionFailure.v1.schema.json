@@ -1,0 +1,116 @@
+{
+  "$id": "heniek://contract/ExecutionFailure/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "classification",
+    "phase",
+    "code",
+    "message",
+    "fallbackEligible"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "classification": {
+      "anyOf": [
+        {
+          "const": "account_unavailable",
+          "type": "string"
+        },
+        {
+          "const": "profile_unavailable",
+          "type": "string"
+        },
+        {
+          "const": "model_unavailable",
+          "type": "string"
+        },
+        {
+          "const": "engine_unavailable",
+          "type": "string"
+        },
+        {
+          "const": "provider_throttled",
+          "type": "string"
+        },
+        {
+          "const": "context_capacity_exhausted",
+          "type": "string"
+        },
+        {
+          "const": "authentication_failed",
+          "type": "string"
+        },
+        {
+          "const": "permission_denied",
+          "type": "string"
+        },
+        {
+          "const": "invalid_request",
+          "type": "string"
+        },
+        {
+          "const": "workspace_failed",
+          "type": "string"
+        },
+        {
+          "const": "artifact_failed",
+          "type": "string"
+        },
+        {
+          "const": "hard_limit_exceeded",
+          "type": "string"
+        },
+        {
+          "const": "cancelled",
+          "type": "string"
+        },
+        {
+          "const": "ambiguous",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "type": "string"
+        }
+      ]
+    },
+    "phase": {
+      "anyOf": [
+        {
+          "const": "admission",
+          "type": "string"
+        },
+        {
+          "const": "start",
+          "type": "string"
+        },
+        {
+          "const": "running",
+          "type": "string"
+        },
+        {
+          "const": "completion",
+          "type": "string"
+        }
+      ]
+    },
+    "code": {
+      "minLength": 1,
+      "maxLength": 128,
+      "type": "string"
+    },
+    "message": {
+      "minLength": 1,
+      "maxLength": 512,
+      "type": "string"
+    },
+    "fallbackEligible": {
+      "type": "boolean"
+    }
+  }
+}

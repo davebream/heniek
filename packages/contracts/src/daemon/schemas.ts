@@ -1,6 +1,11 @@
 import { Type } from "@sinclair/typebox";
 import { ArtifactId } from "../artifact/index.js";
-import { PendingInteractionV2, StageId } from "../execution-backend/index.js";
+import {
+  ExecutionAttemptV1,
+  PendingInteractionV2,
+  SchedulingDecisionV1,
+  StageId,
+} from "../execution-backend/index.js";
 import {
   InteractionAnswerSubmissionV2,
   InteractionId,
@@ -222,6 +227,38 @@ export const StageStartResultV1 = versioned("StageStartResult", 1, {
   status: RunStatus.schema,
 });
 
+const StageLimits = Type.Object(
+  {
+    maxDurationMs: Type.Optional(Type.Integer({ minimum: 1 })),
+    maxTurns: Type.Optional(Type.Integer({ minimum: 1 })),
+  },
+  { additionalProperties: false },
+);
+
+export const StageStartRequestV2 = versioned("StageStartRequest", 2, {
+  currentDirectory: Type.String({ minLength: 1 }),
+  prompt: Type.String({ minLength: 1 }),
+  artifactPath: Type.String({ minLength: 1 }),
+  profileId: Type.String({ minLength: 1 }),
+  priority: Type.Integer({ minimum: 0, maximum: 9 }),
+  requestedIdentifiers: Type.Array(
+    Type.String({
+      minLength: 1,
+      maxLength: 128,
+      pattern: "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+    }),
+    { uniqueItems: true },
+  ),
+  limits: StageLimits,
+});
+
+export const StageStartResultV2 = versioned("StageStartResult", 2, {
+  runId: RunId,
+  stageId: StageId,
+  status: RunStatus.schema,
+  schedulingRevision: Type.Integer({ minimum: 1 }),
+});
+
 export const StageRunStatusResultV1 = versioned("StageRunStatusResult", 1, {
   runId: RunId,
   stageId: StageId,
@@ -249,6 +286,34 @@ export const StageRunStatusResultV2 = versioned("StageRunStatusResult", 2, {
   status: RunStatus.schema,
   runRevision: Type.Integer({ minimum: 1 }),
   interactions: Type.Array(InteractionV2),
+});
+
+const SchedulingState = Type.Object(
+  {
+    revision: Type.Integer({ minimum: 1 }),
+    state: Type.Union([
+      Type.Literal("queued"),
+      Type.Literal("waiting_on_user"),
+      Type.Literal("running"),
+      Type.Literal("terminal"),
+    ]),
+    requestedPriority: Type.Integer({ minimum: 0, maximum: 9 }),
+    selectedCandidateIndex: Type.Optional(Type.Integer({ minimum: 0 })),
+    selectedProfileId: Type.Optional(Type.String({ minLength: 1 })),
+    selectedAccountId: Type.Optional(Type.String({ minLength: 1 })),
+  },
+  { additionalProperties: false },
+);
+
+export const StageRunStatusResultV3 = versioned("StageRunStatusResult", 3, {
+  runId: RunId,
+  stageId: StageId,
+  status: RunStatus.schema,
+  runRevision: Type.Integer({ minimum: 1 }),
+  interactions: Type.Array(InteractionV2),
+  scheduling: SchedulingState,
+  attempts: Type.Array(Type.Ref(ExecutionAttemptV1)),
+  decisions: Type.Array(Type.Ref(SchedulingDecisionV1)),
 });
 
 export const RunAnswerRequestV2 = versioned("RunAnswerRequest", 2, {
@@ -307,6 +372,30 @@ export const StageRunResultV1 = versioned("StageRunResult", 1, {
     ),
   ),
   error: Type.Optional(Type.String({ minLength: 1 })),
+});
+
+export const StageRunResultV2 = versioned("StageRunResult", 2, {
+  runId: RunId,
+  stageId: StageId,
+  status: RunStatus.schema,
+  summary: Type.Optional(Type.String({ minLength: 1 })),
+  sessionId: Type.Optional(Type.String({ minLength: 1 })),
+  artifacts: Type.Array(
+    Type.Object(
+      {
+        name: Type.String({ minLength: 1 }),
+        artifactId: ArtifactId,
+        mediaType: Type.String({ minLength: 1 }),
+        byteLength: Type.Integer({ minimum: 0 }),
+        sha256: Type.String({ pattern: "^[a-f0-9]{64}$" }),
+      },
+      { additionalProperties: false },
+    ),
+  ),
+  error: Type.Optional(Type.String({ minLength: 1 })),
+  scheduling: SchedulingState,
+  attempts: Type.Array(Type.Ref(ExecutionAttemptV1)),
+  decisions: Type.Array(Type.Ref(SchedulingDecisionV1)),
 });
 
 export const ArtifactGetResultV1 = versioned("ArtifactGetResult", 1, {

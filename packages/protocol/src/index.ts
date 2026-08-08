@@ -16,9 +16,11 @@ export const CODEBASE_REGISTER_METHOD = "codebase.register";
 export const CODEBASE_REGISTER_V1_METHOD = "codebase.register.v1";
 export const STAGE_START_METHOD = "stage.start";
 export const STAGE_START_V1_METHOD = "stage.start.v1";
+export const STAGE_START_V2_METHOD = "stage.start.v2";
 export const RUN_STATUS_METHOD = "run.status";
 export const RUN_STATUS_V1_METHOD = "run.status.v1";
 export const RUN_STATUS_V2_METHOD = "run.status.v2";
+export const RUN_STATUS_V3_METHOD = "run.status.v3";
 export const RUN_ANSWER_METHOD = "run.answer";
 export const RUN_ANSWER_V1_METHOD = "run.answer.v1";
 export const RUN_ANSWER_V2_METHOD = "run.answer.v2";
@@ -31,6 +33,7 @@ export const RUN_CANCEL_METHOD = "run.cancel";
 export const RUN_CANCEL_V1_METHOD = "run.cancel.v1";
 export const RUN_RESULT_METHOD = "run.result";
 export const RUN_RESULT_V1_METHOD = "run.result.v1";
+export const RUN_RESULT_V2_METHOD = "run.result.v2";
 export const ARTIFACT_GET_METHOD = "artifact.get";
 export const ARTIFACT_GET_V1_METHOD = "artifact.get.v1";
 export const DOCTOR_METHOD = "doctor";
@@ -88,12 +91,18 @@ export const REGISTERED_CODEBASE_SCHEMA_SHA256 =
 export const STAGE_START_SCHEMA_ID = "heniek://contract/StageStartResult/v1";
 export const STAGE_START_SCHEMA_SHA256 =
   "35776620780b4a150ab249801125096c4edfd9bfb8713c5c3e57e3d41c616341";
+export const STAGE_START_V2_SCHEMA_ID = "heniek://contract/StageStartResult/v2";
+export const STAGE_START_V2_SCHEMA_SHA256 =
+  "f3b5fc903ec2b65c6541b16c753974f7dabd77c44eee941317cec492bd3be6cd";
 export const RUN_STATUS_SCHEMA_ID = "heniek://contract/StageRunStatusResult/v1";
 export const RUN_STATUS_SCHEMA_SHA256 =
   "69c0bd03d97d24dab4ee7b8b552b224ec23ddc5536db25e08bdd70b82a88fc79";
 export const RUN_STATUS_V2_SCHEMA_ID = "heniek://contract/StageRunStatusResult/v2";
 export const RUN_STATUS_V2_SCHEMA_SHA256 =
   "f9d6117ced1e9ecf64569e2a15285e13999d0d67cd28e83f6b909a7df0c15601";
+export const RUN_STATUS_V3_SCHEMA_ID = "heniek://contract/StageRunStatusResult/v3";
+export const RUN_STATUS_V3_SCHEMA_SHA256 =
+  "4812a646b8cf1b9d4f7cabfca9e96c1fb8b24857caf3d48fc2c855ea8caa0eb4";
 export const RUN_MUTATION_SCHEMA_ID = "heniek://contract/StageRunMutationResult/v1";
 export const RUN_MUTATION_SCHEMA_SHA256 =
   "7491e0d1842751707d3658b7c71c058f1d2a6b1194d8c6752511b8293f1c9e3b";
@@ -109,6 +118,9 @@ export const INBOX_LIST_SCHEMA_SHA256 =
 export const RUN_RESULT_SCHEMA_ID = "heniek://contract/StageRunResult/v1";
 export const RUN_RESULT_SCHEMA_SHA256 =
   "8f0faffeabe166f355b7033e9a45b6cf2bae829d1ab64ab10f086fce501fc8fa";
+export const RUN_RESULT_V2_SCHEMA_ID = "heniek://contract/StageRunResult/v2";
+export const RUN_RESULT_V2_SCHEMA_SHA256 =
+  "046a7e45967777b4ebb50bfb734207a8a369b90d50002768891e3e6d50f715d9";
 export const ARTIFACT_GET_SCHEMA_ID = "heniek://contract/ArtifactGetResult/v1";
 export const ARTIFACT_GET_SCHEMA_SHA256 =
   "f7b3994c57cb536a8bcca368a33c38d24d5ffafaf60144ce3382e89a03d38223";

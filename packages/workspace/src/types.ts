@@ -24,6 +24,8 @@ export interface ProvisionWorkspaceInput {
   readonly codebaseId: CodebaseId;
   readonly repositoryId: RepositoryId;
   readonly integrationBranch: string;
+  /** Optional immutable base for fallback attempts; legacy callers resolve the configured remote branch. */
+  readonly baseSha?: string;
   readonly owner: LeaseOwner;
   readonly configuration: WorkspaceConfiguration;
 }
