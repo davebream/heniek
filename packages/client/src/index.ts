@@ -7,20 +7,32 @@ import type {
   CapabilityCatalogueV1,
   CodebaseDetectionResult,
   DoctorReportV1,
+  ExecutionFailureV1,
+  ExternalStageResultV1,
   InteractionAnswerSetV1,
   InteractionAnswerSubmissionV2,
   InteractionInboxResultV1,
+  NativeStagePollResultV1,
+  NativeStageQuestionResultV1,
+  NativeStageStatusResultV1,
+  NativeStageSubmitResultV1,
+  ParentSessionAttachmentV1,
+  ParentSessionDetachResultV1,
+  PendingInteractionV2,
   RegisteredCodebase,
   StageRunAnswerResultV2,
   StageRunMutationResultV1,
   StageRunResultV1,
   StageRunResultV2,
+  StageRunResultV3,
   StageRunResumeResultV2,
   StageRunStatusResultV1,
   StageRunStatusResultV2,
   StageRunStatusResultV3,
+  StageRunStatusResultV4,
   StageStartResultV1,
   StageStartResultV2,
+  StageStartResultV3,
 } from "@heniek/contracts";
 import {
   ARTIFACT_GET_METHOD,
@@ -55,6 +67,30 @@ import {
   INBOX_LIST_V1_METHOD,
   JSON_RPC_VERSION,
   MAX_LINE_BYTES,
+  NATIVE_STAGE_POLL_METHOD,
+  NATIVE_STAGE_POLL_SCHEMA_ID,
+  NATIVE_STAGE_POLL_SCHEMA_SHA256,
+  NATIVE_STAGE_POLL_V1_METHOD,
+  NATIVE_STAGE_QUESTION_METHOD,
+  NATIVE_STAGE_QUESTION_SCHEMA_ID,
+  NATIVE_STAGE_QUESTION_SCHEMA_SHA256,
+  NATIVE_STAGE_QUESTION_V1_METHOD,
+  NATIVE_STAGE_STATUS_METHOD,
+  NATIVE_STAGE_STATUS_SCHEMA_ID,
+  NATIVE_STAGE_STATUS_SCHEMA_SHA256,
+  NATIVE_STAGE_STATUS_V1_METHOD,
+  NATIVE_STAGE_SUBMIT_METHOD,
+  NATIVE_STAGE_SUBMIT_SCHEMA_ID,
+  NATIVE_STAGE_SUBMIT_SCHEMA_SHA256,
+  NATIVE_STAGE_SUBMIT_V1_METHOD,
+  PARENT_SESSION_ATTACH_METHOD,
+  PARENT_SESSION_ATTACH_SCHEMA_ID,
+  PARENT_SESSION_ATTACH_SCHEMA_SHA256,
+  PARENT_SESSION_ATTACH_V1_METHOD,
+  PARENT_SESSION_DETACH_METHOD,
+  PARENT_SESSION_DETACH_SCHEMA_ID,
+  PARENT_SESSION_DETACH_SCHEMA_SHA256,
+  PARENT_SESSION_DETACH_V1_METHOD,
   REGISTERED_CODEBASE_SCHEMA_ID,
   REGISTERED_CODEBASE_SCHEMA_SHA256,
   RPC_CANCEL_METHOD,
@@ -74,6 +110,9 @@ import {
   RUN_RESULT_V2_METHOD,
   RUN_RESULT_V2_SCHEMA_ID,
   RUN_RESULT_V2_SCHEMA_SHA256,
+  RUN_RESULT_V3_METHOD,
+  RUN_RESULT_V3_SCHEMA_ID,
+  RUN_RESULT_V3_SCHEMA_SHA256,
   RUN_RESUME_METHOD,
   RUN_RESUME_V1_METHOD,
   RUN_RESUME_V2_METHOD,
@@ -89,6 +128,9 @@ import {
   RUN_STATUS_V3_METHOD,
   RUN_STATUS_V3_SCHEMA_ID,
   RUN_STATUS_V3_SCHEMA_SHA256,
+  RUN_STATUS_V4_METHOD,
+  RUN_STATUS_V4_SCHEMA_ID,
+  RUN_STATUS_V4_SCHEMA_SHA256,
   STAGE_START_METHOD,
   STAGE_START_SCHEMA_ID,
   STAGE_START_SCHEMA_SHA256,
@@ -96,6 +138,9 @@ import {
   STAGE_START_V2_METHOD,
   STAGE_START_V2_SCHEMA_ID,
   STAGE_START_V2_SCHEMA_SHA256,
+  STAGE_START_V3_METHOD,
+  STAGE_START_V3_SCHEMA_ID,
+  STAGE_START_V3_SCHEMA_SHA256,
   TRANSPORT_VERSION,
   zeroCredential,
 } from "@heniek/protocol";
@@ -383,6 +428,14 @@ const STAGE_START_V2_REQUIREMENT: RpcRequirement = {
   sha256: STAGE_START_V2_SCHEMA_SHA256,
 };
 
+const STAGE_START_V3_REQUIREMENT: RpcRequirement = {
+  name: STAGE_START_METHOD,
+  methodVersion: 3,
+  wireMethod: STAGE_START_V3_METHOD,
+  schemaId: STAGE_START_V3_SCHEMA_ID,
+  sha256: STAGE_START_V3_SCHEMA_SHA256,
+};
+
 const RUN_STATUS_REQUIREMENT: RpcRequirement = {
   name: RUN_STATUS_METHOD,
   wireMethod: RUN_STATUS_V1_METHOD,
@@ -404,6 +457,14 @@ const RUN_STATUS_V3_REQUIREMENT: RpcRequirement = {
   wireMethod: RUN_STATUS_V3_METHOD,
   schemaId: RUN_STATUS_V3_SCHEMA_ID,
   sha256: RUN_STATUS_V3_SCHEMA_SHA256,
+};
+
+const RUN_STATUS_V4_REQUIREMENT: RpcRequirement = {
+  name: RUN_STATUS_METHOD,
+  methodVersion: 4,
+  wireMethod: RUN_STATUS_V4_METHOD,
+  schemaId: RUN_STATUS_V4_SCHEMA_ID,
+  sha256: RUN_STATUS_V4_SCHEMA_SHA256,
 };
 
 const INBOX_LIST_REQUIREMENT: RpcRequirement = {
@@ -451,6 +512,62 @@ const RUN_RESULT_V2_REQUIREMENT: RpcRequirement = {
   wireMethod: RUN_RESULT_V2_METHOD,
   schemaId: RUN_RESULT_V2_SCHEMA_ID,
   sha256: RUN_RESULT_V2_SCHEMA_SHA256,
+};
+
+const RUN_RESULT_V3_REQUIREMENT: RpcRequirement = {
+  name: RUN_RESULT_METHOD,
+  methodVersion: 3,
+  wireMethod: RUN_RESULT_V3_METHOD,
+  schemaId: RUN_RESULT_V3_SCHEMA_ID,
+  sha256: RUN_RESULT_V3_SCHEMA_SHA256,
+};
+
+/**
+ * Q023's native bridge — the surface the Claude Code plugin (Q050) will
+ * drive. `parentSession.*` requirements have no `methodVersion` entry
+ * because there is only ever one version of each so far, matching every
+ * other single-version requirement above (the field defaults to `1`).
+ */
+const PARENT_SESSION_ATTACH_REQUIREMENT: RpcRequirement = {
+  name: PARENT_SESSION_ATTACH_METHOD,
+  wireMethod: PARENT_SESSION_ATTACH_V1_METHOD,
+  schemaId: PARENT_SESSION_ATTACH_SCHEMA_ID,
+  sha256: PARENT_SESSION_ATTACH_SCHEMA_SHA256,
+};
+
+const PARENT_SESSION_DETACH_REQUIREMENT: RpcRequirement = {
+  name: PARENT_SESSION_DETACH_METHOD,
+  wireMethod: PARENT_SESSION_DETACH_V1_METHOD,
+  schemaId: PARENT_SESSION_DETACH_SCHEMA_ID,
+  sha256: PARENT_SESSION_DETACH_SCHEMA_SHA256,
+};
+
+const NATIVE_STAGE_POLL_REQUIREMENT: RpcRequirement = {
+  name: NATIVE_STAGE_POLL_METHOD,
+  wireMethod: NATIVE_STAGE_POLL_V1_METHOD,
+  schemaId: NATIVE_STAGE_POLL_SCHEMA_ID,
+  sha256: NATIVE_STAGE_POLL_SCHEMA_SHA256,
+};
+
+const NATIVE_STAGE_QUESTION_REQUIREMENT: RpcRequirement = {
+  name: NATIVE_STAGE_QUESTION_METHOD,
+  wireMethod: NATIVE_STAGE_QUESTION_V1_METHOD,
+  schemaId: NATIVE_STAGE_QUESTION_SCHEMA_ID,
+  sha256: NATIVE_STAGE_QUESTION_SCHEMA_SHA256,
+};
+
+const NATIVE_STAGE_SUBMIT_REQUIREMENT: RpcRequirement = {
+  name: NATIVE_STAGE_SUBMIT_METHOD,
+  wireMethod: NATIVE_STAGE_SUBMIT_V1_METHOD,
+  schemaId: NATIVE_STAGE_SUBMIT_SCHEMA_ID,
+  sha256: NATIVE_STAGE_SUBMIT_SCHEMA_SHA256,
+};
+
+const NATIVE_STAGE_STATUS_REQUIREMENT: RpcRequirement = {
+  name: NATIVE_STAGE_STATUS_METHOD,
+  wireMethod: NATIVE_STAGE_STATUS_V1_METHOD,
+  schemaId: NATIVE_STAGE_STATUS_SCHEMA_ID,
+  sha256: NATIVE_STAGE_STATUS_SCHEMA_SHA256,
 };
 
 const ARTIFACT_GET_REQUIREMENT: RpcRequirement = {
@@ -957,6 +1074,41 @@ export function startStageV2ViaDaemon(
   );
 }
 
+/**
+ * Q023's one admission door: routes to native or scheduled execution by the
+ * resolved profile's `executionMode`, reported back in `executionMode` so a
+ * caller never has to pre-decide which mode a profile uses.
+ */
+export function startStageV3ViaDaemon(
+  home: ApplicationHome,
+  input: {
+    readonly currentDirectory: string;
+    readonly prompt: string;
+    readonly artifactPath: string;
+    readonly profileId: string;
+    readonly priority?: number;
+    readonly requestedIdentifiers?: readonly string[];
+    readonly limits?: { readonly maxDurationMs?: number; readonly maxTurns?: number };
+    readonly signal?: AbortSignal;
+  },
+): Promise<Static<typeof StageStartResultV3>> {
+  return domainCall(
+    home,
+    STAGE_START_V3_REQUIREMENT,
+    {
+      currentDirectory: input.currentDirectory,
+      prompt: input.prompt,
+      artifactPath: input.artifactPath,
+      profileId: input.profileId,
+      priority: input.priority ?? 0,
+      requestedIdentifiers: [...(input.requestedIdentifiers ?? [])],
+      limits: input.limits ?? {},
+    },
+    "stage start v3",
+    input.signal,
+  );
+}
+
 export function fetchRunStatusViaDaemon(
   home: ApplicationHome,
   runId: string,
@@ -979,6 +1131,14 @@ export function fetchRunStatusV3ViaDaemon(
   signal?: AbortSignal,
 ): Promise<Static<typeof StageRunStatusResultV3>> {
   return domainCall(home, RUN_STATUS_V3_REQUIREMENT, { runId }, "run status v3", signal);
+}
+
+export function fetchRunStatusV4ViaDaemon(
+  home: ApplicationHome,
+  runId: string,
+  signal?: AbortSignal,
+): Promise<Static<typeof StageRunStatusResultV4>> {
+  return domainCall(home, RUN_STATUS_V4_REQUIREMENT, { runId }, "run status v4", signal);
 }
 
 export function listInteractionInboxViaDaemon(
@@ -1065,6 +1225,182 @@ export function fetchRunResultV2ViaDaemon(
   runId: string,
 ): Promise<Static<typeof StageRunResultV2>> {
   return domainCall(home, RUN_RESULT_V2_REQUIREMENT, { runId }, "run result v2");
+}
+
+export function fetchRunResultV3ViaDaemon(
+  home: ApplicationHome,
+  runId: string,
+): Promise<Static<typeof StageRunResultV3>> {
+  return domainCall(home, RUN_RESULT_V3_REQUIREMENT, { runId }, "run result v3");
+}
+
+/**
+ * Q023's native bridge — the surface the Claude Code plugin (Q050) will
+ * drive: attach once per connection, then poll/question/submit against
+ * whatever native stages a codebase's `stage.start.v3` calls have queued.
+ */
+export function attachParentSessionViaDaemon(
+  home: ApplicationHome,
+  input: {
+    readonly currentDirectory: string;
+    readonly previousSessionId?: string;
+    readonly previousSessionRevision?: number;
+    readonly resumeDispatchIds?: readonly string[];
+    readonly signal?: AbortSignal;
+  },
+): Promise<Static<typeof ParentSessionAttachmentV1>> {
+  return domainCall(
+    home,
+    PARENT_SESSION_ATTACH_REQUIREMENT,
+    {
+      schemaVersion: 1,
+      currentDirectory: input.currentDirectory,
+      ...(input.previousSessionId === undefined
+        ? {}
+        : { previousSessionId: input.previousSessionId }),
+      ...(input.previousSessionRevision === undefined
+        ? {}
+        : { previousSessionRevision: input.previousSessionRevision }),
+      resumeDispatchIds: [...(input.resumeDispatchIds ?? [])],
+    },
+    "parent session attach",
+    input.signal,
+  );
+}
+
+export function detachParentSessionViaDaemon(
+  home: ApplicationHome,
+  input: {
+    readonly sessionId: string;
+    readonly sessionRevision: number;
+    readonly dispatches: readonly {
+      readonly dispatchId: string;
+      readonly outcome: "not_started" | "abandoned";
+    }[];
+    readonly signal?: AbortSignal;
+  },
+): Promise<Static<typeof ParentSessionDetachResultV1>> {
+  return domainCall(
+    home,
+    PARENT_SESSION_DETACH_REQUIREMENT,
+    {
+      schemaVersion: 1,
+      sessionId: input.sessionId,
+      sessionRevision: input.sessionRevision,
+      dispatches: [...input.dispatches],
+    },
+    "parent session detach",
+    input.signal,
+  );
+}
+
+export function pollNativeStageViaDaemon(
+  home: ApplicationHome,
+  input: {
+    readonly sessionId: string;
+    readonly sessionRevision: number;
+    readonly maxDispatches?: number;
+    readonly signal?: AbortSignal;
+  },
+): Promise<Static<typeof NativeStagePollResultV1>> {
+  return domainCall(
+    home,
+    NATIVE_STAGE_POLL_REQUIREMENT,
+    {
+      schemaVersion: 1,
+      sessionId: input.sessionId,
+      sessionRevision: input.sessionRevision,
+      ...(input.maxDispatches === undefined ? {} : { maxDispatches: input.maxDispatches }),
+    },
+    "native stage poll",
+    input.signal,
+  );
+}
+
+export function raiseNativeStageQuestionViaDaemon(
+  home: ApplicationHome,
+  input: {
+    readonly sessionId: string;
+    readonly sessionRevision: number;
+    readonly dispatchId: string;
+    readonly expectedDispatchRevision: number;
+    readonly runId: string;
+    readonly stageId: string;
+    readonly attemptId: string;
+    readonly interaction: Static<typeof PendingInteractionV2>;
+    readonly signal?: AbortSignal;
+  },
+): Promise<Static<typeof NativeStageQuestionResultV1>> {
+  return domainCall(
+    home,
+    NATIVE_STAGE_QUESTION_REQUIREMENT,
+    {
+      schemaVersion: 1,
+      sessionId: input.sessionId,
+      sessionRevision: input.sessionRevision,
+      dispatchId: input.dispatchId,
+      expectedDispatchRevision: input.expectedDispatchRevision,
+      runId: input.runId,
+      stageId: input.stageId,
+      attemptId: input.attemptId,
+      interaction: input.interaction,
+    },
+    "native stage question",
+    input.signal,
+  );
+}
+
+export function submitNativeStageViaDaemon(
+  home: ApplicationHome,
+  input: {
+    readonly sessionId: string;
+    readonly sessionRevision: number;
+    readonly dispatchId: string;
+    readonly expectedDispatchRevision: number;
+    readonly runId: string;
+    readonly stageId: string;
+    readonly attemptId: string;
+    readonly submissionId: string;
+    readonly outcome: "succeeded" | "failed" | "cancelled";
+    readonly result?: Static<typeof ExternalStageResultV1>;
+    readonly failure?: Static<typeof ExecutionFailureV1>;
+    readonly signal?: AbortSignal;
+  },
+): Promise<Static<typeof NativeStageSubmitResultV1>> {
+  return domainCall(
+    home,
+    NATIVE_STAGE_SUBMIT_REQUIREMENT,
+    {
+      schemaVersion: 1,
+      sessionId: input.sessionId,
+      sessionRevision: input.sessionRevision,
+      dispatchId: input.dispatchId,
+      expectedDispatchRevision: input.expectedDispatchRevision,
+      runId: input.runId,
+      stageId: input.stageId,
+      attemptId: input.attemptId,
+      submissionId: input.submissionId,
+      outcome: input.outcome,
+      ...(input.result === undefined ? {} : { result: input.result }),
+      ...(input.failure === undefined ? {} : { failure: input.failure }),
+    },
+    "native stage submit",
+    input.signal,
+  );
+}
+
+export function fetchNativeStageStatusViaDaemon(
+  home: ApplicationHome,
+  runId: string,
+  signal?: AbortSignal,
+): Promise<Static<typeof NativeStageStatusResultV1>> {
+  return domainCall(
+    home,
+    NATIVE_STAGE_STATUS_REQUIREMENT,
+    { runId },
+    "native stage status",
+    signal,
+  );
 }
 
 export async function fetchArtifactViaDaemon(
