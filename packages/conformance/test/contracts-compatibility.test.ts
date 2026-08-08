@@ -115,6 +115,29 @@ const manifestPath = resolve(packageRoot, "../contracts/generated/manifest.json"
  * 3. The question contracts are reused, not re-minted. A native `needs_input`
  *    crosses as the same `PendingInteraction/v2` an external backend raises,
  *    and is answered through the same `InteractionAnswerSubmission/v2`.
+ *
+ * Q023 then raises the count 103 → 106 for a defect found while implementing
+ * it, again by pure addition: `SchedulingDecision/v2` plus the two daemon
+ * results that carry it, `StageRunStatusResult/v4` and `StageRunResult/v3`.
+ *
+ * `SchedulingDecision/v1` omits four kinds the scheduler has always written —
+ * `attempt_succeeded`, `attempt_cancelled`, `attempt_recovery_required` and
+ * `user_choice`. Nothing caught it, because `recordDecision` typed `kind` as
+ * a bare `string`, `scheduling_decision.kind` carries no CHECK, and outgoing
+ * results are never validated against their own published schema. The
+ * consequence was live: a run that took a fallback, was cancelled by the
+ * user, or ended in recovery could be reported through `run.status.v3` or
+ * `run.result.v2` as a payload that fails those methods' own pinned schemas.
+ *
+ * Widening V1 in place would have been the smaller diff, and was rejected:
+ * the in-place route requires proof that the schema's consumer set is empty,
+ * which is exactly what is *not* true of a shipped daemon result. So V1 stays
+ * frozen and incomplete, V2 is complete, and V1 remains selectable through
+ * `daemon.negotiate` for any client pinned to it.
+ *
+ * The durable fix is not this schema — it is that `recordDecision` now takes
+ * `SchedulingDecisionKind` instead of `string`, so the next omission is a
+ * compile error rather than a wire-format lie.
  */
 const EXPECTED_SCHEMAS: readonly {
   readonly schemaId: string;
@@ -639,6 +662,12 @@ const EXPECTED_SCHEMAS: readonly {
     path: "generated/SchedulingDecision.v1.schema.json",
   },
   {
+    schemaId: "heniek://contract/SchedulingDecision/v2",
+    schemaVersion: 2,
+    sha256: "27b87dbe1727aab276a0db642c2511942bfba9bc1da7c52ca4c7d68ee20d8049",
+    path: "generated/SchedulingDecision.v2.schema.json",
+  },
+  {
     schemaId: "heniek://contract/StageRunAnswerResult/v2",
     schemaVersion: 2,
     sha256: "f2a8f8fc1020ec5371e769db12fe0aeaca865caa669077d7c35167a29efc265c",
@@ -663,6 +692,12 @@ const EXPECTED_SCHEMAS: readonly {
     path: "generated/StageRunResult.v2.schema.json",
   },
   {
+    schemaId: "heniek://contract/StageRunResult/v3",
+    schemaVersion: 3,
+    sha256: "0bcc4f412bf6574a4f75f26b77979fa6c56963497e8a16efc886bfd119959557",
+    path: "generated/StageRunResult.v3.schema.json",
+  },
+  {
     schemaId: "heniek://contract/StageRunResumeResult/v2",
     schemaVersion: 2,
     sha256: "39164d439fdce631fadae6a7baa7ca926d6c3fc76b76c25f8f9411e6da65b4c7",
@@ -685,6 +720,12 @@ const EXPECTED_SCHEMAS: readonly {
     schemaVersion: 3,
     sha256: "4812a646b8cf1b9d4f7cabfca9e96c1fb8b24857caf3d48fc2c855ea8caa0eb4",
     path: "generated/StageRunStatusResult.v3.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/StageRunStatusResult/v4",
+    schemaVersion: 4,
+    sha256: "448d39bcafb560b28c47b04c07ae649e2053d7674e6ca6bd15d8ac448fd6ef09",
+    path: "generated/StageRunStatusResult.v4.schema.json",
   },
   {
     schemaId: "heniek://contract/StageStartRequest/v2",
@@ -743,7 +784,7 @@ const EXPECTED_SCHEMAS: readonly {
 ];
 
 describe("packages/contracts generated manifest is unchanged (AC4)", () => {
-  it("manifest.json lists exactly the 103 known schemas with their recorded sha256", async () => {
+  it("manifest.json lists exactly the 106 known schemas with their recorded sha256", async () => {
     const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
     expect(manifest).toEqual({
       schemaVersion: "heniek.contracts-manifest.v1",

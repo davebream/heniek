@@ -1,4 +1,7 @@
 import { rm } from "node:fs/promises";
+import { createRequire } from "node:module";
+import { SchedulingDecisionV1, SchedulingDecisionV2 } from "@heniek/contracts";
+import { Ajv } from "ajv";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { internalHandle, openStateDatabase, type StateDatabase } from "../src/database/open.js";
 import { runMigrations } from "../src/migrations/migrate.js";
@@ -20,6 +23,13 @@ import { createDeterministicIds, createFakeClock } from "./helpers/determinism.j
 import { makeTempDbPath } from "./helpers/temp-db.js";
 
 const SHA = "0123456789abcdef0123456789abcdef01234567";
+
+// See packages/contracts/scripts/generate.ts for why ajv-formats is loaded
+// via createRequire rather than a static import.
+const require = createRequire(import.meta.url);
+const addFormats: typeof import("ajv-formats").default = require("ajv-formats");
+const ajv = new Ajv({ strict: true, allErrors: true });
+addFormats(ajv);
 
 function required<T>(value: T | undefined, description: string): T {
   if (value === undefined) throw new Error(`expected ${description}`);
@@ -362,5 +372,71 @@ describe("migration 10 durable account scheduler", () => {
         .prepare("UPDATE scheduling_decision SET reason_code = 'changed' WHERE decision_id = ?")
         .run(decision.decisionId),
     ).toThrow(/immutable/);
+  });
+
+  /**
+   * Regression for a defect found while implementing Q023.
+   *
+   * `SchedulingDecision/v1` lists fourteen kinds; the scheduler writes
+   * eighteen. The four it never declared — `attempt_succeeded`,
+   * `attempt_cancelled`, `attempt_recovery_required`, `user_choice` — reach
+   * the wire through `StageRunStatusResult/v3.decisions` and
+   * `StageRunResult/v2.decisions`, so the daemon could answer `run.status`
+   * with a payload that fails its own published schema.
+   *
+   * Nothing caught it because all three guards were absent at once:
+   * `recordDecision` typed `kind` as `string`, `scheduling_decision.kind`
+   * has no CHECK, and outgoing results are not validated against their
+   * schema. The primary fix is the parameter type, which makes an omission a
+   * compile error. This test pins the runtime half: what the scheduler
+   * actually emits must validate against what the contract actually
+   * declares.
+   */
+  it("emits only decision kinds SchedulingDecision/v2 declares", () => {
+    const validate = ajv.compile(SchedulingDecisionV2);
+
+    schedule("cancelled-run");
+    cancelQueuedExecutionSchedule(db, "cancelled-run");
+
+    schedule("succeeded-run");
+    const claim = required(
+      claimNextExecutionCandidate(db, { ownerId: "daemon" }),
+      "claim for the succeeded run",
+    );
+    completeExecutionAttempt(db, { attemptId: claim.attemptId, status: "succeeded" });
+
+    const decisions = [
+      ...readSchedulingDecisions(db, "cancelled-run"),
+      ...readSchedulingDecisions(db, "succeeded-run"),
+    ];
+    expect(decisions.length).toBeGreaterThan(0);
+
+    for (const decision of decisions) {
+      const payload = {
+        schemaVersion: 2,
+        decisionId: decision.decisionId,
+        runId: decision.runId,
+        stageId: decision.stageId,
+        ...(decision.candidateIndex === null ? {} : { candidateIndex: decision.candidateIndex }),
+        ...(decision.profileId === null ? {} : { profileId: decision.profileId }),
+        ...(decision.accountId === null ? {} : { accountId: decision.accountId }),
+        kind: decision.kind,
+        reasonCode: decision.reasonCode,
+        recordedAt: decision.recordedAt,
+      };
+      expect(
+        validate(payload),
+        `expected "${decision.kind}" to satisfy SchedulingDecision/v2`,
+      ).toBe(true);
+    }
+
+    // The defect itself, pinned: these kinds are real emissions that the
+    // frozen v1 union cannot express. If this ever stops holding, v1 was
+    // edited in place and its pinned digest moved.
+    const v1Kinds = new Set<string>(
+      SchedulingDecisionV1.properties.kind.anyOf.map((one) => one.const),
+    );
+    const emitted = new Set<string>(decisions.map((decision) => decision.kind));
+    expect([...emitted].filter((kind) => !v1Kinds.has(kind))).not.toHaveLength(0);
   });
 });

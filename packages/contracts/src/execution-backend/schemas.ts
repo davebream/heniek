@@ -788,6 +788,60 @@ export const SchedulingDecisionV1 = versioned("SchedulingDecision", 1, {
   recordedAt: Type.String({ format: "date-time" }),
 });
 
+/**
+ * The scheduler's full decision vocabulary, exported so the writer can be
+ * *typed* against it rather than merely tested against it.
+ *
+ * V1 omitted four kinds the scheduler has always written —
+ * `attempt_succeeded`, `attempt_cancelled`, `attempt_recovery_required` and
+ * `user_choice`. Nothing caught it: `recordDecision` typed `kind` as a bare
+ * `string`, `scheduling_decision.kind` carries no CHECK, and outgoing
+ * results are never validated against their own published schema. So
+ * `run.status.v3` and `run.result.v2` could return a `decisions` array that
+ * fails `StageRunStatusResult/v3` — the daemon violating its own contract
+ * while every gate stayed green.
+ *
+ * Widening V1 in place was rejected: its digest is pinned, and the repo's
+ * own rule is that an in-place digest change needs proof of an empty
+ * consumer set, which is not true here. So V1 stays frozen and wrong, V2 is
+ * complete, and the daemon results move to V2 through their own new
+ * versions.
+ */
+export const SCHEDULING_DECISION_KINDS = [
+  "enqueued",
+  "capacity_rejected",
+  "compatibility_rejected",
+  "candidate_selected",
+  "lease_acquired",
+  "lease_renewed",
+  "lease_released",
+  "lease_expired",
+  "capacity_question_created",
+  "capacity_answered",
+  "attempt_started",
+  "attempt_succeeded",
+  "attempt_cancelled",
+  "attempt_failed",
+  "attempt_recovery_required",
+  "fallback_selected",
+  "fallback_exhausted",
+  "user_choice",
+] as const;
+
+export type SchedulingDecisionKind = (typeof SCHEDULING_DECISION_KINDS)[number];
+
+export const SchedulingDecisionV2 = versioned("SchedulingDecision", 2, {
+  decisionId: Type.String({ minLength: 1 }),
+  runId: RunId,
+  stageId: StageId,
+  candidateIndex: Type.Optional(Type.Integer({ minimum: 0 })),
+  profileId: Type.Optional(ProfileId),
+  accountId: Type.Optional(Type.String({ minLength: 1 })),
+  kind: Type.Union(SCHEDULING_DECISION_KINDS.map((kind) => Type.Literal(kind))),
+  reasonCode: Type.String({ minLength: 1, maxLength: 128 }),
+  recordedAt: Type.String({ format: "date-time" }),
+});
+
 /** The one-stage structured result Heniek validates before completion. */
 export const ExternalStageResultV1 = versioned("ExternalStageResult", 1, {
   summary: Type.String({ minLength: 1 }),

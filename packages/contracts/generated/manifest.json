@@ -518,6 +518,12 @@
       "path": "generated/SchedulingDecision.v1.schema.json"
     },
     {
+      "schemaId": "heniek://contract/SchedulingDecision/v2",
+      "schemaVersion": 2,
+      "sha256": "27b87dbe1727aab276a0db642c2511942bfba9bc1da7c52ca4c7d68ee20d8049",
+      "path": "generated/SchedulingDecision.v2.schema.json"
+    },
+    {
       "schemaId": "heniek://contract/StageRunAnswerResult/v2",
       "schemaVersion": 2,
       "sha256": "f2a8f8fc1020ec5371e769db12fe0aeaca865caa669077d7c35167a29efc265c",
@@ -542,6 +548,12 @@
       "path": "generated/StageRunResult.v2.schema.json"
     },
     {
+      "schemaId": "heniek://contract/StageRunResult/v3",
+      "schemaVersion": 3,
+      "sha256": "0bcc4f412bf6574a4f75f26b77979fa6c56963497e8a16efc886bfd119959557",
+      "path": "generated/StageRunResult.v3.schema.json"
+    },
+    {
       "schemaId": "heniek://contract/StageRunResumeResult/v2",
       "schemaVersion": 2,
       "sha256": "39164d439fdce631fadae6a7baa7ca926d6c3fc76b76c25f8f9411e6da65b4c7",
@@ -564,6 +576,12 @@
       "schemaVersion": 3,
       "sha256": "4812a646b8cf1b9d4f7cabfca9e96c1fb8b24857caf3d48fc2c855ea8caa0eb4",
       "path": "generated/StageRunStatusResult.v3.schema.json"
+    },
+    {
+      "schemaId": "heniek://contract/StageRunStatusResult/v4",
+      "schemaVersion": 4,
+      "sha256": "448d39bcafb560b28c47b04c07ae649e2053d7674e6ca6bd15d8ac448fd6ef09",
+      "path": "generated/StageRunStatusResult.v4.schema.json"
     },
     {
       "schemaId": "heniek://contract/StageStartRequest/v2",

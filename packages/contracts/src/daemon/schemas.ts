@@ -5,6 +5,7 @@ import {
   ExecutionAttemptV1,
   PendingInteractionV2,
   SchedulingDecisionV1,
+  SchedulingDecisionV2,
   StageId,
 } from "../execution-backend/index.js";
 import {
@@ -342,6 +343,24 @@ export const StageRunStatusResultV3 = versioned("StageRunStatusResult", 3, {
   decisions: Type.Array(Type.Ref(SchedulingDecisionV1)),
 });
 
+/**
+ * Identical to V3 apart from the decision reference — see
+ * `StageRunResult/v3` for why the cascade exists. V3 stays frozen and
+ * remains selectable through `daemon.negotiate`, so a client pinned to it
+ * keeps working; it just cannot see the four late-added decision kinds
+ * without failing its own validation.
+ */
+export const StageRunStatusResultV4 = versioned("StageRunStatusResult", 4, {
+  runId: RunId,
+  stageId: StageId,
+  status: RunStatus.schema,
+  runRevision: Type.Integer({ minimum: 1 }),
+  interactions: Type.Array(InteractionV2),
+  scheduling: SchedulingState,
+  attempts: Type.Array(Type.Ref(ExecutionAttemptV1)),
+  decisions: Type.Array(Type.Ref(SchedulingDecisionV2)),
+});
+
 export const RunAnswerRequestV2 = versioned("RunAnswerRequest", 2, {
   runId: RunId,
   answer: InteractionAnswerSubmissionV2,
@@ -422,6 +441,37 @@ export const StageRunResultV2 = versioned("StageRunResult", 2, {
   scheduling: SchedulingState,
   attempts: Type.Array(Type.Ref(ExecutionAttemptV1)),
   decisions: Type.Array(Type.Ref(SchedulingDecisionV1)),
+});
+
+/**
+ * Identical to V2 apart from the decision reference. `SchedulingDecision/v1`
+ * omits four kinds the scheduler has always written, so a run that took a
+ * fallback, was cancelled by the user, or ended in recovery could return a
+ * `decisions` array failing V2's own schema. V3 references the complete
+ * `SchedulingDecision/v2`.
+ */
+export const StageRunResultV3 = versioned("StageRunResult", 3, {
+  runId: RunId,
+  stageId: StageId,
+  status: RunStatus.schema,
+  summary: Type.Optional(Type.String({ minLength: 1 })),
+  sessionId: Type.Optional(Type.String({ minLength: 1 })),
+  artifacts: Type.Array(
+    Type.Object(
+      {
+        name: Type.String({ minLength: 1 }),
+        artifactId: ArtifactId,
+        mediaType: Type.String({ minLength: 1 }),
+        byteLength: Type.Integer({ minimum: 0 }),
+        sha256: Type.String({ pattern: "^[a-f0-9]{64}$" }),
+      },
+      { additionalProperties: false },
+    ),
+  ),
+  error: Type.Optional(Type.String({ minLength: 1 })),
+  scheduling: SchedulingState,
+  attempts: Type.Array(Type.Ref(ExecutionAttemptV1)),
+  decisions: Type.Array(Type.Ref(SchedulingDecisionV2)),
 });
 
 export const ArtifactGetResultV1 = versioned("ArtifactGetResult", 1, {
