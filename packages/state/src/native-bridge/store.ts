@@ -734,6 +734,44 @@ export function attachParentSession(
   });
 }
 
+export interface ParentSessionSnapshot {
+  readonly sessionId: string;
+  readonly codebaseId: string;
+  readonly state: string;
+  readonly revision: number;
+  readonly expiresAt: string;
+}
+
+/**
+ * The one read the RPC layer needs that no mutating call already provides:
+ * `nativeStage.poll.v1`'s wire request carries no `codebaseId` — the session
+ * pins one from `attach` — so the daemon resolves it here rather than
+ * trusting a client-supplied value, and reuses the same read to report the
+ * session's actual current revision/expiry back to a caller whose poll was
+ * rejected (a `stale_session_revision` reply is far more useful carrying the
+ * revision to retry with than carrying the stale one the caller already
+ * knew was wrong).
+ */
+export function readParentSession(
+  db: StateDatabase,
+  sessionId: string,
+): ParentSessionSnapshot | undefined {
+  const row = internalHandle(db)
+    .prepare(
+      `SELECT session_id, codebase_id, state, revision, expires_at FROM parent_session
+        WHERE session_id = ?`,
+    )
+    .get(sessionId);
+  if (row === undefined) return undefined;
+  return {
+    sessionId: toText(row.session_id, "parent_session.session_id"),
+    codebaseId: toText(row.codebase_id, "parent_session.codebase_id"),
+    state: toText(row.state, "parent_session.state"),
+    revision: toSafeInteger(row.revision, "parent_session.revision"),
+    expiresAt: toText(row.expires_at, "parent_session.expires_at"),
+  };
+}
+
 export interface DetachDispatchOutcome {
   readonly dispatchId: string;
   readonly disposition: "redispatchable" | "recovery_required";
@@ -2034,12 +2072,13 @@ export function readPendingNativeQuestions(
 
 export function listNativeQuestionInbox(db: StateDatabase): readonly {
   readonly runId: string;
+  readonly stageId: string;
   readonly runRevision: number;
   readonly interaction: Interaction;
 }[] {
   return internalHandle(db)
     .prepare(
-      `SELECT q.run_id, q.interaction_id, q.canonical_payload_json, p.state, p.revision,
+      `SELECT q.run_id, q.stage_id, q.interaction_id, q.canonical_payload_json, p.state, p.revision,
               p.delivery_state, r.revision AS run_revision
          FROM native_stage_question q
          JOIN native_question_projection p
@@ -2056,6 +2095,7 @@ export function listNativeQuestionInbox(db: StateDatabase): readonly {
       ) as Interaction;
       return {
         runId: toText(raw.run_id, "native_stage_question.run_id"),
+        stageId: toText(raw.stage_id, "native_stage_question.stage_id"),
         runRevision: toSafeInteger(raw.run_revision, "run_projection.revision"),
         interaction: {
           ...canonical,

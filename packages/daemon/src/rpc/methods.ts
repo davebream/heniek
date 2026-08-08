@@ -21,27 +21,36 @@ export {
   DOCTOR_V1_METHOD,
   ENGINE_CATALOGUE_V1_METHOD,
   INBOX_LIST_V1_METHOD,
+  NATIVE_STAGE_POLL_V1_METHOD,
+  NATIVE_STAGE_QUESTION_V1_METHOD,
+  NATIVE_STAGE_STATUS_V1_METHOD,
+  NATIVE_STAGE_SUBMIT_V1_METHOD,
+  PARENT_SESSION_ATTACH_V1_METHOD,
+  PARENT_SESSION_DETACH_V1_METHOD,
   RUN_ANSWER_V1_METHOD,
   RUN_ANSWER_V2_METHOD,
   RUN_CANCEL_V1_METHOD,
   RUN_RESULT_V1_METHOD,
   RUN_RESULT_V2_METHOD,
+  RUN_RESULT_V3_METHOD,
   RUN_RESUME_V1_METHOD,
   RUN_RESUME_V2_METHOD,
   RUN_STATUS_V1_METHOD,
   RUN_STATUS_V2_METHOD,
   RUN_STATUS_V3_METHOD,
+  RUN_STATUS_V4_METHOD,
   STAGE_START_V1_METHOD,
   STAGE_START_V2_METHOD,
+  STAGE_START_V3_METHOD,
 } from "@heniek/protocol";
 export const RPC_CANCEL_METHOD = "rpc.cancel";
 
 /**
- * Authenticated methods for Q008 — exactly these two. `daemon.hello` is
- * pre-auth and is never registered here. There is no third:
- * plan-review round 2, finding 13 withdrew `daemon.rotateCredential`, and
- * `daemon.shutdown` was never added — SIGTERM already covers graceful
- * drain and an RPC equivalent has no consumer (YAGNI).
+ * Authenticated methods. `daemon.hello` is pre-auth and is never registered
+ * here. Q023 adds the native bridge's six methods; `stage.start`,
+ * `run.status`, `run.result` already cover their v3/v4 negotiated variants
+ * — a method family is named once here regardless of how many versions
+ * `dispatch.ts`'s `availableByName` table offers for it.
  */
 export const AUTHENTICATED_METHODS = [
   DAEMON_STATUS_METHOD,
@@ -58,6 +67,12 @@ export const AUTHENTICATED_METHODS = [
   "artifact.get",
   "doctor",
   "engine.catalogue",
+  "parentSession.attach",
+  "parentSession.detach",
+  "nativeStage.poll",
+  "nativeStage.question",
+  "nativeStage.submit",
+  "nativeStage.status",
 ] as const;
 
 export interface MethodContext {
