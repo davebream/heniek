@@ -1,0 +1,21 @@
+workflow_command_gates:
+  custom_scripts: true
+
+provider_profiles:
+  codex:
+    default_permission_mode: edit
+    step_permission_overrides:
+      build: full
+  cursor:
+    default_permission_mode: edit
+    step_permission_overrides:
+      build: full
+
+workflow_overrides:
+  steps:
+    build:
+      quality_gates:
+        - type: command
+          name: heniek-full-check
+          command: pnpm check
+          timeout_ms: 180000
