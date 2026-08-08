@@ -457,4 +457,181 @@ CREATE TABLE capability_snapshot
 CREATE INDEX capability_snapshot_latest
 ON capability_snapshot (engine, account_key, observed_at DESC);
 
-PRAGMA user_version = 9;
+CREATE TABLE execution_schedule
+(
+    run_id                    TEXT NOT NULL PRIMARY KEY,
+    stage_id                  TEXT NOT NULL UNIQUE,
+    codebase_id               TEXT NOT NULL,
+    repository_id             TEXT NOT NULL,
+    prompt                    TEXT NOT NULL,
+    artifact_path             TEXT NOT NULL,
+    base_sha                  TEXT,
+    hard_deadline_at          TEXT,
+    state                     TEXT NOT NULL,
+    capacity_policy           TEXT NOT NULL,
+    requested_priority        INTEGER NOT NULL,
+    current_candidate_index   INTEGER,
+    current_attempt_id        TEXT,
+    revision                  INTEGER NOT NULL,
+    chain_json                TEXT NOT NULL CHECK (json_valid(chain_json)),
+    requested_secret_ids_json TEXT NOT NULL CHECK (json_valid(requested_secret_ids_json)),
+    enqueued_at               TEXT NOT NULL,
+    updated_at                TEXT NOT NULL,
+    CHECK (state IN ('queued','waiting_on_user','running','terminal')),
+    CHECK (capacity_policy IN ('queue','fallback','ask')),
+    CHECK (requested_priority BETWEEN 0 AND 9),
+    CHECK (revision >= 1)
+) STRICT;
+
+CREATE TABLE execution_candidate
+(
+    run_id                 TEXT NOT NULL REFERENCES execution_schedule(run_id),
+    candidate_index        INTEGER NOT NULL,
+    profile_id             TEXT NOT NULL,
+    account_id             TEXT,
+    engine                 TEXT NOT NULL,
+    max_concurrent_runs    INTEGER NOT NULL,
+    profile_json           TEXT NOT NULL CHECK (json_valid(profile_json)),
+    limits_json            TEXT NOT NULL CHECK (json_valid(limits_json)),
+    permissions_json       TEXT NOT NULL CHECK (json_valid(permissions_json)),
+    state                  TEXT NOT NULL,
+    PRIMARY KEY (run_id, candidate_index),
+    CHECK (candidate_index >= 0),
+    CHECK (max_concurrent_runs >= 1),
+    CHECK (state IN ('pending','queued','selected','rejected','failed','succeeded'))
+) STRICT;
+
+CREATE INDEX execution_candidate_account
+ON execution_candidate (account_id, state, run_id, candidate_index);
+
+CREATE TABLE account_capacity
+(
+    account_id             TEXT NOT NULL PRIMARY KEY,
+    max_concurrent_runs    INTEGER NOT NULL,
+    updated_at             TEXT NOT NULL,
+    CHECK (max_concurrent_runs >= 1)
+) STRICT;
+
+CREATE TABLE account_queue_entry
+(
+    queue_sequence         INTEGER PRIMARY KEY,
+    run_id                 TEXT NOT NULL,
+    candidate_index        INTEGER NOT NULL,
+    account_id             TEXT NOT NULL,
+    requested_priority     INTEGER NOT NULL,
+    enqueued_at            TEXT NOT NULL,
+    UNIQUE (run_id, candidate_index),
+    FOREIGN KEY (run_id, candidate_index)
+        REFERENCES execution_candidate(run_id, candidate_index),
+    CHECK (requested_priority BETWEEN 0 AND 9)
+) STRICT;
+
+CREATE INDEX account_queue_order
+ON account_queue_entry (account_id, requested_priority DESC, queue_sequence);
+
+CREATE TABLE execution_attempt
+(
+    attempt_id             TEXT NOT NULL PRIMARY KEY,
+    run_id                 TEXT NOT NULL REFERENCES execution_schedule(run_id),
+    stage_id               TEXT NOT NULL,
+    candidate_index        INTEGER NOT NULL,
+    profile_id             TEXT NOT NULL,
+    account_id             TEXT,
+    workspace_id           TEXT REFERENCES workspace(workspace_id),
+    backend_execution_id   TEXT UNIQUE,
+    status                 TEXT NOT NULL,
+    limits_json            TEXT NOT NULL CHECK (json_valid(limits_json)),
+    permissions_json       TEXT NOT NULL CHECK (json_valid(permissions_json)),
+    readonly_baseline_json TEXT CHECK (readonly_baseline_json IS NULL OR json_valid(readonly_baseline_json)),
+    result_json            TEXT CHECK (result_json IS NULL OR json_valid(result_json)),
+    failure_json           TEXT CHECK (failure_json IS NULL OR json_valid(failure_json)),
+    started_at             TEXT,
+    finished_at            TEXT,
+    created_at             TEXT NOT NULL,
+    updated_at             TEXT NOT NULL,
+    UNIQUE (run_id, candidate_index),
+    FOREIGN KEY (run_id, candidate_index)
+        REFERENCES execution_candidate(run_id, candidate_index),
+    CHECK (status IN ('queued','running','waiting_on_user','recovery_required','succeeded','failed','cancelled'))
+) STRICT;
+
+CREATE INDEX execution_attempt_run
+ON execution_attempt (run_id, candidate_index);
+
+CREATE TABLE account_concurrency_lease
+(
+    lease_id               TEXT NOT NULL PRIMARY KEY,
+    account_id             TEXT NOT NULL,
+    run_id                 TEXT NOT NULL,
+    candidate_index        INTEGER NOT NULL,
+    attempt_id             TEXT NOT NULL REFERENCES execution_attempt(attempt_id),
+    owner_id               TEXT NOT NULL,
+    acquired_at            TEXT NOT NULL,
+    renewed_at             TEXT NOT NULL,
+    expires_at             TEXT NOT NULL,
+    released_at            TEXT,
+    fencing_revision       INTEGER NOT NULL,
+    state                  TEXT NOT NULL,
+    FOREIGN KEY (run_id, candidate_index)
+        REFERENCES execution_candidate(run_id, candidate_index),
+    CHECK (fencing_revision >= 1),
+    CHECK (state IN ('active','released','expired'))
+) STRICT;
+
+CREATE UNIQUE INDEX account_lease_attempt_active
+ON account_concurrency_lease (attempt_id) WHERE state = 'active';
+
+CREATE INDEX account_lease_capacity
+ON account_concurrency_lease (account_id, state, expires_at);
+
+CREATE TABLE scheduling_decision
+(
+    decision_sequence      INTEGER PRIMARY KEY,
+    decision_id            TEXT NOT NULL UNIQUE,
+    run_id                 TEXT NOT NULL REFERENCES execution_schedule(run_id),
+    stage_id               TEXT NOT NULL,
+    candidate_index        INTEGER,
+    profile_id             TEXT,
+    account_id             TEXT,
+    kind                   TEXT NOT NULL,
+    reason_code            TEXT NOT NULL,
+    recorded_at            TEXT NOT NULL,
+    CHECK (candidate_index IS NULL OR candidate_index >= 0)
+) STRICT;
+
+CREATE INDEX scheduling_decision_run
+ON scheduling_decision (run_id, decision_sequence);
+
+CREATE TRIGGER scheduling_decision_immutable_update
+BEFORE UPDATE ON scheduling_decision
+BEGIN
+    SELECT RAISE(ABORT, 'scheduling decisions are immutable');
+END;
+
+CREATE TRIGGER scheduling_decision_immutable_delete
+BEFORE DELETE ON scheduling_decision
+BEGIN
+    SELECT RAISE(ABORT, 'scheduling decisions are immutable');
+END;
+
+CREATE TABLE scheduling_capacity_question
+(
+    run_id                 TEXT NOT NULL PRIMARY KEY REFERENCES execution_schedule(run_id),
+    interaction_id        TEXT NOT NULL UNIQUE,
+    question_json         TEXT NOT NULL CHECK (json_valid(question_json)),
+    state                  TEXT NOT NULL,
+    revision               INTEGER NOT NULL,
+    answer_json            TEXT CHECK (answer_json IS NULL OR json_valid(answer_json)),
+    created_at             TEXT NOT NULL,
+    answered_at           TEXT,
+    CHECK (state IN ('pending','answered')),
+    CHECK (revision >= 1)
+) STRICT;
+
+CREATE TRIGGER scheduling_capacity_question_immutable
+BEFORE UPDATE OF interaction_id, question_json, created_at ON scheduling_capacity_question
+BEGIN
+    SELECT RAISE(ABORT, 'scheduling capacity questions are immutable');
+END;
+
+PRAGMA user_version = 10;

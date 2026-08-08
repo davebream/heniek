@@ -14,10 +14,13 @@ import type {
   StageRunAnswerResultV2,
   StageRunMutationResultV1,
   StageRunResultV1,
+  StageRunResultV2,
   StageRunResumeResultV2,
   StageRunStatusResultV1,
   StageRunStatusResultV2,
+  StageRunStatusResultV3,
   StageStartResultV1,
+  StageStartResultV2,
 } from "@heniek/contracts";
 import {
   ARTIFACT_GET_METHOD,
@@ -68,6 +71,9 @@ import {
   RUN_RESULT_SCHEMA_ID,
   RUN_RESULT_SCHEMA_SHA256,
   RUN_RESULT_V1_METHOD,
+  RUN_RESULT_V2_METHOD,
+  RUN_RESULT_V2_SCHEMA_ID,
+  RUN_RESULT_V2_SCHEMA_SHA256,
   RUN_RESUME_METHOD,
   RUN_RESUME_V1_METHOD,
   RUN_RESUME_V2_METHOD,
@@ -80,10 +86,16 @@ import {
   RUN_STATUS_V2_METHOD,
   RUN_STATUS_V2_SCHEMA_ID,
   RUN_STATUS_V2_SCHEMA_SHA256,
+  RUN_STATUS_V3_METHOD,
+  RUN_STATUS_V3_SCHEMA_ID,
+  RUN_STATUS_V3_SCHEMA_SHA256,
   STAGE_START_METHOD,
   STAGE_START_SCHEMA_ID,
   STAGE_START_SCHEMA_SHA256,
   STAGE_START_V1_METHOD,
+  STAGE_START_V2_METHOD,
+  STAGE_START_V2_SCHEMA_ID,
+  STAGE_START_V2_SCHEMA_SHA256,
   TRANSPORT_VERSION,
   zeroCredential,
 } from "@heniek/protocol";
@@ -363,6 +375,14 @@ const STAGE_START_REQUIREMENT: RpcRequirement = {
   sha256: STAGE_START_SCHEMA_SHA256,
 };
 
+const STAGE_START_V2_REQUIREMENT: RpcRequirement = {
+  name: STAGE_START_METHOD,
+  methodVersion: 2,
+  wireMethod: STAGE_START_V2_METHOD,
+  schemaId: STAGE_START_V2_SCHEMA_ID,
+  sha256: STAGE_START_V2_SCHEMA_SHA256,
+};
+
 const RUN_STATUS_REQUIREMENT: RpcRequirement = {
   name: RUN_STATUS_METHOD,
   wireMethod: RUN_STATUS_V1_METHOD,
@@ -376,6 +396,14 @@ const RUN_STATUS_V2_REQUIREMENT: RpcRequirement = {
   wireMethod: RUN_STATUS_V2_METHOD,
   schemaId: RUN_STATUS_V2_SCHEMA_ID,
   sha256: RUN_STATUS_V2_SCHEMA_SHA256,
+};
+
+const RUN_STATUS_V3_REQUIREMENT: RpcRequirement = {
+  name: RUN_STATUS_METHOD,
+  methodVersion: 3,
+  wireMethod: RUN_STATUS_V3_METHOD,
+  schemaId: RUN_STATUS_V3_SCHEMA_ID,
+  sha256: RUN_STATUS_V3_SCHEMA_SHA256,
 };
 
 const INBOX_LIST_REQUIREMENT: RpcRequirement = {
@@ -417,6 +445,14 @@ const RUN_RESULT_REQUIREMENT: RpcRequirement = {
   sha256: RUN_RESULT_SCHEMA_SHA256,
 };
 
+const RUN_RESULT_V2_REQUIREMENT: RpcRequirement = {
+  name: RUN_RESULT_METHOD,
+  methodVersion: 2,
+  wireMethod: RUN_RESULT_V2_METHOD,
+  schemaId: RUN_RESULT_V2_SCHEMA_ID,
+  sha256: RUN_RESULT_V2_SCHEMA_SHA256,
+};
+
 const ARTIFACT_GET_REQUIREMENT: RpcRequirement = {
   name: ARTIFACT_GET_METHOD,
   wireMethod: ARTIFACT_GET_V1_METHOD,
@@ -438,8 +474,8 @@ const ENGINE_CATALOGUE_REQUIREMENT: RpcRequirement = {
   sha256: CAPABILITY_CATALOGUE_SCHEMA_SHA256,
 };
 
-function parseVersioned<T>(value: unknown, description: string): T {
-  if (!isRecord(value) || value.schemaVersion !== 1) {
+function parseVersioned<T>(value: unknown, description: string, expectedVersion = 1): T {
+  if (!isRecord(value) || value.schemaVersion !== expectedVersion) {
     throw new HeniekClientError(
       "RPC_FAILURE",
       `The Heniek daemon returned an invalid ${description} response.`,
@@ -860,7 +896,7 @@ async function domainCall<T>(
       home,
       requirement,
       params,
-      (value) => parseVersioned<T>(value, description),
+      (value) => parseVersioned<T>(value, description, requirement.methodVersion ?? 1),
       signal,
     );
     return response.result;
@@ -891,6 +927,36 @@ export function startStageViaDaemon(
   );
 }
 
+export function startStageV2ViaDaemon(
+  home: ApplicationHome,
+  input: {
+    readonly currentDirectory: string;
+    readonly prompt: string;
+    readonly artifactPath: string;
+    readonly profileId: string;
+    readonly priority?: number;
+    readonly requestedIdentifiers?: readonly string[];
+    readonly limits?: { readonly maxDurationMs?: number; readonly maxTurns?: number };
+    readonly signal?: AbortSignal;
+  },
+): Promise<Static<typeof StageStartResultV2>> {
+  return domainCall(
+    home,
+    STAGE_START_V2_REQUIREMENT,
+    {
+      currentDirectory: input.currentDirectory,
+      prompt: input.prompt,
+      artifactPath: input.artifactPath,
+      profileId: input.profileId,
+      priority: input.priority ?? 0,
+      requestedIdentifiers: [...(input.requestedIdentifiers ?? [])],
+      limits: input.limits ?? {},
+    },
+    "stage start",
+    input.signal,
+  );
+}
+
 export function fetchRunStatusViaDaemon(
   home: ApplicationHome,
   runId: string,
@@ -905,6 +971,14 @@ export function fetchRunStatusV2ViaDaemon(
   signal?: AbortSignal,
 ): Promise<Static<typeof StageRunStatusResultV2>> {
   return domainCall(home, RUN_STATUS_V2_REQUIREMENT, { runId }, "run status v2", signal);
+}
+
+export function fetchRunStatusV3ViaDaemon(
+  home: ApplicationHome,
+  runId: string,
+  signal?: AbortSignal,
+): Promise<Static<typeof StageRunStatusResultV3>> {
+  return domainCall(home, RUN_STATUS_V3_REQUIREMENT, { runId }, "run status v3", signal);
 }
 
 export function listInteractionInboxViaDaemon(
@@ -984,6 +1058,13 @@ export function fetchRunResultViaDaemon(
   runId: string,
 ): Promise<Static<typeof StageRunResultV1>> {
   return domainCall(home, RUN_RESULT_REQUIREMENT, { runId }, "run result");
+}
+
+export function fetchRunResultV2ViaDaemon(
+  home: ApplicationHome,
+  runId: string,
+): Promise<Static<typeof StageRunResultV2>> {
+  return domainCall(home, RUN_RESULT_V2_REQUIREMENT, { runId }, "run result v2");
 }
 
 export async function fetchArtifactViaDaemon(

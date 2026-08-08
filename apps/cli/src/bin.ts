@@ -15,7 +15,7 @@ import {
   HeniekClientError,
   registerCodebaseViaDaemon,
   resumeRunViaDaemon,
-  startStageViaDaemon,
+  startStageV2ViaDaemon,
 } from "@heniek/client";
 import { readApplicationHomeSource, resolveApplicationHome } from "@heniek/config";
 import {
@@ -52,7 +52,7 @@ interface CliError {
 }
 
 function usage(): string {
-  return "Usage: heniek status [--json]\n       heniek codebase detect [ROOT...] [--json]\n       heniek codebase register [ROOT...] [--confirm-registration] [--json]\n       heniek stage start --task-file PATH --artifact-path PATH [--json]\n       heniek run status RUN_ID [--json]\n       heniek run answer RUN_ID INTERACTION_ID --answers-json JSON [--json]\n       heniek run resume RUN_ID [--input-artifact ARTIFACT_ID...] [--json]\n       heniek run cancel RUN_ID [--json]\n       heniek run result RUN_ID [--json]\n       heniek artifact get ARTIFACT_ID [--output PATH] [--json]\n       heniek engine list [--refresh] [--json]\n       heniek runtime list [--json]\n       heniek runtime install claudexor VERSION [--json]\n       heniek runtime activate claudexor VERSION [--json]\n       heniek runtime upgrade claudexor VERSION [--json]\n       heniek runtime rollback claudexor [--json]\n       heniek runtime adopt claudexor --entry ABSOLUTE_PATH [--json]\n       heniek doctor [--json]\n       heniek --help\n       heniek --version";
+  return "Usage: heniek status [--json]\n       heniek codebase detect [ROOT...] [--json]\n       heniek codebase register [ROOT...] [--confirm-registration] [--json]\n       heniek stage start --task-file PATH --artifact-path PATH --profile PROFILE [--priority 0-9] [--secret ID...] [--json]\n       heniek run status RUN_ID [--json]\n       heniek run answer RUN_ID INTERACTION_ID --answers-json JSON [--json]\n       heniek run resume RUN_ID [--input-artifact ARTIFACT_ID...] [--json]\n       heniek run cancel RUN_ID [--json]\n       heniek run result RUN_ID [--json]\n       heniek artifact get ARTIFACT_ID [--output PATH] [--json]\n       heniek engine list [--refresh] [--json]\n       heniek runtime list [--json]\n       heniek runtime install claudexor VERSION [--json]\n       heniek runtime activate claudexor VERSION [--json]\n       heniek runtime upgrade claudexor VERSION [--json]\n       heniek runtime rollback claudexor [--json]\n       heniek runtime adopt claudexor --entry ABSOLUTE_PATH [--json]\n       heniek doctor [--json]\n       heniek --help\n       heniek --version";
 }
 
 function exitCode(code: ErrorCode): number {
@@ -430,7 +430,18 @@ async function domainCommand<T>(
 async function runStageStart(argv: readonly string[], json: boolean): Promise<number> {
   const taskFile = optionValue(argv, "--task-file");
   const artifactPath = optionValue(argv, "--artifact-path");
-  if (taskFile === undefined || artifactPath === undefined) return 2;
+  const profileId = optionValue(argv, "--profile");
+  const priorityValue = optionValue(argv, "--priority");
+  const priority = priorityValue === undefined ? 0 : Number(priorityValue);
+  if (
+    taskFile === undefined ||
+    artifactPath === undefined ||
+    profileId === undefined ||
+    !Number.isInteger(priority) ||
+    priority < 0 ||
+    priority > 9
+  )
+    return 2;
   let prompt: string;
   try {
     prompt = await readFile(taskFile, "utf8");
@@ -446,10 +457,13 @@ async function runStageStart(argv: readonly string[], json: boolean): Promise<nu
     "stage.start",
     json,
     () =>
-      startStageViaDaemon(applicationHome(), {
+      startStageV2ViaDaemon(applicationHome(), {
         currentDirectory: process.cwd(),
         prompt,
         artifactPath,
+        profileId,
+        priority,
+        requestedIdentifiers: optionValues(argv, "--secret"),
       }),
     (result: { runId: string; stageId: string; status: string }) => {
       process.stdout.write(

@@ -103,6 +103,12 @@ export { createNodeLockFileSystem } from "./runtime/lock-filesystem.js";
 export { createHmacSha256MacProvider } from "./runtime/mac.js";
 export { createSystemProcessLiveness } from "./runtime/process-liveness.js";
 export { createSystemRandomSource } from "./runtime/random-source.js";
+export {
+  createSchedulingExecutionService,
+  type ScheduledStageInput,
+  type SchedulingExecutionService,
+  type SchedulingExecutionServiceOptions,
+} from "./runtime/scheduling-service.js";
 export type { SignalHandlerDeps } from "./runtime/signals.js";
 export { installSignalHandlers } from "./runtime/signals.js";
 export { createNodeSocketProbe } from "./runtime/socket-probe.js";
@@ -113,3 +119,10 @@ export {
   MAX_UNAUTHENTICATED_CONNECTIONS,
 } from "./runtime/socket-server.js";
 export { createStderrTraceSink } from "./runtime/trace-sink.js";
+export {
+  type ExecutionLimitsInput,
+  isFallbackEligibleFailure,
+  type PermissionResolution,
+  resolveAttemptLimits,
+  resolveAttemptPermissions,
+} from "./scheduling/policy.js";

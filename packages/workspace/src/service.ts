@@ -538,11 +538,26 @@ export function createWorkspaceService(deps: CreateWorkspaceServiceInput): Works
           "Workspace provisioning has already failed.",
         );
       }
-      const base = await resolveRemoteBase(
+      const resolvedBase = await resolveRemoteBase(
         repository.repositoryPath as string,
         input.configuration,
         deps.clock,
       );
+      if (input.baseSha !== undefined && !/^[a-f0-9]{40}$/iu.test(input.baseSha)) {
+        throw new WorkspaceError("INVALID_BASE", "Pinned workspace base SHA is invalid.");
+      }
+      if (input.baseSha !== undefined) {
+        const exists = await runCommand(
+          "git",
+          ["cat-file", "-e", `${input.baseSha}^{commit}`],
+          repository.repositoryPath as string,
+        );
+        if (exists.exitCode !== 0) {
+          throw new WorkspaceError("INVALID_BASE", "Pinned workspace base commit does not exist.");
+        }
+      }
+      const base =
+        input.baseSha === undefined ? resolvedBase : { ...resolvedBase, sha: input.baseSha };
       if (existing !== undefined && existing.remoteBase.sha !== base.sha) {
         throw new WorkspaceError(
           "RECOVERY_REQUIRED",

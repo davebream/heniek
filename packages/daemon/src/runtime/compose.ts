@@ -50,11 +50,13 @@ import {
   type ArtifactId,
   type DoctorReportV1,
   type ExecutionBackend,
+  type ExecutionBackendV7,
   InteractionAnswerSetV1,
+  type ResolvedProfileChainV1,
   RunAnswerRequestV2,
   RunResumeRequestV2,
 } from "@heniek/contracts";
-import { createFileSecretStore } from "@heniek/secrets";
+import { createFileSecretStore, createScopedSecretReader } from "@heniek/secrets";
 import {
   legacyAnswerSubmission,
   listInteractionInbox,
@@ -62,6 +64,7 @@ import {
   readPendingInteractions,
   readRunInteractions,
   readRunProjection,
+  readStageArtifacts,
   runMigrations,
 } from "@heniek/state";
 import {
@@ -108,11 +111,14 @@ import {
   RUN_ANSWER_V2_METHOD,
   RUN_CANCEL_V1_METHOD,
   RUN_RESULT_V1_METHOD,
+  RUN_RESULT_V2_METHOD,
   RUN_RESUME_V1_METHOD,
   RUN_RESUME_V2_METHOD,
   RUN_STATUS_V1_METHOD,
   RUN_STATUS_V2_METHOD,
+  RUN_STATUS_V3_METHOD,
   STAGE_START_V1_METHOD,
+  STAGE_START_V2_METHOD,
 } from "../rpc/methods.js";
 import { createSystemClock } from "./clock.js";
 import {
@@ -127,6 +133,7 @@ import { createNodeLockFileSystem } from "./lock-filesystem.js";
 import { createHmacSha256MacProvider } from "./mac.js";
 import { createSystemProcessLiveness } from "./process-liveness.js";
 import { createSystemRandomSource } from "./random-source.js";
+import { createSchedulingExecutionService } from "./scheduling-service.js";
 import { installSignalHandlers } from "./signals.js";
 import { createNodeSocketProbe } from "./socket-probe.js";
 import type { RawConnection } from "./socket-server.js";
@@ -293,6 +300,13 @@ export interface StartDaemonDeps {
   readonly backend: ExecutionBackend;
   /** Q012 stage backend; omitted for legacy daemon/recovery consumers. */
   readonly backendV2?: DurableExecutionBackend;
+  /** Q021 scheduler backend and already capability-checked flat profile-chain resolver. */
+  readonly scheduling?: {
+    readonly backend: ExecutionBackendV7;
+    readonly resolveProfileChain: (
+      profileId: string,
+    ) => Promise<Static<typeof ResolvedProfileChainV1>> | Static<typeof ResolvedProfileChainV1>;
+  };
   /** Provider-neutral catalogue source. Raw Claudexor DTOs stay inside its adapter. */
   readonly capability?: {
     readonly source: CapabilityDiscoverySource;
@@ -501,6 +515,21 @@ export async function startDaemon(deps: StartDaemonDeps): Promise<StartDaemonOut
           instanceId,
           ids,
         });
+  const schedulingService =
+    deps.scheduling === undefined
+      ? undefined
+      : createSchedulingExecutionService({
+          db: workspaceDatabase,
+          backend: deps.scheduling.backend,
+          workspaceService,
+          artifactsDirectory: home.paths.artifactsDirectory,
+          instanceId,
+          ids,
+          clock,
+          resolveProfileChain: deps.scheduling.resolveProfileChain,
+          createIdentifierReader: (identifiers) =>
+            createScopedSecretReader(secretStore, identifiers),
+        });
   const capabilityService =
     deps.capability === undefined
       ? undefined
@@ -511,6 +540,7 @@ export async function startDaemon(deps: StartDaemonDeps): Promise<StartDaemonOut
           clock: { now: () => new Date(clock.nowIso()) },
         });
   await executionService?.observeAll();
+  await schedulingService?.reconcile();
   const startedAt = clock.nowIso();
   const reconciliation = reconcileResult?.reconciliation ?? EMPTY_RECONCILIATION;
   const artifactRecovery = reconcileResult?.artifactRecovery ?? EMPTY_ARTIFACT_RECOVERY;
@@ -548,6 +578,7 @@ export async function startDaemon(deps: StartDaemonDeps): Promise<StartDaemonOut
     // this process still legitimately owns both.
     await socket.close();
     executionService?.stop();
+    schedulingService?.stop();
     workspaceDatabase.close();
     // Inode-verified: only unlinks if the path still carries this guard's
     // identity.
@@ -734,6 +765,196 @@ export async function startDaemon(deps: StartDaemonDeps): Promise<StartDaemonOut
       },
     ]);
   }
+  if (schedulingService !== undefined) {
+    const schedulingPayload = (runId: string) => {
+      const snapshot = schedulingService.status(runId);
+      if (snapshot === undefined) throw new Error("scheduled run does not exist");
+      const attempts = snapshot.attempts.map((attempt) => ({
+        schemaVersion: 1,
+        attemptId: attempt.attemptId,
+        runId: attempt.runId,
+        stageId: attempt.stageId,
+        candidateIndex: attempt.candidateIndex,
+        profileId: attempt.profileId,
+        ...(attempt.accountId === null ? {} : { accountId: attempt.accountId }),
+        ...(attempt.workspaceId === null ? {} : { workspaceId: attempt.workspaceId }),
+        status: attempt.status,
+        ...(attempt.backendExecutionId === null
+          ? {}
+          : { backendExecutionId: attempt.backendExecutionId }),
+        limits: attempt.limits,
+        permissions: attempt.permissions,
+        ...(attempt.failure === null ? {} : { failure: attempt.failure }),
+        ...(attempt.startedAt === null ? {} : { startedAt: attempt.startedAt }),
+        ...(attempt.finishedAt === null ? {} : { finishedAt: attempt.finishedAt }),
+      }));
+      const decisions = snapshot.decisions.map((decision) => ({
+        schemaVersion: 1,
+        decisionId: decision.decisionId,
+        runId: decision.runId,
+        stageId: decision.stageId,
+        ...(decision.candidateIndex === null ? {} : { candidateIndex: decision.candidateIndex }),
+        ...(decision.profileId === null ? {} : { profileId: decision.profileId }),
+        ...(decision.accountId === null ? {} : { accountId: decision.accountId }),
+        kind: decision.kind,
+        reasonCode: decision.reasonCode,
+        recordedAt: decision.recordedAt,
+      }));
+      const selectedAttempt = snapshot.attempts.find(
+        (attempt) => attempt.candidateIndex === snapshot.schedule.currentCandidateIndex,
+      );
+      return {
+        snapshot,
+        attempts,
+        decisions,
+        scheduling: {
+          revision: snapshot.schedule.revision,
+          state: snapshot.schedule.state,
+          requestedPriority: snapshot.schedule.requestedPriority,
+          ...(snapshot.schedule.currentCandidateIndex === null
+            ? {}
+            : { selectedCandidateIndex: snapshot.schedule.currentCandidateIndex }),
+          ...(selectedAttempt === undefined
+            ? {}
+            : {
+                selectedProfileId: selectedAttempt.profileId,
+                ...(selectedAttempt.accountId === null
+                  ? {}
+                  : { selectedAccountId: selectedAttempt.accountId }),
+              }),
+        },
+      };
+    };
+    entries.push(
+      [
+        STAGE_START_V2_METHOD,
+        async (params) => {
+          const input = withoutAuth(recordParams(params));
+          const priority = input.priority;
+          const requestedIdentifiers = input.requestedIdentifiers;
+          const limits = input.limits;
+          if (
+            typeof priority !== "number" ||
+            !Number.isSafeInteger(priority) ||
+            priority < 0 ||
+            priority > 9 ||
+            !Array.isArray(requestedIdentifiers) ||
+            !requestedIdentifiers.every((value) => typeof value === "string") ||
+            typeof limits !== "object" ||
+            limits === null ||
+            Array.isArray(limits)
+          ) {
+            throw new Error("invalid scheduled stage request");
+          }
+          const started = await schedulingService.start({
+            currentDirectory: requiredParam(input, "currentDirectory"),
+            prompt: requiredParam(input, "prompt"),
+            artifactPath: requiredParam(input, "artifactPath"),
+            profileId: requiredParam(input, "profileId"),
+            priority,
+            requestedIdentifiers,
+            limits: limits as { maxDurationMs?: number; maxTurns?: number },
+          });
+          const current = schedulingService.status(started.runId);
+          return {
+            schemaVersion: 2,
+            ...started,
+            status: current?.status ?? "queued",
+          };
+        },
+      ],
+      [
+        RUN_STATUS_V3_METHOD,
+        async (params) => {
+          const runId = requiredParam(recordParams(params), "runId");
+          const payload = schedulingPayload(runId);
+          const projection = readRunProjection(workspaceDatabase, runId);
+          if (projection === undefined) throw new Error("run projection does not exist");
+          return {
+            schemaVersion: 3,
+            runId,
+            stageId: payload.snapshot.schedule.stageId,
+            status: payload.snapshot.status,
+            runRevision: projection.revision,
+            interactions: [
+              ...readRunInteractions(workspaceDatabase, runId),
+              ...schedulingService.interactions(runId),
+            ],
+            scheduling: payload.scheduling,
+            attempts: payload.attempts,
+            decisions: payload.decisions,
+          };
+        },
+      ],
+      [
+        RUN_RESULT_V2_METHOD,
+        async (params) => {
+          const runId = requiredParam(recordParams(params), "runId");
+          const payload = schedulingPayload(runId);
+          const result = schedulingService.result(runId);
+          return {
+            schemaVersion: 2,
+            runId,
+            stageId: payload.snapshot.schedule.stageId,
+            status: payload.snapshot.status,
+            ...(result?.summary === undefined ? {} : { summary: result.summary }),
+            ...(result?.sessionId === undefined ? {} : { sessionId: result.sessionId }),
+            artifacts: readStageArtifacts(workspaceDatabase, runId).map((artifact) => ({
+              name: artifact.name,
+              artifactId: artifact.artifactId,
+              mediaType: artifact.mediaType,
+              byteLength: artifact.byteLength,
+              sha256: artifact.contentHash,
+            })),
+            scheduling: payload.scheduling,
+            attempts: payload.attempts,
+            decisions: payload.decisions,
+          };
+        },
+      ],
+      [
+        RUN_CANCEL_V1_METHOD,
+        async (params) => {
+          const runId = requiredParam(recordParams(params), "runId");
+          await schedulingService.cancel(runId);
+          const current = schedulingService.status(runId);
+          return {
+            schemaVersion: 1,
+            runId,
+            status: current?.status ?? "cancelled",
+            accepted: true,
+          };
+        },
+      ],
+      [
+        RUN_ANSWER_V2_METHOD,
+        async (params, context) => {
+          const input = withoutAuth(recordParams(params));
+          if (!Value.Check(RunAnswerRequestV2, input)) throw new Error("invalid answer request");
+          if (context.authenticatedKeyId === undefined)
+            throw new Error("authenticated key missing");
+          const accepted = await schedulingService.answer(
+            input.runId,
+            input.answer,
+            context.authenticatedKeyId,
+          );
+          const projection = readRunProjection(workspaceDatabase, input.runId);
+          const current = schedulingService.status(input.runId);
+          return {
+            schemaVersion: 2,
+            runId: input.runId,
+            status: current?.status ?? "queued",
+            runRevision: projection?.revision ?? 1,
+            interactionId: accepted.interactionId,
+            interactionRevision: accepted.interactionRevision,
+            accepted: true,
+            operationId: accepted.operationId,
+            deliveryState: "delivered",
+          };
+        },
+      ],
+    );
+  }
   if (executionService !== undefined) {
     entries.push(
       [
@@ -814,6 +1035,26 @@ export async function startDaemon(deps: StartDaemonDeps): Promise<StartDaemonOut
           if (!Value.Check(RunAnswerRequestV2, input)) throw new Error("invalid answer request");
           if (context.authenticatedKeyId === undefined)
             throw new Error("authenticated key missing");
+          if (schedulingService?.status(input.runId) !== undefined) {
+            const accepted = await schedulingService.answer(
+              input.runId,
+              input.answer,
+              context.authenticatedKeyId,
+            );
+            const projection = readRunProjection(workspaceDatabase, input.runId);
+            const current = schedulingService.status(input.runId);
+            return {
+              schemaVersion: 2,
+              runId: input.runId,
+              status: current?.status ?? "queued",
+              runRevision: projection?.revision ?? 1,
+              interactionId: accepted.interactionId,
+              interactionRevision: accepted.interactionRevision,
+              accepted: true,
+              operationId: accepted.operationId,
+              deliveryState: "delivered",
+            };
+          }
           const accepted = await executionService.answer(
             input.runId,
             input.answer,
@@ -873,6 +1114,16 @@ export async function startDaemon(deps: StartDaemonDeps): Promise<StartDaemonOut
         RUN_CANCEL_V1_METHOD,
         async (params) => {
           const runId = requiredParam(recordParams(params), "runId");
+          if (schedulingService?.status(runId) !== undefined) {
+            await schedulingService.cancel(runId);
+            const current = schedulingService.status(runId);
+            return {
+              schemaVersion: 1,
+              runId,
+              status: current?.status ?? "cancelled",
+              accepted: true,
+            };
+          }
           await executionService.cancel(runId);
           const row = await executionService.status(runId);
           return { schemaVersion: 1, runId, status: row.status, accepted: true };

@@ -2,7 +2,9 @@ import type {
   ProfileEngine,
   ProfileExecutionMode,
   ProfileQuestionMode,
+  ResolvedProfileChainV1,
   ResolvedProfileV1,
+  ResolvedProfileV2,
 } from "@heniek/contracts";
 import type { Static } from "@sinclair/typebox";
 import type { Diagnostic } from "../diagnostics.js";
@@ -12,6 +14,8 @@ export type Engine = Static<typeof ProfileEngine>;
 export type ExecutionMode = Static<typeof ProfileExecutionMode>;
 export type QuestionMode = Static<typeof ProfileQuestionMode>;
 export type ResolvedProfile = Static<typeof ResolvedProfileV1>;
+export type ResolvedProfileV2Snapshot = Static<typeof ResolvedProfileV2>;
+export type ResolvedProfileChain = Static<typeof ResolvedProfileChainV1>;
 
 export const PROFILE_OVERRIDE_FIELDS = [
   "engine",
@@ -64,6 +68,17 @@ export type ProfileResolutionResult =
   | {
       readonly ok: true;
       readonly profile: ResolvedProfile;
+      readonly diagnostics: readonly Diagnostic[];
+    }
+  | {
+      readonly ok: false;
+      readonly diagnostics: readonly Diagnostic[];
+    };
+
+export type ProfileChainResolutionResult =
+  | {
+      readonly ok: true;
+      readonly chain: ResolvedProfileChain;
       readonly diagnostics: readonly Diagnostic[];
     }
   | {

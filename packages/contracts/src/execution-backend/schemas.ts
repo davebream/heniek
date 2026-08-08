@@ -1,9 +1,9 @@
 import { Type } from "@sinclair/typebox";
 import { ArtifactId } from "../artifact/index.js";
-import { ResolvedProfileSchema } from "../configuration/index.js";
+import { ResolvedProfileSchema, ResolvedProfileSchemaV2 } from "../configuration/index.js";
 import { InteractionId, InteractionQuestionId } from "../interaction/index.js";
 import { SCHEMA_REGISTRY, versioned } from "../kernel/index.js";
-import { RepositoryId, WorkspaceId } from "../run/index.js";
+import { RepositoryId, RunId, WorkspaceId } from "../run/index.js";
 import { BackendArtifactId, BackendExecutionId, ProfileId, StageId } from "./ids.js";
 import { ExecutionStatus } from "./state.js";
 
@@ -114,6 +114,72 @@ export const ExecutionRequestV3 = versioned("ExecutionRequest", 3, {
   inputArtifactRefs: Type.Array(ArtifactId),
   limits: ExecutionLimits,
   profile: ResolvedProfileSchema,
+});
+
+const ExecutionPermissionFields = {
+  workspace: Type.Union([Type.Literal("read-only"), Type.Literal("read-write")]),
+  identifiers: Type.Array(
+    Type.String({
+      minLength: 1,
+      maxLength: 128,
+      pattern: "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+    }),
+    { uniqueItems: true },
+  ),
+} as const;
+
+/** Names-only permission envelope. Secret values never cross this contract. */
+export const ExecutionPermissionEnvelopeV1 = versioned(
+  "ExecutionPermissionEnvelope",
+  1,
+  ExecutionPermissionFields,
+);
+
+export const ExecutionFailureClass = Type.Union([
+  Type.Literal("account_unavailable"),
+  Type.Literal("profile_unavailable"),
+  Type.Literal("model_unavailable"),
+  Type.Literal("engine_unavailable"),
+  Type.Literal("provider_throttled"),
+  Type.Literal("context_capacity_exhausted"),
+  Type.Literal("authentication_failed"),
+  Type.Literal("permission_denied"),
+  Type.Literal("invalid_request"),
+  Type.Literal("workspace_failed"),
+  Type.Literal("artifact_failed"),
+  Type.Literal("hard_limit_exceeded"),
+  Type.Literal("cancelled"),
+  Type.Literal("ambiguous"),
+  Type.Literal("unknown"),
+]);
+
+const ExecutionFailureFields = {
+  classification: ExecutionFailureClass,
+  phase: Type.Union([
+    Type.Literal("admission"),
+    Type.Literal("start"),
+    Type.Literal("running"),
+    Type.Literal("completion"),
+  ]),
+  code: Type.String({ minLength: 1, maxLength: 128 }),
+  message: Type.String({ minLength: 1, maxLength: 512 }),
+  fallbackEligible: Type.Boolean(),
+} as const;
+
+export const ExecutionFailureV1 = versioned("ExecutionFailure", 1, ExecutionFailureFields);
+
+/** Q021 adds resolved permissions without changing V1-V3 request bytes. */
+export const ExecutionRequestV4 = versioned("ExecutionRequest", 4, {
+  runId: Type.String({ minLength: 1 }),
+  stageId: StageId,
+  workspaceId: WorkspaceId,
+  workingDirectory: Type.String({ minLength: 1 }),
+  prompt: Type.String({ minLength: 1 }),
+  artifactPath: Type.String({ minLength: 1 }),
+  inputArtifactRefs: Type.Array(ArtifactId),
+  limits: ExecutionLimits,
+  profile: ResolvedProfileSchemaV2,
+  permissions: Type.Ref(ExecutionPermissionEnvelopeV1),
 });
 
 export const BackendExecutionHandleV1 = versioned("BackendExecutionHandle", 1, {
@@ -652,6 +718,74 @@ export const ExecutionResultV4 = versioned("ExecutionResult", 4, {
       { additionalProperties: false },
     ),
   ),
+});
+
+/** Q021's failure-classified terminal result. */
+export const ExecutionResultV5 = versioned("ExecutionResult", 5, {
+  status: Type.Union([
+    Type.Literal("succeeded"),
+    Type.Literal("failed"),
+    Type.Literal("cancelled"),
+  ]),
+  summary: Type.String({ minLength: 1 }),
+  sessionId: Type.Optional(Type.String({ minLength: 1 })),
+  artifacts: Type.Array(BackendArtifactV1),
+  telemetry: Type.Ref(ExecutionTelemetryV1),
+  diff: Type.Optional(
+    Type.Object(
+      {
+        files: Type.Integer({ minimum: 0 }),
+        additions: Type.Integer({ minimum: 0 }),
+        deletions: Type.Integer({ minimum: 0 }),
+      },
+      { additionalProperties: false },
+    ),
+  ),
+  failure: Type.Optional(Type.Ref(ExecutionFailureV1)),
+});
+
+export const ExecutionAttemptV1 = versioned("ExecutionAttempt", 1, {
+  attemptId: Type.String({ minLength: 1 }),
+  runId: RunId,
+  stageId: StageId,
+  candidateIndex: Type.Integer({ minimum: 0 }),
+  profileId: ProfileId,
+  accountId: Type.Optional(Type.String({ minLength: 1 })),
+  workspaceId: Type.Optional(WorkspaceId),
+  status: ExecutionStatus.schema,
+  backendExecutionId: Type.Optional(BackendExecutionId),
+  limits: ExecutionLimits,
+  permissions: Type.Ref(ExecutionPermissionEnvelopeV1),
+  failure: Type.Optional(Type.Ref(ExecutionFailureV1)),
+  startedAt: Type.Optional(Type.String({ format: "date-time" })),
+  finishedAt: Type.Optional(Type.String({ format: "date-time" })),
+});
+
+export const SchedulingDecisionV1 = versioned("SchedulingDecision", 1, {
+  decisionId: Type.String({ minLength: 1 }),
+  runId: RunId,
+  stageId: StageId,
+  candidateIndex: Type.Optional(Type.Integer({ minimum: 0 })),
+  profileId: Type.Optional(ProfileId),
+  accountId: Type.Optional(Type.String({ minLength: 1 })),
+  kind: Type.Union([
+    Type.Literal("enqueued"),
+    Type.Literal("capacity_rejected"),
+    Type.Literal("compatibility_rejected"),
+    Type.Literal("candidate_selected"),
+    Type.Literal("lease_acquired"),
+    Type.Literal("lease_renewed"),
+    Type.Literal("lease_released"),
+    Type.Literal("lease_expired"),
+    Type.Literal("capacity_question_created"),
+    Type.Literal("capacity_answered"),
+    Type.Literal("attempt_started"),
+    Type.Literal("attempt_failed"),
+    Type.Literal("fallback_selected"),
+    Type.Literal("fallback_exhausted"),
+  ]),
+  reasonCode: Type.String({ minLength: 1, maxLength: 128 }),
+  recordedAt: Type.String({ format: "date-time" }),
 });
 
 /** The one-stage structured result Heniek validates before completion. */

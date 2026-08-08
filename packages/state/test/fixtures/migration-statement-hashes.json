@@ -34,5 +34,9 @@
   "9": {
     "name": "durable-interactions",
     "statementHash": "c15761917dafa54b927fb9c1b87b20bbf73114794eda5055620c506b21e4da7b"
+  },
+  "10": {
+    "name": "account-scheduling",
+    "statementHash": "92decb58ffb2dc4d6f030b336685dcea8b304b56519c57f5dfc9ff1d689818c4"
   }
 }

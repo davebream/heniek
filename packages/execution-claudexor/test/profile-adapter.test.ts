@@ -1,4 +1,4 @@
-import type { ExecutionRequestV3 } from "@heniek/contracts";
+import type { ExecutionRequestV3, ExecutionRequestV4 } from "@heniek/contracts";
 import type { Static } from "@sinclair/typebox";
 import { describe, expect, it } from "vitest";
 import {
@@ -8,6 +8,7 @@ import {
   createClaudeProfileExecutionAdapter,
   createCodexProfileExecutionAdapter,
   createCursorProfileExecutionAdapter,
+  createScheduledProfileExecutionAdapter,
 } from "../src/index.js";
 
 const expectedEngine = {
@@ -93,6 +94,21 @@ const cursorInput: Static<typeof ExecutionRequestV3> = {
     effort: "medium",
     fingerprint: `sha256:${"c".repeat(64)}`,
   },
+};
+
+const scheduledInput: Static<typeof ExecutionRequestV4> = {
+  ...input,
+  schemaVersion: 4,
+  profile: {
+    ...input.profile,
+    schemaVersion: 2,
+    accountMaxConcurrentRuns: 1,
+    accountQueueStrategy: "priority-fifo",
+    fallbackProfileIds: [],
+    onCapacity: "queue",
+    permissions: { workspace: "read-write", identifiers: [] },
+  },
+  permissions: { schemaVersion: 1, workspace: "read-only", identifiers: [] },
 };
 
 describe("ExecutionBackendV5 profile conformance", () => {
@@ -737,5 +753,47 @@ describe("ExecutionBackendV5 profile conformance", () => {
     const result = await adapter.result(handle.executionId);
     expect(result.summary).toBe("Claudexor execution succeeded.");
     expect(result.summary.trim().length).toBeGreaterThan(0);
+  });
+});
+
+describe("ExecutionBackendV7 scheduling conformance", () => {
+  it("maps read-only access and pins one explicit v3.1.2 harness/account/profile route", async () => {
+    expect(CLAUDEXOR_ENGINE_VERSION).toBe("3.1.2");
+    let threadBody: Record<string, unknown> | undefined;
+    const adapter = createScheduledProfileExecutionAdapter(
+      {
+        baseUrl: "http://127.0.0.1:43001",
+        expectedEngine,
+        fetch: async (url, init = {}) => {
+          const path = new URL(String(url)).pathname;
+          if (path === "/v2/handshake") return json(handshake());
+          if (path === "/v2/threads" && init.method === "POST") {
+            threadBody = JSON.parse(String(init.body)) as Record<string, unknown>;
+            return json({ id: "thread-scheduled-1" });
+          }
+          if (path === "/v2/threads/thread-scheduled-1/turns") {
+            return json({
+              jobId: "run-scheduled-1",
+              threadId: "thread-scheduled-1",
+              turnId: "turn-1",
+            });
+          }
+          throw new Error(`unexpected route: ${path}`);
+        },
+      },
+      "claude",
+    );
+
+    await adapter.start(scheduledInput, {
+      identifierReader: { read: async () => undefined },
+    });
+    expect(threadBody).toMatchObject({
+      credentialProfileId: "claude-subscription",
+      primaryHarness: "claude",
+      eligibleHarnesses: ["claude"],
+      access: "readonly",
+    });
+    expect(threadBody).not.toHaveProperty("accountPool");
+    expect(threadBody).not.toHaveProperty("quotaRotation");
   });
 });

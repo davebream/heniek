@@ -207,7 +207,7 @@ describe("Q020 migration 9", () => {
     ).toBe(3);
 
     runMigrations(db);
-    expect(db.schemaVersion).toBe(9);
+    expect(db.schemaVersion).toBe(10);
     expect(readRunInteractions(db, "run-m9")).toHaveLength(3);
     expect(compareInteractionProjectionToJournal(db).status).toBe("exact");
   });

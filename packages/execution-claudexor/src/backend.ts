@@ -7,8 +7,10 @@ import type {
   ExecutionEventV3,
   ExecutionRequestV2,
   ExecutionRequestV3,
+  ExecutionRequestV4,
   ExecutionResultV2,
   ExecutionResultV4,
+  ExecutionResultV5,
   ExecutionResumeRequestV1,
   ExecutionStatus,
   ExecutionTelemetryV1,
@@ -52,12 +54,17 @@ export interface ClaudexorExecutionBackend extends Omit<ExecutionBackendV2, "res
   startProfile(
     request: Static<typeof ExecutionRequestV3>,
   ): Promise<Static<typeof import("@heniek/contracts").BackendExecutionHandleV1>>;
+  /** Q021 primitive: explicit profile/account plus a non-escalating permission envelope. */
+  startScheduled(
+    request: Static<typeof ExecutionRequestV4>,
+  ): Promise<Static<typeof import("@heniek/contracts").BackendExecutionHandleV1>>;
   /** Internal primitive used by the subscription-only profile adapter. */
   resumeProfile(request: Static<typeof ExecutionResumeRequestV1>): Promise<void>;
   /** Normalized, replayable lifecycle facts; raw SSE payloads never escape. */
   events(executionId: string, after?: string): AsyncIterable<Static<typeof ExecutionEventV3>>;
   /** Internal structured result used by the Q019 profile adapter. */
   resultProfile(executionId: string): Promise<Static<typeof ExecutionResultV4>>;
+  resultScheduled(executionId: string): Promise<Static<typeof ExecutionResultV5>>;
   diagnoseCompatibility(): Promise<readonly ClaudexorDiagnostic[]>;
   diagnoseRuntime(): Promise<ClaudexorDiagnostic>;
   diagnoseAuthRoute(): Promise<ClaudexorDiagnostic>;
@@ -127,7 +134,9 @@ function encodedArtifactPath(path: string): string {
     .join("/");
 }
 
-type ResolvedProfile = Static<typeof ExecutionRequestV3>["profile"];
+type ResolvedProfile =
+  | Static<typeof ExecutionRequestV3>["profile"]
+  | Static<typeof ExecutionRequestV4>["profile"];
 type ProfileHarness = "claude" | "codex" | "cursor";
 
 /** Harnesses whose subscription route is a Claudexor-owned native session. */
@@ -655,6 +664,46 @@ export function createClaudexorExecutionBackend(
       return { schemaVersion: 1, executionId: executionId as BackendExecutionId };
     },
 
+    async startScheduled(input: Static<typeof ExecutionRequestV4>) {
+      const route = subscriptionProfileRoute(input.profile, "startScheduled");
+      await handshake();
+      if (isNativeSessionHarness(route.harness)) await requireNativeSession(route.harness);
+      const created = await callJson(
+        "POST",
+        "/v2/threads",
+        "createThread",
+        {
+          title: `Heniek ${input.runId}`,
+          scope: { kind: "project", root: input.workingDirectory, context: "auto" },
+          workspace: "in_place",
+          authPreference: "subscription",
+          ...(route.credentialProfileId === undefined
+            ? {}
+            : { credentialProfileId: route.credentialProfileId }),
+          primaryHarness: route.harness,
+          eligibleHarnesses: [route.harness],
+          access: input.permissions.workspace === "read-only" ? "readonly" : "workspace_write",
+        },
+        {
+          "Idempotency-Key": idempotencyKey(
+            "thread",
+            `${input.runId}:${input.profile.fingerprint}`,
+          ),
+        },
+      );
+      const executionId = requiredString(created, "id", "createThread");
+      await createTurn(
+        executionId,
+        `${input.prompt}\n\nWrite the requested final artifact to ${input.artifactPath}. ` +
+          "Do not write outside the current workspace. Finish with a concise summary.",
+        `${input.runId}:${input.stageId}:${input.profile.fingerprint}:initial`,
+        input.limits,
+        input.profile,
+      );
+      profiles.set(executionId, input.profile);
+      return { schemaVersion: 1, executionId: executionId as BackendExecutionId };
+    },
+
     async status(executionId: string) {
       const value = await run(executionId);
       return value === null ? "queued" : mapStatus(value);
@@ -796,6 +845,44 @@ export function createClaudexorExecutionBackend(
         artifacts: await listedArtifacts(executionId),
         telemetry,
         ...(diff === undefined ? {} : { diff }),
+      };
+    },
+
+    async resultScheduled(executionId: string): Promise<Static<typeof ExecutionResultV5>> {
+      const result = await this.resultProfile(executionId);
+      const failure =
+        result.status === "succeeded"
+          ? undefined
+          : result.status === "cancelled"
+            ? {
+                schemaVersion: 1 as const,
+                classification: "cancelled" as const,
+                phase: "running" as const,
+                code: "cancelled",
+                message: "Execution was cancelled.",
+                fallbackEligible: false,
+              }
+            : result.telemetry.context.pressure.state === "exhausted"
+              ? {
+                  schemaVersion: 1 as const,
+                  classification: "context_capacity_exhausted" as const,
+                  phase: "running" as const,
+                  code: "context_capacity_exhausted",
+                  message: "Execution exhausted the available context capacity.",
+                  fallbackEligible: true,
+                }
+              : {
+                  schemaVersion: 1 as const,
+                  classification: "unknown" as const,
+                  phase: "completion" as const,
+                  code: "provider_failure",
+                  message: "Provider execution failed without a safe fallback classification.",
+                  fallbackEligible: false,
+                };
+      return {
+        ...result,
+        schemaVersion: 5,
+        ...(failure === undefined ? {} : { failure }),
       };
     },
 

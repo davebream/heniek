@@ -174,6 +174,21 @@ const AccountConfiguration = Type.Object(
   { additionalProperties: false },
 );
 
+const AccountQueueConfiguration = Type.Object(
+  { strategy: Type.Literal("priority-fifo") },
+  { additionalProperties: false },
+);
+
+const AccountConfigurationV2 = Type.Object(
+  {
+    engine: ProfileEngine,
+    billing: Type.Literal("subscription"),
+    max_concurrent_runs: Type.Optional(Type.Integer({ minimum: 1 })),
+    queue: Type.Optional(AccountQueueConfiguration),
+  },
+  { additionalProperties: false },
+);
+
 const WorkerConfiguration = Type.Object(
   {
     engine: ProfileEngine,
@@ -206,6 +221,47 @@ const ProfileConfiguration = Type.Object(
   { additionalProperties: false },
 );
 
+export const ProfileCapacityPolicy = Type.Union([
+  Type.Literal("queue"),
+  Type.Literal("fallback"),
+  Type.Literal("ask"),
+]);
+
+export const WorkspacePermission = Type.Union([
+  Type.Literal("read-only"),
+  Type.Literal("read-write"),
+]);
+
+const SecretIdentifier = Type.String({
+  minLength: 1,
+  maxLength: 128,
+  pattern: "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+});
+
+export const ExecutionPermissionEnvelope = Type.Object(
+  {
+    workspace: WorkspacePermission,
+    identifiers: Type.Array(SecretIdentifier, { uniqueItems: true }),
+  },
+  { additionalProperties: false },
+);
+
+const ProfileConfigurationV2Shape = Type.Object(
+  {
+    worker: WorkerId,
+    role: RoleId,
+    questions: ProfileQuestionMode,
+    overridable: Type.Optional(Type.Array(ProfileOverridableField, { uniqueItems: true })),
+    focus: Type.Optional(Type.String({ minLength: 1 })),
+    max_duration: Type.Optional(Duration),
+    workspace_strategy: Type.Optional(Type.String({ minLength: 1 })),
+    fallbacks: Type.Optional(Type.Array(ProfileId, { uniqueItems: true })),
+    on_capacity: Type.Optional(ProfileCapacityPolicy),
+    permissions: Type.Optional(ExecutionPermissionEnvelope),
+  },
+  { additionalProperties: false },
+);
+
 /**
  * The post-layer-merge shape for §9's named configuration. Human-authored
  * YAML does not carry `schemaVersion`; the configuration package adds it only
@@ -224,6 +280,22 @@ export const ProfileConfigurationV1 = versioned("ProfileConfiguration", 1, {
   ),
   profiles: Type.Optional(
     Type.Record(ConfigurationName, ProfileConfiguration, { additionalProperties: false }),
+  ),
+});
+
+/** Q021's additive account-capacity, fallback, and permission configuration contract. */
+export const ProfileConfigurationV2 = versioned("ProfileConfiguration", 2, {
+  accounts: Type.Optional(
+    Type.Record(ConfigurationName, AccountConfigurationV2, { additionalProperties: false }),
+  ),
+  workers: Type.Optional(
+    Type.Record(ConfigurationName, WorkerConfiguration, { additionalProperties: false }),
+  ),
+  roles: Type.Optional(
+    Type.Record(ConfigurationName, RoleConfiguration, { additionalProperties: false }),
+  ),
+  profiles: Type.Optional(
+    Type.Record(ConfigurationName, ProfileConfigurationV2Shape, { additionalProperties: false }),
   ),
 });
 
@@ -276,3 +348,27 @@ export const ResolvedProfileSchema = Type.Object(
   { schemaVersion: Type.Literal(1), ...ResolvedProfileFields },
   { additionalProperties: false },
 );
+
+export const ResolvedProfileFieldsV2 = {
+  ...ResolvedProfileFields,
+  accountMaxConcurrentRuns: Type.Optional(Type.Integer({ minimum: 1 })),
+  accountQueueStrategy: Type.Optional(Type.Literal("priority-fifo")),
+  fallbackProfileIds: Type.Array(ProfileId, { uniqueItems: true }),
+  onCapacity: ProfileCapacityPolicy,
+  permissions: ExecutionPermissionEnvelope,
+} as const;
+
+/** Q021's resolved profile snapshot. V1 remains byte-for-byte frozen. */
+export const ResolvedProfileV2 = versioned("ResolvedProfile", 2, ResolvedProfileFieldsV2);
+
+/** Unregistered inline V2 shape for execution and chain contracts. */
+export const ResolvedProfileSchemaV2 = Type.Object(
+  { schemaVersion: Type.Literal(2), ...ResolvedProfileFieldsV2 },
+  { additionalProperties: false },
+);
+
+/** A primary profile plus its flat, explicitly ordered fallback candidates. */
+export const ResolvedProfileChainV1 = versioned("ResolvedProfileChain", 1, {
+  primary: ResolvedProfileSchemaV2,
+  fallbacks: Type.Array(ResolvedProfileSchemaV2),
+});

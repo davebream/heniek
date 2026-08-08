@@ -33,14 +33,20 @@ import {
   RUN_MUTATION_SCHEMA_SHA256,
   RUN_RESULT_SCHEMA_ID,
   RUN_RESULT_SCHEMA_SHA256,
+  RUN_RESULT_V2_SCHEMA_ID,
+  RUN_RESULT_V2_SCHEMA_SHA256,
   RUN_RESUME_V2_SCHEMA_ID,
   RUN_RESUME_V2_SCHEMA_SHA256,
   RUN_STATUS_SCHEMA_ID,
   RUN_STATUS_SCHEMA_SHA256,
   RUN_STATUS_V2_SCHEMA_ID,
   RUN_STATUS_V2_SCHEMA_SHA256,
+  RUN_STATUS_V3_SCHEMA_ID,
+  RUN_STATUS_V3_SCHEMA_SHA256,
   STAGE_START_SCHEMA_ID,
   STAGE_START_SCHEMA_SHA256,
+  STAGE_START_V2_SCHEMA_ID,
+  STAGE_START_V2_SCHEMA_SHA256,
 } from "@heniek/protocol";
 import type { ConnectionAuthState } from "../auth/challenge.js";
 import { UNAUTHORIZED_MESSAGE } from "../auth/errors.js";
@@ -73,11 +79,14 @@ import {
   RUN_ANSWER_V2_METHOD,
   RUN_CANCEL_V1_METHOD,
   RUN_RESULT_V1_METHOD,
+  RUN_RESULT_V2_METHOD,
   RUN_RESUME_V1_METHOD,
   RUN_RESUME_V2_METHOD,
   RUN_STATUS_V1_METHOD,
   RUN_STATUS_V2_METHOD,
+  RUN_STATUS_V3_METHOD,
   STAGE_START_V1_METHOD,
+  STAGE_START_V2_METHOD,
 } from "./methods.js";
 
 const STATUS_SCHEMA_ID = "heniek://contract/DaemonStatus/v1";
@@ -233,6 +242,12 @@ function negotiateResult(params: Record<string, unknown>) {
     ],
     "stage.start": [
       {
+        methodVersion: 2,
+        schemaId: STAGE_START_V2_SCHEMA_ID,
+        sha256: STAGE_START_V2_SCHEMA_SHA256,
+        wireMethod: STAGE_START_V2_METHOD,
+      },
+      {
         methodVersion: 1,
         schemaId: STAGE_START_SCHEMA_ID,
         sha256: STAGE_START_SCHEMA_SHA256,
@@ -240,6 +255,12 @@ function negotiateResult(params: Record<string, unknown>) {
       },
     ],
     "run.status": [
+      {
+        methodVersion: 3,
+        schemaId: RUN_STATUS_V3_SCHEMA_ID,
+        sha256: RUN_STATUS_V3_SCHEMA_SHA256,
+        wireMethod: RUN_STATUS_V3_METHOD,
+      },
       {
         methodVersion: 2,
         schemaId: RUN_STATUS_V2_SCHEMA_ID,
@@ -298,6 +319,12 @@ function negotiateResult(params: Record<string, unknown>) {
       },
     ],
     "run.result": [
+      {
+        methodVersion: 2,
+        schemaId: RUN_RESULT_V2_SCHEMA_ID,
+        sha256: RUN_RESULT_V2_SCHEMA_SHA256,
+        wireMethod: RUN_RESULT_V2_METHOD,
+      },
       {
         methodVersion: 1,
         schemaId: RUN_RESULT_SCHEMA_ID,

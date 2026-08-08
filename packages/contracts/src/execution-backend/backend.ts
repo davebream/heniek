@@ -10,10 +10,12 @@ import type {
   ExecutionRequestV1,
   ExecutionRequestV2,
   ExecutionRequestV3,
+  ExecutionRequestV4,
   ExecutionResultV1,
   ExecutionResultV2,
   ExecutionResultV3,
   ExecutionResultV4,
+  ExecutionResultV5,
   ExecutionResumeRequestV1,
   InteractionAnswerSetV1,
   PendingInteractionV1,
@@ -126,6 +128,27 @@ export interface ExecutionBackendV6 {
   answer(executionId: string, answer: Static<typeof InteractionAnswerSetV1>): Promise<void>;
   resume(request: Static<typeof ExecutionResumeRequestV1>): Promise<void>;
   result(executionId: string): Promise<Static<typeof ExecutionResultV4>>;
+  cancel(executionId: string): Promise<void>;
+  artifacts(executionId: string): Promise<Static<typeof BackendArtifactV1>[]>;
+  readArtifact(executionId: string, artifactId: string): Promise<Uint8Array>;
+  events(executionId: string, after?: string): AsyncIterable<Static<typeof ExecutionEventV3>>;
+}
+
+/** Q021's permission-bounded, failure-classified execution boundary. */
+export interface ExecutionIdentifierReaderV1 {
+  read(identifier: string): Promise<unknown>;
+}
+
+export interface ExecutionBackendV7 {
+  start(
+    request: Static<typeof ExecutionRequestV4>,
+    context: { readonly identifierReader: ExecutionIdentifierReaderV1 },
+  ): Promise<Static<typeof BackendExecutionHandleV1>>;
+  status(executionId: string): Promise<ExecutionStatus>;
+  interactions(executionId: string): Promise<Static<typeof PendingInteractionV2>[]>;
+  answer(executionId: string, answer: Static<typeof InteractionAnswerSetV1>): Promise<void>;
+  resume(request: Static<typeof ExecutionResumeRequestV1>): Promise<void>;
+  result(executionId: string): Promise<Static<typeof ExecutionResultV5>>;
   cancel(executionId: string): Promise<void>;
   artifacts(executionId: string): Promise<Static<typeof BackendArtifactV1>[]>;
   readArtifact(executionId: string, artifactId: string): Promise<Uint8Array>;

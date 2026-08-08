@@ -1,0 +1,617 @@
+{
+  "$id": "heniek://contract/ResolvedProfileChain/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "primary",
+    "fallbacks"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "primary": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "profileId",
+        "workerId",
+        "roleId",
+        "engine",
+        "model",
+        "effort",
+        "executionMode",
+        "questions",
+        "instructionsPath",
+        "artifactContract",
+        "provenance",
+        "fingerprint",
+        "fallbackProfileIds",
+        "onCapacity",
+        "permissions"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 2,
+          "type": "number"
+        },
+        "profileId": {
+          "minLength": 1,
+          "description": "Opaque ProfileId.",
+          "type": "string"
+        },
+        "workerId": {
+          "minLength": 1,
+          "description": "Opaque WorkerId.",
+          "type": "string"
+        },
+        "roleId": {
+          "minLength": 1,
+          "description": "Opaque RoleId.",
+          "type": "string"
+        },
+        "engine": {
+          "anyOf": [
+            {
+              "const": "claude",
+              "type": "string"
+            },
+            {
+              "const": "codex",
+              "type": "string"
+            },
+            {
+              "const": "cursor",
+              "type": "string"
+            }
+          ]
+        },
+        "accountId": {
+          "minLength": 1,
+          "description": "Opaque AccountId.",
+          "type": "string"
+        },
+        "billing": {
+          "const": "subscription",
+          "type": "string"
+        },
+        "model": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "effort": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "executionMode": {
+          "anyOf": [
+            {
+              "const": "native",
+              "type": "string"
+            },
+            {
+              "const": "external",
+              "type": "string"
+            }
+          ]
+        },
+        "questions": {
+          "anyOf": [
+            {
+              "const": "parent-mediated",
+              "type": "string"
+            },
+            {
+              "const": "direct",
+              "type": "string"
+            }
+          ]
+        },
+        "instructionsPath": {
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*[\\\\])(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\u0000).+$",
+          "type": "string"
+        },
+        "artifactContract": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "focus": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "maxDurationMs": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "workspaceStrategy": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "provenance": {
+          "type": "array",
+          "items": {
+            "additionalProperties": false,
+            "type": "object",
+            "required": [
+              "field",
+              "pointer",
+              "layer",
+              "value",
+              "overridden"
+            ],
+            "properties": {
+              "field": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "pointer": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "layer": {
+                "anyOf": [
+                  {
+                    "const": "built-in-defaults",
+                    "type": "string"
+                  },
+                  {
+                    "const": "global-defaults",
+                    "type": "string"
+                  },
+                  {
+                    "const": "codebase",
+                    "type": "string"
+                  },
+                  {
+                    "const": "repository",
+                    "type": "string"
+                  },
+                  {
+                    "const": "pipeline-template",
+                    "type": "string"
+                  },
+                  {
+                    "const": "profile-or-stage",
+                    "type": "string"
+                  },
+                  {
+                    "const": "invocation-override",
+                    "type": "string"
+                  }
+                ]
+              },
+              "sourcePath": {
+                "type": "string"
+              },
+              "value": {},
+              "overridden": {
+                "type": "array",
+                "items": {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "layer",
+                    "value"
+                  ],
+                  "properties": {
+                    "layer": {
+                      "anyOf": [
+                        {
+                          "const": "built-in-defaults",
+                          "type": "string"
+                        },
+                        {
+                          "const": "global-defaults",
+                          "type": "string"
+                        },
+                        {
+                          "const": "codebase",
+                          "type": "string"
+                        },
+                        {
+                          "const": "repository",
+                          "type": "string"
+                        },
+                        {
+                          "const": "pipeline-template",
+                          "type": "string"
+                        },
+                        {
+                          "const": "profile-or-stage",
+                          "type": "string"
+                        },
+                        {
+                          "const": "invocation-override",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "sourcePath": {
+                      "type": "string"
+                    },
+                    "value": {}
+                  }
+                }
+              }
+            }
+          }
+        },
+        "fingerprint": {
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "type": "string"
+        },
+        "accountMaxConcurrentRuns": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "accountQueueStrategy": {
+          "const": "priority-fifo",
+          "type": "string"
+        },
+        "fallbackProfileIds": {
+          "uniqueItems": true,
+          "type": "array",
+          "items": {
+            "minLength": 1,
+            "description": "Opaque ProfileId.",
+            "type": "string"
+          }
+        },
+        "onCapacity": {
+          "anyOf": [
+            {
+              "const": "queue",
+              "type": "string"
+            },
+            {
+              "const": "fallback",
+              "type": "string"
+            },
+            {
+              "const": "ask",
+              "type": "string"
+            }
+          ]
+        },
+        "permissions": {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "workspace",
+            "identifiers"
+          ],
+          "properties": {
+            "workspace": {
+              "anyOf": [
+                {
+                  "const": "read-only",
+                  "type": "string"
+                },
+                {
+                  "const": "read-write",
+                  "type": "string"
+                }
+              ]
+            },
+            "identifiers": {
+              "uniqueItems": true,
+              "type": "array",
+              "items": {
+                "minLength": 1,
+                "maxLength": 128,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "fallbacks": {
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "profileId",
+          "workerId",
+          "roleId",
+          "engine",
+          "model",
+          "effort",
+          "executionMode",
+          "questions",
+          "instructionsPath",
+          "artifactContract",
+          "provenance",
+          "fingerprint",
+          "fallbackProfileIds",
+          "onCapacity",
+          "permissions"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "const": 2,
+            "type": "number"
+          },
+          "profileId": {
+            "minLength": 1,
+            "description": "Opaque ProfileId.",
+            "type": "string"
+          },
+          "workerId": {
+            "minLength": 1,
+            "description": "Opaque WorkerId.",
+            "type": "string"
+          },
+          "roleId": {
+            "minLength": 1,
+            "description": "Opaque RoleId.",
+            "type": "string"
+          },
+          "engine": {
+            "anyOf": [
+              {
+                "const": "claude",
+                "type": "string"
+              },
+              {
+                "const": "codex",
+                "type": "string"
+              },
+              {
+                "const": "cursor",
+                "type": "string"
+              }
+            ]
+          },
+          "accountId": {
+            "minLength": 1,
+            "description": "Opaque AccountId.",
+            "type": "string"
+          },
+          "billing": {
+            "const": "subscription",
+            "type": "string"
+          },
+          "model": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "effort": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "executionMode": {
+            "anyOf": [
+              {
+                "const": "native",
+                "type": "string"
+              },
+              {
+                "const": "external",
+                "type": "string"
+              }
+            ]
+          },
+          "questions": {
+            "anyOf": [
+              {
+                "const": "parent-mediated",
+                "type": "string"
+              },
+              {
+                "const": "direct",
+                "type": "string"
+              }
+            ]
+          },
+          "instructionsPath": {
+            "minLength": 1,
+            "pattern": "^(?!/)(?!.*[\\\\])(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\u0000).+$",
+            "type": "string"
+          },
+          "artifactContract": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "focus": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxDurationMs": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "workspaceStrategy": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "provenance": {
+            "type": "array",
+            "items": {
+              "additionalProperties": false,
+              "type": "object",
+              "required": [
+                "field",
+                "pointer",
+                "layer",
+                "value",
+                "overridden"
+              ],
+              "properties": {
+                "field": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "pointer": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "layer": {
+                  "anyOf": [
+                    {
+                      "const": "built-in-defaults",
+                      "type": "string"
+                    },
+                    {
+                      "const": "global-defaults",
+                      "type": "string"
+                    },
+                    {
+                      "const": "codebase",
+                      "type": "string"
+                    },
+                    {
+                      "const": "repository",
+                      "type": "string"
+                    },
+                    {
+                      "const": "pipeline-template",
+                      "type": "string"
+                    },
+                    {
+                      "const": "profile-or-stage",
+                      "type": "string"
+                    },
+                    {
+                      "const": "invocation-override",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "sourcePath": {
+                  "type": "string"
+                },
+                "value": {},
+                "overridden": {
+                  "type": "array",
+                  "items": {
+                    "additionalProperties": false,
+                    "type": "object",
+                    "required": [
+                      "layer",
+                      "value"
+                    ],
+                    "properties": {
+                      "layer": {
+                        "anyOf": [
+                          {
+                            "const": "built-in-defaults",
+                            "type": "string"
+                          },
+                          {
+                            "const": "global-defaults",
+                            "type": "string"
+                          },
+                          {
+                            "const": "codebase",
+                            "type": "string"
+                          },
+                          {
+                            "const": "repository",
+                            "type": "string"
+                          },
+                          {
+                            "const": "pipeline-template",
+                            "type": "string"
+                          },
+                          {
+                            "const": "profile-or-stage",
+                            "type": "string"
+                          },
+                          {
+                            "const": "invocation-override",
+                            "type": "string"
+                          }
+                        ]
+                      },
+                      "sourcePath": {
+                        "type": "string"
+                      },
+                      "value": {}
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "fingerprint": {
+            "pattern": "^sha256:[a-f0-9]{64}$",
+            "type": "string"
+          },
+          "accountMaxConcurrentRuns": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "accountQueueStrategy": {
+            "const": "priority-fifo",
+            "type": "string"
+          },
+          "fallbackProfileIds": {
+            "uniqueItems": true,
+            "type": "array",
+            "items": {
+              "minLength": 1,
+              "description": "Opaque ProfileId.",
+              "type": "string"
+            }
+          },
+          "onCapacity": {
+            "anyOf": [
+              {
+                "const": "queue",
+                "type": "string"
+              },
+              {
+                "const": "fallback",
+                "type": "string"
+              },
+              {
+                "const": "ask",
+                "type": "string"
+              }
+            ]
+          },
+          "permissions": {
+            "additionalProperties": false,
+            "type": "object",
+            "required": [
+              "workspace",
+              "identifiers"
+            ],
+            "properties": {
+              "workspace": {
+                "anyOf": [
+                  {
+                    "const": "read-only",
+                    "type": "string"
+                  },
+                  {
+                    "const": "read-write",
+                    "type": "string"
+                  }
+                ]
+              },
+              "identifiers": {
+                "uniqueItems": true,
+                "type": "array",
+                "items": {
+                  "minLength": 1,
+                  "maxLength": 128,
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

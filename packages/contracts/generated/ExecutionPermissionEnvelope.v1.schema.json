@@ -1,0 +1,38 @@
+{
+  "$id": "heniek://contract/ExecutionPermissionEnvelope/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "workspace",
+    "identifiers"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "workspace": {
+      "anyOf": [
+        {
+          "const": "read-only",
+          "type": "string"
+        },
+        {
+          "const": "read-write",
+          "type": "string"
+        }
+      ]
+    },
+    "identifiers": {
+      "uniqueItems": true,
+      "type": "array",
+      "items": {
+        "minLength": 1,
+        "maxLength": 128,
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+        "type": "string"
+      }
+    }
+  }
+}
