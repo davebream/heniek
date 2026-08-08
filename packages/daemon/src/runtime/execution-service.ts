@@ -12,6 +12,7 @@ import type {
   WorkspaceId,
 } from "@heniek/contracts";
 import { ExternalStageResultV1 } from "@heniek/contracts";
+import { redactText } from "@heniek/secrets";
 import type { IdGenerator } from "@heniek/state";
 import {
   type AcceptedInteractionAnswer,
@@ -232,7 +233,7 @@ export function createExecutionService(options: ExecutionServiceOptions): Execut
       completePendingArtifactImports(options.db, row.runId);
       markExecutionFinalized(options.db, row.runId, {
         status: "succeeded",
-        summary: result.summary,
+        summary: redactText(result.summary),
         ...(result.sessionId === undefined ? {} : { sessionId: result.sessionId }),
       });
       releaseLease(row);
@@ -297,7 +298,7 @@ export function createExecutionService(options: ExecutionServiceOptions): Execut
     });
     markExecutionFinalized(options.db, row.runId, {
       status: "succeeded",
-      summary: result.summary,
+      summary: redactText(result.summary),
       ...(result.sessionId === undefined ? {} : { sessionId: result.sessionId }),
     });
     releaseLease(row);
@@ -322,7 +323,7 @@ export function createExecutionService(options: ExecutionServiceOptions): Execut
           await finalizeSuccess(row);
         } catch (error) {
           if (error instanceof ExecutionServiceCrashFault) throw error;
-          const message = error instanceof Error ? error.message : String(error);
+          const message = redactText(error instanceof Error ? error.message : String(error));
           updateStageExecutionStatus(options.db, runId, "failed", { error: message });
           markExecutionFinalized(options.db, runId, {
             status: "failed",
@@ -334,12 +335,12 @@ export function createExecutionService(options: ExecutionServiceOptions): Execut
       } else if (status === "failed" || status === "cancelled") {
         const result = await options.backend.result(executionId);
         updateStageExecutionStatus(options.db, runId, status, {
-          summary: result.summary,
+          summary: redactText(result.summary),
           ...(result.sessionId === undefined ? {} : { sessionId: result.sessionId }),
         });
         markExecutionFinalized(options.db, runId, {
           status,
-          summary: result.summary,
+          summary: redactText(result.summary),
           ...(result.sessionId === undefined ? {} : { sessionId: result.sessionId }),
         });
         releaseLease(row);
@@ -416,8 +417,9 @@ export function createExecutionService(options: ExecutionServiceOptions): Execut
           configuration: workspaceConfiguration(context.defaultRemote, context.defaultBranch),
         });
       } catch (error) {
-        const message =
-          error instanceof Error ? error.message : "managed workspace provisioning failed";
+        const message = redactText(
+          error instanceof Error ? error.message : "managed workspace provisioning failed",
+        );
         updateStageExecutionStatus(options.db, runId, "failed", { error: message });
         markExecutionFinalized(options.db, runId, {
           status: "failed",
