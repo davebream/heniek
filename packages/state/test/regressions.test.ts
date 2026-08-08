@@ -22,6 +22,7 @@ import {
 } from "../src/command/commit.js";
 import { internalHandle, openStateDatabase, type StateDatabase } from "../src/database/open.js";
 import { StageAssertionFailedError } from "../src/errors.js";
+import { createStageExecution, markExecutionFinalized } from "../src/execution/store.js";
 import { runMigrations } from "../src/migrations/migrate.js";
 import { createDeterministicIds, createFakeClock } from "./helpers/determinism.js";
 import { makeTempDbPath } from "./helpers/temp-db.js";
@@ -341,5 +342,69 @@ describe("R-Q007-P4b — a plain commitStateChange call can mint an artifact row
     }
     expect(caught).toBeInstanceOf(StageAssertionFailedError);
     expect(internalHandle(db).prepare("SELECT COUNT(*) AS n FROM artifact").get()?.n).toBe(0);
+  });
+});
+
+describe("R-Q023-F1 — markExecutionFinalized let two completions overwrite each other", () => {
+  /*
+   * Found while implementing Q023. The `UPDATE stage_execution … WHERE
+   * run_id = ?` carried no `finalized` guard and asserted nothing about
+   * `changes`, so finalization was last-writer-wins: a run already reported
+   * `succeeded` could be silently rewritten to `failed`, or the reverse,
+   * with no trace that it had ever held the other value.
+   *
+   * The ordering is reachable, not theoretical — `ExecutionService.observe`
+   * finalizes as `failed` in the catch block around `finalizeSuccess`, and
+   * `finalizeSuccess` finalizes as `succeeded` before its own last
+   * statements run. Nothing in between guaranteed the first write had not
+   * already landed.
+   *
+   * The guard belongs in the `WHERE` rather than in a read-then-write in
+   * JavaScript: a JS-side `if (row.finalized) return` is correct only
+   * because this process happens to be single-threaded today, and it would
+   * be silently wrong the moment anything else holds the handle. `finalized
+   * = 0` in the predicate plus a `changes` assertion makes it atomic in
+   * SQLite and loud at the call site that got it wrong.
+   */
+  it("refuses a second finalization instead of overwriting the first", () => {
+    registerCodebaseAndRun();
+    commitStateChange(db, {
+      type: "repository.registered",
+      payload: { repositoryId: "repository-1", codebaseId: "cb-1" },
+    });
+    commitStateChange(db, {
+      type: "workspace.registered",
+      payload: { workspaceId: "workspace-1", codebaseId: "cb-1" },
+    });
+    createStageExecution(db, {
+      runId: "run-1",
+      stageId: "stage-1",
+      codebaseId: "cb-1",
+      repositoryId: "repository-1",
+      workspaceId: "workspace-1",
+      backendKind: "claudexor-v2",
+      prompt: "Finalize once.",
+      artifactPath: "artifacts/result.md",
+      limits: {},
+    });
+
+    markExecutionFinalized(db, "run-1", { status: "succeeded", summary: "First and only." });
+
+    expect(() =>
+      markExecutionFinalized(db, "run-1", { status: "failed", summary: "Second." }),
+    ).toThrow(/already finalized/);
+
+    expect(
+      internalHandle(db)
+        .prepare("SELECT status, summary FROM stage_execution WHERE run_id = 'run-1'")
+        .get(),
+    ).toMatchObject({ status: "succeeded", summary: "First and only." });
+  });
+
+  it("reports a missing run through the same guard rather than succeeding silently", () => {
+    registerCodebaseAndRun();
+    expect(() =>
+      markExecutionFinalized(db, "run-absent", { status: "succeeded", summary: "Nothing here." }),
+    ).toThrow(/already finalized or missing/);
   });
 });
