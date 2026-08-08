@@ -117,8 +117,8 @@ async function startFakeDaemon(homeRoot: string) {
             methods: [
               {
                 name: required?.name,
-                methodVersion: 1,
-                wireMethod: `${required?.name}.v1`,
+                methodVersion: required?.name === "stage.start" ? 2 : 1,
+                wireMethod: `${required?.name}.v${required?.name === "stage.start" ? 2 : 1}`,
                 resultSchemaId: required?.resultSchemas[0]?.schemaId,
                 resultSchemaSha256: required?.resultSchemas[0]?.sha256,
               },
@@ -148,12 +148,13 @@ async function startFakeDaemon(homeRoot: string) {
             instructionSnapshot: INSTRUCTION_SNAPSHOT,
             diagnostics: [],
           };
-        } else if (request.method === "stage.start.v1") {
+        } else if (request.method === "stage.start.v2") {
           result = {
-            schemaVersion: 1,
+            schemaVersion: 2,
             runId: "run-q012",
             stageId: "stage-q012",
-            status: "running",
+            status: "queued",
+            schedulingRevision: 1,
           };
         } else if (request.method === "run.status.v1") {
           result = {
@@ -318,7 +319,7 @@ describe("heniek CLI", () => {
     const result = run(["--help"]);
     expect(result.status).toBe(0);
     expect(result.stdout).toBe(
-      "Usage: heniek status [--json]\n       heniek codebase detect [ROOT...] [--json]\n       heniek codebase register [ROOT...] [--confirm-registration] [--json]\n       heniek stage start --task-file PATH --artifact-path PATH [--json]\n       heniek run status RUN_ID [--json]\n       heniek run answer RUN_ID INTERACTION_ID --answers-json JSON [--json]\n       heniek run resume RUN_ID [--input-artifact ARTIFACT_ID...] [--json]\n       heniek run cancel RUN_ID [--json]\n       heniek run result RUN_ID [--json]\n       heniek artifact get ARTIFACT_ID [--output PATH] [--json]\n       heniek engine list [--refresh] [--json]\n       heniek runtime list [--json]\n       heniek runtime install claudexor VERSION [--json]\n       heniek runtime activate claudexor VERSION [--json]\n       heniek runtime upgrade claudexor VERSION [--json]\n       heniek runtime rollback claudexor [--json]\n       heniek runtime adopt claudexor --entry ABSOLUTE_PATH [--json]\n       heniek doctor [--json]\n       heniek --help\n       heniek --version\n",
+      "Usage: heniek status [--json]\n       heniek codebase detect [ROOT...] [--json]\n       heniek codebase register [ROOT...] [--confirm-registration] [--json]\n       heniek stage start --task-file PATH --artifact-path PATH --profile PROFILE [--priority 0-9] [--secret ID...] [--json]\n       heniek run status RUN_ID [--json]\n       heniek run answer RUN_ID INTERACTION_ID --answers-json JSON [--json]\n       heniek run resume RUN_ID [--input-artifact ARTIFACT_ID...] [--json]\n       heniek run cancel RUN_ID [--json]\n       heniek run result RUN_ID [--json]\n       heniek artifact get ARTIFACT_ID [--output PATH] [--json]\n       heniek engine list [--refresh] [--json]\n       heniek runtime list [--json]\n       heniek runtime install claudexor VERSION [--json]\n       heniek runtime activate claudexor VERSION [--json]\n       heniek runtime upgrade claudexor VERSION [--json]\n       heniek runtime rollback claudexor [--json]\n       heniek runtime adopt claudexor --entry ABSOLUTE_PATH [--json]\n       heniek doctor [--json]\n       heniek --help\n       heniek --version\n",
     );
     expect(result.stderr).toBe("");
   });
@@ -448,15 +449,19 @@ describe("heniek CLI", () => {
           taskFile,
           "--artifact-path",
           "artifacts/report.md",
+          "--profile",
+          "claude-report",
+          "--priority",
+          "3",
           "--json",
         ],
         home,
       );
-      expect(start.status).toBe(0);
+      expect(start.status, `${start.stderr}\n${start.stdout}`).toBe(0);
       expect(JSON.parse(start.stdout)).toMatchObject({
         ok: true,
         command: "stage.start",
-        result: { runId: "run-q012", status: "running" },
+        result: { runId: "run-q012", status: "queued", schedulingRevision: 1 },
       });
 
       const status = await runAsync(["run", "status", "run-q012", "--json"], home);
@@ -505,7 +510,7 @@ describe("heniek CLI", () => {
         ok: true,
         result: { health: "degraded" },
       });
-      expect(daemon.methods).toContain("stage.start.v1");
+      expect(daemon.methods).toContain("stage.start.v2");
       expect(daemon.methods).toContain("run.answer.v1");
       expect(daemon.methods.filter((method) => method === "artifact.get.v1")).toHaveLength(3);
       expect(daemon.methods).toContain("doctor.v1");
