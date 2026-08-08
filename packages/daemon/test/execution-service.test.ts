@@ -376,6 +376,42 @@ describe("Q012 durable execution service", () => {
     setup.db.close();
   });
 
+  it("redacts provider-derived terminal summaries before durable persistence", async () => {
+    const setup = await fixture();
+    const fake = fakeBackend();
+    const backend: DurableExecutionBackend = {
+      ...fake.backend,
+      async result(executionId) {
+        return {
+          ...(await fake.backend.result(executionId)),
+          summary: "GET https://provider.example/v1/runs/1 Authorization: Bearer provider-secret",
+        };
+      },
+    };
+    const service = createExecutionService({
+      db: setup.db,
+      backend,
+      workspaceService: setup.workspace(setup.db),
+      artifactsDirectory: join(setup.root, "artifacts"),
+      instanceId: "daemon-redaction",
+      ids: setup.ids,
+      pollMilliseconds: 1_000_000,
+    });
+    const started = await service.start({
+      currentDirectory: setup.source,
+      prompt: "Persist only redacted diagnostics.",
+      artifactPath: "artifacts/report.md",
+    });
+    fake.setStatus("failed");
+
+    await service.status(started.runId);
+    const summary = readStageExecution(setup.db, started.runId)?.summary ?? "";
+    expect(summary).not.toContain("provider.example");
+    expect(summary).not.toContain("provider-secret");
+    service.stop();
+    setup.db.close();
+  });
+
   it("recovers a crash-boundary start with no persisted handle and reports cleanup until reconciled", async () => {
     const setup = await fixture();
     const fake = fakeBackend();

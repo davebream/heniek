@@ -3,6 +3,7 @@ import {
   type CancellationFacts,
   classifyCancellation,
   classifyDaemonRestart,
+  classifyOrphanProcessSnapshot,
   classifyParentIndependence,
   classifyQuestionAnswer,
   type DaemonRestartFacts,
@@ -129,7 +130,6 @@ describe("classifyCancellation", () => {
   const base: CancellationFacts = {
     acceptedControlCall: true,
     finalState: "cancelled",
-    survivingDescendantPids: 0,
     settleMs: 3_000,
   };
 
@@ -137,10 +137,10 @@ describe("classifyCancellation", () => {
     expect(classifyCancellation(base).outcome).toBe("supported");
   });
 
-  it("degrades when the process tree is not reaped", () => {
-    const result = classifyCancellation({ ...base, survivingDescendantPids: 2 });
-    expect(result.outcome).toBe("degraded");
-    expect(result.fallback).toMatch(/reap the process tree/);
+  it("reports only backend lifecycle settlement", () => {
+    const result = classifyCancellation(base);
+    expect(result.outcome).toBe("supported");
+    expect(result.evidence).not.toHaveProperty("survivingDescendantPids");
   });
 
   it("degrades when the run settles as something other than cancelled", () => {
@@ -151,6 +151,30 @@ describe("classifyCancellation", () => {
     expect(classifyCancellation({ ...base, acceptedControlCall: false }).outcome).toBe(
       "unsupported",
     );
+  });
+});
+
+describe("classifyOrphanProcessSnapshot", () => {
+  it("keeps a non-growing ps sample explicitly indicative", () => {
+    const result = classifyOrphanProcessSnapshot({
+      instrument: "ps",
+      sampleTiming: "after_terminal",
+      baselineDescendantCount: 2,
+      observedDescendantCount: 0,
+    });
+    expect(result.outcome).toBe("supported");
+    expect(result.evidence.evidenceStrength).toBe("indicative");
+  });
+
+  it("degrades when the indicative sample grows", () => {
+    expect(
+      classifyOrphanProcessSnapshot({
+        instrument: "ps",
+        sampleTiming: "after_terminal",
+        baselineDescendantCount: 0,
+        observedDescendantCount: 1,
+      }).outcome,
+    ).toBe("degraded");
   });
 });
 
@@ -189,13 +213,12 @@ describe("toMarkdownTable", () => {
       classifyCancellation({
         acceptedControlCall: true,
         finalState: "cancelled",
-        survivingDescendantPids: 0,
         settleMs: 1,
       }),
     ]);
     expect(table.split("\n")).toHaveLength(4);
     expect(table).toContain("parentIndependence(detached)");
-    expect(table).toContain("cancellationCleanup");
+    expect(table).toContain("cancellationSettlement");
     expect(table).toContain("postKillMs=");
   });
 

@@ -34,8 +34,8 @@ async function runner(output: unknown, exitCode = 0, observationPath?: string): 
       observationPath === undefined
         ? ""
         : `import { writeFileSync } from "node:fs";\nwriteFileSync(${JSON.stringify(observationPath)}, JSON.stringify({
-  exposed: ["OPENAI_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN", "CODEX_HOME", "AWS_SECRET_ACCESS_KEY"].filter((name) => Object.hasOwn(process.env, name)),
-  explicit: process.env.PROMOTION_EXPLICIT_ROUTE,
+  exposed: ["OPENAI_API_KEY", "CODEX_HOME", "AWS_SECRET_ACCESS_KEY", "UNRELATED_TOKENISH_NAME"].filter((name) => Object.hasOwn(process.env, name)),
+  carrier: process.env.CLAUDE_CODE_OAUTH_TOKEN,
   home: process.env.HOME,
   xdgConfigHome: process.env.XDG_CONFIG_HOME,
 }));\n`
@@ -112,19 +112,20 @@ describe("command compatibility gate", () => {
       await createCommandCompatibilityGate({
         command,
         explicitEnvironment: {
-          PROMOTION_EXPLICIT_ROUTE: "subscription-route",
+          CLAUDE_CODE_OAUTH_TOKEN: "subscription-route",
+          UNRELATED_TOKENISH_NAME: "must-not-be-propagated",
           HOME: "/must-not-override-isolation",
           XDG_CONFIG_HOME: "/must-not-override-isolation",
         },
       }).run(identity);
       const observed = JSON.parse(await readFile(observationPath, "utf8")) as {
         exposed: string[];
-        explicit: string;
+        carrier: string;
         home: string;
         xdgConfigHome: string;
       };
       expect(observed.exposed).toEqual([]);
-      expect(observed.explicit).toBe("subscription-route");
+      expect(observed.carrier).toBe("subscription-route");
       expect(observed.home).not.toBe("/hostile/home");
       expect(observed.home).not.toBe("/must-not-override-isolation");
       expect(observed.xdgConfigHome).not.toBe("/hostile/xdg");
