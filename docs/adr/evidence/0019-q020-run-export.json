@@ -1,0 +1,60 @@
+{
+  "schemaVersion": "heniek.q020-evidence.v1",
+  "sanitized": true,
+  "run": {
+    "runId": "run-example",
+    "stageId": "stage-example",
+    "status": "succeeded",
+    "runRevision": 7,
+    "backend": {
+      "kind": "claudexor-v2",
+      "executionId": "thread-redacted",
+      "sessionContinuity": "same-run"
+    },
+    "interactions": [
+      {
+        "schemaVersion": 2,
+        "interactionId": "interaction-example",
+        "purpose": "question",
+        "status": "answered",
+        "revision": 3,
+        "requestedAt": "2026-08-08T10:00:00.000Z",
+        "resolvedAt": "2026-08-08T10:00:01.000Z",
+        "deliveryState": "delivered",
+        "questions": [
+          {
+            "questionId": "question-example",
+            "kind": "single_choice",
+            "prompt": "Choose the report format.",
+            "options": [{ "label": "Markdown" }, { "label": "JSON" }]
+          }
+        ]
+      }
+    ],
+    "answers": [
+      {
+        "schemaVersion": 2,
+        "answerId": "answer-example",
+        "operationId": "operation-example",
+        "interactionId": "interaction-example",
+        "interactionRevision": 2,
+        "answers": [
+          {
+            "questionId": "question-example",
+            "kind": "single_choice",
+            "selectedLabels": ["Markdown"]
+          }
+        ],
+        "answeredAt": "2026-08-08T10:00:01.000Z",
+        "answeredByKeyId": "local-key-redacted"
+      }
+    ],
+    "delivery": {
+      "operationId": "operation-example",
+      "kind": "answer",
+      "state": "delivered",
+      "attemptCount": 1,
+      "backendIdempotency": "natural"
+    }
+  }
+}
