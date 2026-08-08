@@ -861,6 +861,245 @@ const MIGRATION_0010_ACCOUNT_SCHEDULING: Migration = {
 Object.freeze(MIGRATION_0010_ACCOUNT_SCHEDULING.statements);
 Object.freeze(MIGRATION_0010_ACCOUNT_SCHEDULING);
 
+/**
+ * Migration 11 — the native Claude bridge (Q023, ADR 0021).
+ *
+ * Native stages get their own tables rather than reusing the scheduler's,
+ * for three structural reasons rather than a stylistic one:
+ *
+ * 1. `account_queue_entry.account_id` is `NOT NULL` and the whole claim path
+ *    groups and capacity-checks by account. A native profile has no account
+ *    by construction — the resolver deletes it and emits
+ *    `profile.native-account-forbidden`, because native execution inherits
+ *    the connected parent session rather than selecting a billing account.
+ *    Reusing the queue would mean inventing a synthetic account id and
+ *    publishing it on `ExecutionAttempt/v1.accountId`, a value the user
+ *    never configured, in a field whose meaning is "which account was
+ *    billed".
+ * 2. `execution_attempt` is `UNIQUE (run_id, candidate_index)` with an FK to
+ *    `execution_candidate`: one attempt per candidate, forever. §9.5 says an
+ *    interrupted native stage "may be retried from canonical run state, but
+ *    that is a new attempt" — which that table cannot represent for a stage
+ *    with a single native candidate. Hence `attempt_ordinal` here.
+ * 3. `interaction_record.run_id` references `stage_execution(run_id)`, and
+ *    foreign keys are on. A native run has no `stage_execution` row, so
+ *    native questions need their own pair of tables — the same reason Q021
+ *    built `scheduling_capacity_question` separately. Only the *storage* is
+ *    separate; the *contracts* are reused verbatim, so a native question
+ *    reaches the inbox and is answered exactly like any other.
+ *
+ * Nothing existing is touched: no CHECK widens, no table is rebuilt, and
+ * there is no backfill. In particular `run_projection.status` needs no
+ * change — it never had a CHECK, the vocabulary lives in `@heniek/contracts`,
+ * and `waiting_for_parent_session` has been a legal `RunStatus` all along.
+ * What was missing was an emitter, not a column.
+ *
+ * The fencing design is concentrated in `native_dispatch`. A dispatch is
+ * one-shot (`dispatched`/`waiting_on_user` are the only non-terminal
+ * states), at most one may be open per attempt (the partial unique index),
+ * its binding to a run/stage/attempt is immutable after insert (trigger),
+ * and its `revision` never moves backwards (trigger). Expiry does not merely
+ * mark the *attempt* recovered — it terminates the *dispatch* and bumps that
+ * revision, which is what stops a parent that slept through its lease from
+ * waking up, rebinding, and submitting a result for a superseded attempt
+ * while a newer one is already running. `expireOrphanLeases` in the
+ * scheduling store does exactly the same thing for account leases.
+ */
+const MIGRATION_0011_NATIVE_BRIDGE: Migration = {
+  version: 11,
+  name: "native-bridge",
+  statements: [
+    `CREATE TABLE parent_session (
+      session_id           TEXT    NOT NULL PRIMARY KEY,
+      codebase_id          TEXT    NOT NULL REFERENCES codebase(codebase_id),
+      state                TEXT    NOT NULL,
+      revision             INTEGER NOT NULL,
+      boot_witness         TEXT,
+      process_witness_json TEXT             CHECK (process_witness_json IS NULL OR json_valid(process_witness_json)),
+      attached_at          TEXT    NOT NULL,
+      renewed_at           TEXT    NOT NULL,
+      expires_at           TEXT    NOT NULL,
+      released_at          TEXT,
+      superseded_by        TEXT             REFERENCES parent_session(session_id),
+      updated_at           TEXT    NOT NULL,
+      CHECK (state IN ('attached','stalled','detached','expired','superseded')),
+      CHECK (revision >= 1),
+      CHECK (superseded_by IS NULL OR superseded_by <> session_id),
+      CHECK ((state IN ('detached','expired','superseded')) = (released_at IS NOT NULL))
+    ) STRICT`,
+    `CREATE INDEX parent_session_live
+      ON parent_session(codebase_id, state, expires_at)`,
+    `CREATE TRIGGER parent_session_first_revision BEFORE INSERT ON parent_session
+      WHEN NEW.revision <> 1
+      BEGIN SELECT RAISE(ABORT, 'first parent session revision must be 1'); END`,
+    `CREATE TRIGGER parent_session_revision_advances BEFORE UPDATE ON parent_session
+      WHEN NEW.revision < OLD.revision
+      BEGIN SELECT RAISE(ABORT, 'a parent session revision must never move backwards'); END`,
+    `CREATE TABLE native_stage (
+      run_id               TEXT    NOT NULL PRIMARY KEY REFERENCES run_projection(run_id),
+      stage_id             TEXT    NOT NULL UNIQUE,
+      codebase_id          TEXT    NOT NULL REFERENCES codebase(codebase_id),
+      repository_id        TEXT    NOT NULL REFERENCES repository(repository_id),
+      profile_id           TEXT    NOT NULL,
+      profile_json         TEXT    NOT NULL CHECK (json_valid(profile_json)),
+      permissions_json     TEXT    NOT NULL CHECK (json_valid(permissions_json)),
+      limits_json          TEXT    NOT NULL CHECK (json_valid(limits_json)),
+      prompt               TEXT    NOT NULL,
+      artifact_path        TEXT    NOT NULL,
+      instructions_path    TEXT    NOT NULL,
+      artifact_contract    TEXT    NOT NULL,
+      model                TEXT    NOT NULL,
+      effort               TEXT    NOT NULL,
+      focus                TEXT,
+      questions            TEXT    NOT NULL,
+      base_sha             TEXT    NOT NULL,
+      hard_deadline_at     TEXT,
+      state                TEXT    NOT NULL,
+      current_attempt_id   TEXT,
+      attempt_count        INTEGER NOT NULL,
+      revision             INTEGER NOT NULL,
+      waiting_since        TEXT,
+      created_at           TEXT    NOT NULL,
+      updated_at           TEXT    NOT NULL,
+      CHECK (state IN ('waiting_for_parent','dispatched','waiting_on_user','recovery_required','settled')),
+      CHECK (questions IN ('parent-mediated','direct')),
+      CHECK (revision >= 1),
+      CHECK (attempt_count >= 0),
+      CHECK ((state = 'waiting_for_parent') = (waiting_since IS NOT NULL))
+    ) STRICT`,
+    `CREATE INDEX native_stage_dispatchable
+      ON native_stage(codebase_id, state, created_at, run_id)`,
+    `CREATE TRIGGER native_stage_first_revision BEFORE INSERT ON native_stage
+      WHEN NEW.revision <> 1
+      BEGIN SELECT RAISE(ABORT, 'first native stage revision must be 1'); END`,
+    `CREATE TRIGGER native_stage_revision_advances BEFORE UPDATE ON native_stage
+      WHEN NEW.revision <> OLD.revision + 1
+      BEGIN SELECT RAISE(ABORT, 'native stage update must advance revision by 1'); END`,
+    `CREATE TRIGGER native_stage_identity_immutable BEFORE UPDATE ON native_stage
+      WHEN NEW.stage_id <> OLD.stage_id OR NEW.codebase_id <> OLD.codebase_id
+        OR NEW.repository_id <> OLD.repository_id OR NEW.artifact_path <> OLD.artifact_path
+        OR NEW.base_sha <> OLD.base_sha
+      BEGIN SELECT RAISE(ABORT, 'native stage identity is immutable'); END`,
+    `CREATE TABLE native_stage_attempt (
+      attempt_id             TEXT    NOT NULL PRIMARY KEY,
+      run_id                 TEXT    NOT NULL REFERENCES native_stage(run_id),
+      stage_id               TEXT    NOT NULL,
+      attempt_ordinal        INTEGER NOT NULL,
+      workspace_id           TEXT             REFERENCES workspace(workspace_id),
+      readonly_baseline_json TEXT             CHECK (readonly_baseline_json IS NULL OR json_valid(readonly_baseline_json)),
+      status                 TEXT    NOT NULL,
+      result_json            TEXT             CHECK (result_json IS NULL OR json_valid(result_json)),
+      failure_json           TEXT             CHECK (failure_json IS NULL OR json_valid(failure_json)),
+      started_at             TEXT,
+      finished_at            TEXT,
+      created_at             TEXT    NOT NULL,
+      updated_at             TEXT    NOT NULL,
+      UNIQUE (run_id, attempt_ordinal),
+      UNIQUE (attempt_id, run_id),
+      CHECK (attempt_ordinal >= 1),
+      CHECK (status IN ('running','waiting_on_user','recovery_required','succeeded','failed','cancelled')),
+      CHECK ((status IN ('succeeded','failed','cancelled')) = (finished_at IS NOT NULL))
+    ) STRICT`,
+    `CREATE TABLE native_dispatch (
+      dispatch_id            TEXT    NOT NULL PRIMARY KEY,
+      run_id                 TEXT    NOT NULL,
+      stage_id               TEXT    NOT NULL,
+      attempt_id             TEXT    NOT NULL,
+      session_id             TEXT    NOT NULL REFERENCES parent_session(session_id),
+      state                  TEXT    NOT NULL,
+      revision               INTEGER NOT NULL,
+      terminal_reason        TEXT,
+      outcome                TEXT,
+      submission_id          TEXT,
+      submission_digest      TEXT,
+      result_json            TEXT             CHECK (result_json IS NULL OR json_valid(result_json)),
+      issued_at              TEXT    NOT NULL,
+      expires_at             TEXT    NOT NULL,
+      settled_at             TEXT,
+      updated_at             TEXT    NOT NULL,
+      UNIQUE (dispatch_id, submission_id),
+      FOREIGN KEY (attempt_id, run_id)
+        REFERENCES native_stage_attempt(attempt_id, run_id),
+      CHECK (state IN ('dispatched','waiting_on_user','submitted','revoked','abandoned')),
+      CHECK (revision >= 1),
+      CHECK (outcome IS NULL OR outcome IN ('succeeded','failed','cancelled')),
+      CHECK ((state = 'submitted') = (outcome IS NOT NULL)),
+      CHECK ((state = 'submitted') = (submission_id IS NOT NULL)),
+      CHECK ((state = 'submitted') = (submission_digest IS NOT NULL)),
+      CHECK ((state IN ('submitted','revoked','abandoned')) = (settled_at IS NOT NULL)),
+      CHECK ((state IN ('revoked','abandoned')) = (terminal_reason IS NOT NULL))
+    ) STRICT`,
+    `CREATE UNIQUE INDEX native_dispatch_open_per_attempt
+      ON native_dispatch(attempt_id) WHERE state IN ('dispatched','waiting_on_user')`,
+    `CREATE INDEX native_dispatch_by_session
+      ON native_dispatch(session_id, state, dispatch_id)`,
+    `CREATE TRIGGER native_dispatch_binding_immutable BEFORE UPDATE ON native_dispatch
+      WHEN NEW.run_id <> OLD.run_id OR NEW.stage_id <> OLD.stage_id
+        OR NEW.attempt_id <> OLD.attempt_id OR NEW.issued_at <> OLD.issued_at
+      BEGIN SELECT RAISE(ABORT, 'a dispatch binding is immutable'); END`,
+    `CREATE TRIGGER native_dispatch_revision_advances BEFORE UPDATE ON native_dispatch
+      WHEN NEW.revision < OLD.revision
+      BEGIN SELECT RAISE(ABORT, 'a dispatch revision must never move backwards'); END`,
+    `CREATE TRIGGER native_dispatch_settlement_final BEFORE UPDATE ON native_dispatch
+      WHEN OLD.state IN ('submitted','revoked','abandoned') AND NEW.state <> OLD.state
+      BEGIN SELECT RAISE(ABORT, 'a settled dispatch is terminal'); END`,
+    `CREATE TABLE native_stage_question (
+      run_id                 TEXT NOT NULL REFERENCES native_stage(run_id),
+      interaction_id         TEXT NOT NULL,
+      stage_id               TEXT NOT NULL,
+      attempt_id             TEXT NOT NULL REFERENCES native_stage_attempt(attempt_id),
+      dispatch_id            TEXT NOT NULL REFERENCES native_dispatch(dispatch_id),
+      source_payload_json    TEXT NOT NULL CHECK (json_valid(source_payload_json)),
+      canonical_payload_json TEXT NOT NULL CHECK (json_valid(canonical_payload_json)),
+      requested_at           TEXT NOT NULL,
+      timeout_at             TEXT,
+      created_event_id       TEXT REFERENCES state_event(event_id),
+      PRIMARY KEY (run_id, interaction_id)
+    ) STRICT`,
+    `CREATE TRIGGER native_stage_question_immutable_update BEFORE UPDATE ON native_stage_question
+      BEGIN SELECT RAISE(ABORT, 'native stage questions are immutable'); END`,
+    `CREATE TRIGGER native_stage_question_immutable_delete BEFORE DELETE ON native_stage_question
+      BEGIN SELECT RAISE(ABORT, 'native stage questions are immutable'); END`,
+    `CREATE TABLE native_question_projection (
+      run_id                 TEXT    NOT NULL,
+      interaction_id         TEXT    NOT NULL,
+      state                  TEXT    NOT NULL,
+      revision               INTEGER NOT NULL,
+      delivery_state         TEXT    NOT NULL,
+      cancellation_reason    TEXT,
+      answer_json            TEXT             CHECK (answer_json IS NULL OR json_valid(answer_json)),
+      answered_by_key_id     TEXT,
+      answered_at            TEXT,
+      resolved_at            TEXT,
+      last_event_sequence    INTEGER NOT NULL REFERENCES state_event(sequence),
+      updated_at             TEXT    NOT NULL,
+      PRIMARY KEY (run_id, interaction_id),
+      FOREIGN KEY (run_id, interaction_id)
+        REFERENCES native_stage_question(run_id, interaction_id),
+      CHECK (state IN ('pending','answered','cancelled')),
+      CHECK (delivery_state IN ('not_applicable','pending','delivered')),
+      CHECK (revision >= 1),
+      CHECK ((state = 'answered') = (answer_json IS NOT NULL)),
+      CHECK ((state = 'answered') = (answered_by_key_id IS NOT NULL)),
+      CHECK ((state IN ('answered','cancelled')) = (resolved_at IS NOT NULL)),
+      CHECK (cancellation_reason IS NULL OR cancellation_reason IN
+        ('withdrawn','timed_out','run_terminal','migration_unresolved'))
+    ) STRICT`,
+    `CREATE INDEX native_question_inbox
+      ON native_question_projection(state, updated_at, run_id, interaction_id)`,
+    `CREATE INDEX native_question_undelivered
+      ON native_question_projection(delivery_state, run_id, interaction_id)`,
+    `CREATE TRIGGER native_question_first_revision BEFORE INSERT ON native_question_projection
+      WHEN NEW.revision <> 1
+      BEGIN SELECT RAISE(ABORT, 'first native question revision must be 1'); END`,
+    `CREATE TRIGGER native_question_causal_update BEFORE UPDATE ON native_question_projection
+      WHEN NEW.last_event_sequence <= OLD.last_event_sequence OR NEW.revision <> OLD.revision + 1
+      BEGIN SELECT RAISE(ABORT, 'native question projection must advance revision by 1'); END`,
+  ],
+};
+Object.freeze(MIGRATION_0011_NATIVE_BRIDGE.statements);
+Object.freeze(MIGRATION_0011_NATIVE_BRIDGE);
+
 export const MIGRATIONS: readonly Migration[] = Object.freeze([
   MIGRATION_0001_JOURNAL,
   MIGRATION_0002_RUN_PROJECTION,
@@ -872,5 +1111,6 @@ export const MIGRATIONS: readonly Migration[] = Object.freeze([
   MIGRATION_0008_CAPABILITY_CACHE,
   MIGRATION_0009_DURABLE_INTERACTIONS,
   MIGRATION_0010_ACCOUNT_SCHEDULING,
+  MIGRATION_0011_NATIVE_BRIDGE,
 ]);
 assertAppendOnly(MIGRATIONS);

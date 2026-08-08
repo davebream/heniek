@@ -42,5 +42,9 @@
   "10": {
     "structural": "1a7a0c2ea72dd934e0e71962e4ed8d15d0c41f7676ff650c956aa75502b0fcbf",
     "declared": "c5e30252fbbf0dba704ba401531cb5fbe1c3be71f96a6fbc2bbcd9def7df7ea3"
+  },
+  "11": {
+    "structural": "604ce633c1aecaa4322e4594cf0c801e4895b472cac62dcfb41b80a33c969b5a",
+    "declared": "4549157c0b41f9c4abbddf3f11b1e8031ade87429447085b14a501928cad7a8a"
   }
 }

@@ -38,5 +38,9 @@
   "10": {
     "name": "account-scheduling",
     "statementHash": "92decb58ffb2dc4d6f030b336685dcea8b304b56519c57f5dfc9ff1d689818c4"
+  },
+  "11": {
+    "name": "native-bridge",
+    "statementHash": "4421d1d75b4d0c834c1fe9238b67bac1994b7de9c80576dcc04f0573de42937a"
   }
 }
