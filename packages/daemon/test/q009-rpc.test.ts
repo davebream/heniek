@@ -13,6 +13,10 @@ import {
   CAPABILITY_CATALOGUE_SCHEMA_SHA256,
   CODEBASE_DETECTION_SCHEMA_ID,
   CODEBASE_DETECTION_SCHEMA_SHA256,
+  RUN_STATUS_SCHEMA_ID,
+  RUN_STATUS_SCHEMA_SHA256,
+  RUN_STATUS_V2_SCHEMA_ID,
+  RUN_STATUS_V2_SCHEMA_SHA256,
 } from "@heniek/protocol";
 import { describe, expect, it } from "vitest";
 
@@ -28,6 +32,111 @@ function connection() {
 }
 
 describe("Q009 negotiation and cancellation", () => {
+  it("Q020 negotiates the highest mutually supported run status version with v1 fallback", async () => {
+    for (const expectation of [
+      {
+        methodVersions: [1, 2],
+        resultSchemas: [
+          { schemaId: RUN_STATUS_SCHEMA_ID, sha256: RUN_STATUS_SCHEMA_SHA256 },
+          { schemaId: RUN_STATUS_V2_SCHEMA_ID, sha256: RUN_STATUS_V2_SCHEMA_SHA256 },
+        ],
+        methodVersion: 2,
+        wireMethod: "run.status.v2",
+      },
+      {
+        methodVersions: [1],
+        resultSchemas: [{ schemaId: RUN_STATUS_SCHEMA_ID, sha256: RUN_STATUS_SCHEMA_SHA256 }],
+        methodVersion: 1,
+        wireMethod: "run.status.v1",
+      },
+    ] as const) {
+      const auth = connection();
+      const deps = {
+        registry: createMethodRegistry([]),
+        credential,
+        macProvider: createHmacSha256MacProvider(),
+        instanceId: "daemon-q020",
+        protocolVersion: 1,
+        isDraining: () => false,
+      };
+      await dispatchFrame(deps, auth, request('{"jsonrpc":"2.0","id":1,"method":"daemon.hello"}'));
+      const negotiation = buildSignedRequest(credential, auth.challenge, 2, "daemon.negotiate", 1, {
+        schemaVersion: 1,
+        transportVersions: [1],
+        requiredMethods: [
+          {
+            name: "run.status",
+            methodVersions: expectation.methodVersions,
+            resultSchemas: expectation.resultSchemas,
+          },
+        ],
+      });
+      expect(
+        JSON.parse(await dispatchFrame(deps, auth, request(negotiation))).result,
+      ).toMatchObject({
+        compatibility: "compatible",
+        methods: [
+          {
+            name: "run.status",
+            methodVersion: expectation.methodVersion,
+            wireMethod: expectation.wireMethod,
+          },
+        ],
+      });
+    }
+  });
+
+  it("Q020 rejects unauthenticated inbox access and propagates authenticated answer provenance", async () => {
+    const unauthenticated = connection();
+    const authenticated = connection();
+    const observedKeyIds: Array<string | undefined> = [];
+    const deps = {
+      registry: createMethodRegistry([
+        [
+          "run.answer.v2",
+          (_params: unknown, context: MethodContext) => {
+            observedKeyIds.push(context.authenticatedKeyId);
+            return { schemaVersion: 2, accepted: true };
+          },
+        ],
+        ["inbox.list.v1", () => ({ schemaVersion: 1, items: [] })],
+      ]),
+      credential,
+      macProvider: createHmacSha256MacProvider(),
+      instanceId: "daemon-q020",
+      protocolVersion: 1,
+      isDraining: () => false,
+    };
+    const unauthorized = request('{"jsonrpc":"2.0","id":1,"method":"inbox.list.v1","params":{}}');
+    expect(JSON.parse(await dispatchFrame(deps, unauthenticated, unauthorized)).error).toEqual({
+      code: -32001,
+      message: "unauthorized",
+    });
+
+    await dispatchFrame(
+      deps,
+      authenticated,
+      request('{"jsonrpc":"2.0","id":1,"method":"daemon.hello"}'),
+    );
+    const negotiation = buildSignedRequest(
+      credential,
+      authenticated.challenge,
+      2,
+      "daemon.negotiate",
+      1,
+      { schemaVersion: 1, transportVersions: [1], requiredMethods: [] },
+    );
+    await dispatchFrame(deps, authenticated, request(negotiation));
+    const answer = buildSignedRequest(credential, authenticated.challenge, 3, "run.answer.v2", 2, {
+      schemaVersion: 2,
+    });
+    expect(JSON.parse(await dispatchFrame(deps, authenticated, request(answer))).result).toEqual({
+      schemaVersion: 2,
+      accepted: true,
+    });
+    expect(observedKeyIds).toEqual([credential.keyId]);
+  });
+
   it("negotiates the authenticated engine catalogue method and schema", async () => {
     const auth = connection();
     const deps = {

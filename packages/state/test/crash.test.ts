@@ -33,7 +33,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { schemaFingerprint } from "../src/database/fingerprint.js";
 import { internalHandle, openStateDatabase, type StateDatabase } from "../src/database/open.js";
 import { readUserVersion } from "../src/database/pragma.js";
-import { runMigrations } from "../src/migrations/migrate.js";
+import { currentSchemaVersion, runMigrations } from "../src/migrations/migrate.js";
 import { createDeterministicIds, createFakeClock } from "./helpers/determinism.js";
 import { makeTempDbPath } from "./helpers/temp-db.js";
 
@@ -238,7 +238,7 @@ describe("crash matrix — SIGKILL at three points (T2, C2, AC1)", () => {
       // land on the committed terminal fingerprint.
       runMigrations(db);
       const fingerprint = schemaFingerprint(db);
-      const terminal = SCHEMA_FINGERPRINTS["8"];
+      const terminal = SCHEMA_FINGERPRINTS[String(currentSchemaVersion())];
       expect(terminal).toBeDefined();
       expect(fingerprint.structural).toBe(terminal?.structural);
       expect(fingerprint.declared).toBe(terminal?.declared);

@@ -34,5 +34,9 @@
   "8": {
     "structural": "8add084e1b8a147774f37350a452acd20b6374e50189b3d9fffd157c2cf76775",
     "declared": "0276fc3789592a9ce7b4da0f77160658863c85762cde0e2be71375f322f9e95b"
+  },
+  "9": {
+    "structural": "0538db4c6fbee019718cd21b53910d843eb6ed64f33506a955304111f2ccfaa2",
+    "declared": "3fee77998436e4a6d03379ed1977dc2161faa99ad9ae7585e47d5e3c23f9de87"
   }
 }

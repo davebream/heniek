@@ -169,7 +169,12 @@ describe("ExecutionBackendV5 profile conformance", () => {
     });
 
     const handle = await adapter.start(input);
-    await adapter.resume(handle.executionId, []);
+    await adapter.resume({
+      schemaVersion: 1,
+      executionId: handle.executionId,
+      operationId: "operation-resume-claude",
+      inputArtifactRefs: [],
+    });
     const events = [];
     for await (const event of adapter.events(handle.executionId, "40")) events.push(event);
 
@@ -350,7 +355,12 @@ describe("ExecutionBackendV5 profile conformance", () => {
     });
 
     const handle = await adapter.start(codexInput);
-    await adapter.resume(handle.executionId, []);
+    await adapter.resume({
+      schemaVersion: 1,
+      executionId: handle.executionId,
+      operationId: "operation-resume-codex",
+      inputArtifactRefs: [],
+    });
     const events = [];
     for await (const event of adapter.events(handle.executionId)) events.push(event);
 
@@ -521,7 +531,12 @@ describe("ExecutionBackendV5 profile conformance", () => {
     });
 
     const handle = await adapter.start(cursorInput);
-    await adapter.resume(handle.executionId, []);
+    await adapter.resume({
+      schemaVersion: 1,
+      executionId: handle.executionId,
+      operationId: "operation-resume-cursor",
+      inputArtifactRefs: [],
+    });
     const events = [];
     for await (const event of adapter.events(handle.executionId)) events.push(event);
 
@@ -657,7 +672,14 @@ describe("ExecutionBackendV5 profile conformance", () => {
 
     const handle = await adapter.start(cursorInput);
     attested = false;
-    await expect(adapter.resume(handle.executionId, [])).rejects.toMatchObject({
+    await expect(
+      adapter.resume({
+        schemaVersion: 1,
+        executionId: handle.executionId,
+        operationId: "operation-resume-unattested",
+        inputArtifactRefs: [],
+      }),
+    ).rejects.toMatchObject({
       code: "cursor_native_session_unattested",
     });
     // The refused resume must not have created a second turn.

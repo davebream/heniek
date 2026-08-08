@@ -30,5 +30,9 @@
   "8": {
     "name": "capability-cache",
     "statementHash": "ac47d1b1d9ea4a40ab03ba7b9380554659fe52baa019a7bff8f19db857bd81bb"
+  },
+  "9": {
+    "name": "durable-interactions",
+    "statementHash": "c15761917dafa54b927fb9c1b87b20bbf73114794eda5055620c506b21e4da7b"
   }
 }

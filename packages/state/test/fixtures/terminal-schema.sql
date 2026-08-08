@@ -307,17 +307,125 @@ CREATE TABLE stage_execution
 CREATE INDEX stage_execution_status
 ON stage_execution (status, run_id);
 
-CREATE TABLE execution_interaction
+CREATE TABLE interaction_record
 (
     run_id                 TEXT NOT NULL REFERENCES stage_execution(run_id),
     interaction_id         TEXT NOT NULL,
-    payload_json           TEXT NOT NULL CHECK (json_valid(payload_json)),
-    answer_json            TEXT CHECK (answer_json IS NULL OR json_valid(answer_json)),
+    stage_id               TEXT NOT NULL,
+    purpose                TEXT NOT NULL,
+    source_payload_json    TEXT NOT NULL CHECK (json_valid(source_payload_json)),
+    canonical_payload_json TEXT CHECK (canonical_payload_json IS NULL OR json_valid(canonical_payload_json)),
+    legacy_state           TEXT,
+    requested_at           TEXT NOT NULL,
+    timeout_at             TEXT,
+    created_event_id       TEXT REFERENCES state_event(event_id),
+    PRIMARY KEY (run_id, interaction_id),
+    CHECK (purpose IN ('question','approval'))
+) STRICT;
+
+CREATE TRIGGER interaction_record_immutable_update
+BEFORE UPDATE ON interaction_record
+BEGIN
+    SELECT RAISE(ABORT, 'interaction records are immutable');
+END;
+
+CREATE TRIGGER interaction_record_immutable_delete
+BEFORE DELETE ON interaction_record
+BEGIN
+    SELECT RAISE(ABORT, 'interaction records are immutable');
+END;
+
+CREATE TABLE interaction_answer_record
+(
+    answer_id                TEXT NOT NULL PRIMARY KEY,
+    run_id                   TEXT NOT NULL,
+    interaction_id           TEXT NOT NULL,
+    operation_id             TEXT NOT NULL UNIQUE,
+    source_answer_json       TEXT NOT NULL CHECK (json_valid(source_answer_json)),
+    canonical_answer_json    TEXT CHECK (canonical_answer_json IS NULL OR json_valid(canonical_answer_json)),
+    answered_by_key_id       TEXT NOT NULL,
+    answered_at              TEXT NOT NULL,
+    accepted_event_id        TEXT REFERENCES state_event(event_id),
+    UNIQUE (run_id, interaction_id),
+    FOREIGN KEY (run_id, interaction_id)
+        REFERENCES interaction_record(run_id, interaction_id)
+) STRICT;
+
+CREATE TRIGGER interaction_answer_immutable_update
+BEFORE UPDATE ON interaction_answer_record
+BEGIN
+    SELECT RAISE(ABORT, 'interaction answers are immutable');
+END;
+
+CREATE TRIGGER interaction_answer_immutable_delete
+BEFORE DELETE ON interaction_answer_record
+BEGIN
+    SELECT RAISE(ABORT, 'interaction answers are immutable');
+END;
+
+CREATE TABLE pending_interaction_projection
+(
+    run_id                 TEXT NOT NULL,
+    interaction_id        TEXT NOT NULL,
     state                  TEXT NOT NULL,
+    revision               INTEGER NOT NULL,
+    delivery_state         TEXT NOT NULL,
+    cancellation_reason    TEXT,
+    resolved_at            TEXT,
+    answer_id              TEXT REFERENCES interaction_answer_record(answer_id),
+    last_event_sequence    INTEGER NOT NULL REFERENCES state_event(sequence),
     updated_at             TEXT NOT NULL,
     PRIMARY KEY (run_id, interaction_id),
-    CHECK (state IN ('pending','answered','resolved'))
+    FOREIGN KEY (run_id, interaction_id)
+        REFERENCES interaction_record(run_id, interaction_id),
+    CHECK (state IN ('pending','answered','cancelled')),
+    CHECK (delivery_state IN ('not_applicable','pending','delivered')),
+    CHECK (revision >= 1),
+    CHECK (cancellation_reason IS NULL OR cancellation_reason IN
+        ('withdrawn','timed_out','run_terminal','migration_unresolved'))
 ) STRICT;
+
+CREATE INDEX pending_interaction_inbox
+ON pending_interaction_projection (state, updated_at, run_id, interaction_id);
+
+CREATE TRIGGER pending_interaction_causal_update
+BEFORE UPDATE ON pending_interaction_projection
+WHEN NEW.last_event_sequence <= OLD.last_event_sequence OR NEW.revision <> OLD.revision + 1
+BEGIN
+    SELECT RAISE(ABORT, 'interaction projection must advance revision by 1');
+END;
+
+CREATE TRIGGER pending_interaction_first_revision
+BEFORE INSERT ON pending_interaction_projection
+WHEN NEW.revision <> 1
+BEGIN
+    SELECT RAISE(ABORT, 'first interaction projection revision must be 1');
+END;
+
+CREATE TABLE execution_operation_outbox
+(
+    operation_id           TEXT NOT NULL PRIMARY KEY,
+    run_id                 TEXT NOT NULL REFERENCES stage_execution(run_id),
+    interaction_id         TEXT,
+    kind                   TEXT NOT NULL,
+    payload_json           TEXT NOT NULL CHECK (json_valid(payload_json)),
+    state                  TEXT NOT NULL,
+    attempt_count          INTEGER NOT NULL DEFAULT 0,
+    last_error             TEXT,
+    created_at             TEXT NOT NULL,
+    delivered_at           TEXT,
+    last_event_sequence    INTEGER NOT NULL REFERENCES state_event(sequence),
+    FOREIGN KEY (run_id, interaction_id)
+        REFERENCES interaction_record(run_id, interaction_id),
+    CHECK (kind IN ('answer','resume')),
+    CHECK (state IN ('pending','delivered')),
+    CHECK (attempt_count >= 0),
+    CHECK ((kind = 'answer' AND interaction_id IS NOT NULL) OR
+           (kind = 'resume' AND interaction_id IS NULL))
+) STRICT;
+
+CREATE INDEX execution_operation_pending
+ON execution_operation_outbox (state, created_at, operation_id);
 
 CREATE TABLE backend_artifact_import
 (
@@ -349,4 +457,4 @@ CREATE TABLE capability_snapshot
 CREATE INDEX capability_snapshot_latest
 ON capability_snapshot (engine, account_key, observed_at DESC);
 
-PRAGMA user_version = 8;
+PRAGMA user_version = 9;
