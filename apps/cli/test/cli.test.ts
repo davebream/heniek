@@ -17,13 +17,19 @@ afterEach(async () => {
   await Promise.all(homes.splice(0).map((home) => rm(home, { recursive: true, force: true })));
 });
 
-function run(argv: readonly string[], configHome?: string, environment: NodeJS.ProcessEnv = {}) {
+function run(
+  argv: readonly string[],
+  applicationHome?: string,
+  environment: NodeJS.ProcessEnv = {},
+  ambientEnvironment: NodeJS.ProcessEnv = process.env,
+) {
+  const { HENIEK_HOME: _inheritedHeniekHome, ...isolatedEnvironment } = ambientEnvironment;
   return spawnSync(process.execPath, ["--import", "tsx", entrypoint, ...argv], {
     cwd: new URL("..", import.meta.url).pathname,
     encoding: "utf8",
     env: {
-      ...process.env,
-      ...(configHome === undefined ? {} : { XDG_CONFIG_HOME: configHome }),
+      ...isolatedEnvironment,
+      ...(applicationHome === undefined ? {} : { HENIEK_HOME: applicationHome }),
       ...environment,
     },
   });
@@ -355,9 +361,9 @@ describe("heniek CLI", () => {
   });
 
   it("uses JSON stdout and exit 3 when no daemon is reachable without creating its home", async () => {
-    const configHome = await mkdtemp(join(tmpdir(), "heniek-cli-test-"));
-    homes.push(configHome);
-    const result = run(["status", "--json"], configHome);
+    const home = await mkdtemp(join(tmpdir(), "heniek-cli-test-"));
+    homes.push(home);
+    const result = run(["status", "--json"], home);
     expect(result.status).toBe(3);
     expect(result.stderr).toBe("");
     expect(JSON.parse(result.stdout)).toEqual({
@@ -370,7 +376,31 @@ describe("heniek CLI", () => {
         retryable: true,
       },
     });
-    expect(existsSync(join(configHome, "heniek"))).toBe(false);
+    expect(existsSync(join(home, "run"))).toBe(false);
+  });
+
+  it("does not inherit HENIEK_HOME into a no-daemon child scenario", async () => {
+    const fallbackHome = await mkdtemp(join(tmpdir(), "heniek-cli-fallback-"));
+    const inheritedHome = await mkdtemp(join(tmpdir(), "heniek-cli-inherited-"));
+    homes.push(fallbackHome, inheritedHome);
+    const daemon = await startFakeDaemon(inheritedHome);
+    try {
+      const result = run(
+        ["status", "--json"],
+        undefined,
+        {},
+        {
+          ...process.env,
+          HOME: fallbackHome,
+          HENIEK_HOME: inheritedHome,
+          XDG_CONFIG_HOME: join(fallbackHome, "config"),
+        },
+      );
+      expect(result.status).toBe(3);
+      expect(JSON.parse(result.stdout).error).toMatchObject({ code: "DAEMON_UNAVAILABLE" });
+    } finally {
+      await daemon.close();
+    }
   });
 
   it("rejects duplicate flags as usage errors", () => {

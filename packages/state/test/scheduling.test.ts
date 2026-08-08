@@ -14,6 +14,7 @@ import {
   readExecutionSchedule,
   readSchedulingDecisions,
   renewAccountLease,
+  restoreAccountLease,
 } from "../src/scheduling/store.js";
 import { createDeterministicIds, createFakeClock } from "./helpers/determinism.js";
 import { makeTempDbPath } from "./helpers/temp-db.js";
@@ -191,6 +192,37 @@ describe("migration 10 durable account scheduler", () => {
     expect(readSchedulingDecisions(db, "run-1").map((decision) => decision.kind)).toContain(
       "lease_expired",
     );
+  });
+
+  it("fences an uncertain attempt without terminalizing or dispatching its fallback", () => {
+    schedule("run", {
+      policy: "fallback",
+      candidates: [candidate("primary", "account-a"), candidate("fallback", "account-b")],
+    });
+    const claimed = required(claimNextExecutionCandidate(db, { ownerId: "daemon-a" }), "claim");
+
+    const recovered = restoreAccountLease(db, {
+      attemptId: claimed.attemptId,
+      ownerId: "daemon-b",
+      recoveryReasonCode: "backend_status_unconfirmed",
+    });
+    const attempt = required(readExecutionAttempts(db, "run")[0], "recovery attempt");
+    expect(attempt.status).toBe("recovery_required");
+    expect(readExecutionSchedule(db, "run")?.state).toBe("running");
+    expect(claimNextExecutionCandidate(db, { ownerId: "daemon-c" })).toBeUndefined();
+    expect(readSchedulingDecisions(db, "run").at(-1)).toMatchObject({
+      kind: "attempt_recovery_required",
+      reasonCode: "backend_status_unconfirmed",
+    });
+
+    expect(
+      restoreAccountLease(db, {
+        attemptId: claimed.attemptId,
+        ownerId: "daemon-b",
+        recoveryReasonCode: "backend_status_unconfirmed",
+      }).fencingRevision,
+    ).toBeGreaterThan(recovered.fencingRevision);
+    expect(readExecutionAttempts(db, "run")).toHaveLength(1);
   });
 
   it("persists an ask decision and atomically rejects stale or duplicate answers", () => {

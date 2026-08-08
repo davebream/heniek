@@ -707,7 +707,7 @@ export const issues: IssueDefinition[] = [
       "§23.5 Required compatibility tests",
     ],
     outcome:
-      "A fail-closed guard verifies subscription routes, constructs a minimal environment, redacts sensitive data, and cleans complete process trees for every execution.",
+      "A fail-closed guard verifies subscription routes, constructs a minimal environment, redacts sensitive data, and enforces the strongest lifecycle and process-cleanup evidence exposed by the versioned execution backend.",
     constraints: [
       "API-key variables are denied by default for subscription profiles.",
       "Secrets are never written to artifacts, exports, or diagnostics.",
@@ -719,13 +719,19 @@ export const issues: IssueDefinition[] = [
     acceptance: [
       "Claude, Codex, and Cursor subscription profiles report a verified billing route before work.",
       "Known key names, token shapes, URLs, headers, and provider payloads are redacted.",
-      "Success, failure, cancellation, timeout, and daemon crash leave no orphan credential-bearing process.",
+      "Success, failure, cancellation, and timeout settle only through the backend lifecycle; a cancellation acknowledgement alone is never treated as completion.",
+      "Backend-disclosed unconfirmed termination and daemon-interrupted attempts map fail-closed to RECOVERY_REQUIRED, retain fenced capacity while execution may still exist, and are never silently retried.",
+      "Process cleanup evidence is reported at the strength exposed by the versioned backend contract; Heniek never fabricates a tree-empty attestation from terminal status or an absent optional diagnostic.",
     ],
     tests: [
       "Hostile-env and redaction corpus tests.",
-      "Process-tree fault injection and credential-revocation tests.",
+      "Cancellation-settlement, interrupted-recovery, and credential-revocation tests.",
+      "An opt-in pinned-backend orphan-process compatibility scan, explicitly reported as indicative unless the backend exposes a versioned positive attestation.",
     ],
-    evidence: ["Billing guard attestation.", "Redaction and orphan-process scan report."],
+    evidence: [
+      "Billing guard attestation.",
+      "Redaction report and an honestly qualified orphan-process compatibility scan.",
+    ],
   },
   {
     id: "Q023",

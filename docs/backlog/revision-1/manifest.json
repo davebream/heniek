@@ -247,7 +247,7 @@
       "title": "Implement subscription billing guard, env scrubbing, redaction and process cleanup",
       "tier": "T2-capability",
       "bodyPath": "issues/Q022.md",
-      "bodyHash": "6ae19c2c88c238eb541a9dc51d7f48e8e7f93c0c4d10082838c37874bc9f35db"
+      "bodyHash": "a8e450432609064bc8fe8adf819f59d46c01036969adeed465376a317799f103"
     },
     {
       "sequence": "Q023",

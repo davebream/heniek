@@ -1,8 +1,11 @@
 import {
   CREDENTIAL_VALUE_PATTERNS,
   isDisallowedConfigurationEntry,
+  isSensitiveDiagnosticKey,
   looksLikeCredentialKey,
   looksLikeCredentialValue,
+  looksLikeSensitiveDiagnosticValue,
+  SENSITIVE_DIAGNOSTIC_VALUE_PATTERNS,
 } from "./patterns.js";
 import { REDACTION_PLACEHOLDER } from "./placeholder.js";
 import { SensitiveValue } from "./sensitive-value.js";
@@ -55,7 +58,9 @@ function redactValue(value: unknown, ancestors: Set<object>, depth: number): Jso
     return REDACTION_PLACEHOLDER;
   }
   if (typeof value === "string") {
-    return looksLikeCredentialValue(value) ? REDACTION_PLACEHOLDER : value;
+    return looksLikeCredentialValue(value) || looksLikeSensitiveDiagnosticValue(value)
+      ? REDACTION_PLACEHOLDER
+      : value;
   }
   if (value === null || typeof value === "number" || typeof value === "boolean") {
     return value;
@@ -147,10 +152,10 @@ function redactValue(value: unknown, ancestors: Set<object>, depth: number): Jso
       // credential-shaped key is sensitive" behaviour documented above.
       const redacted =
         typeof entryValue === "string"
-          ? isDisallowedConfigurationEntry(key, entryValue)
+          ? isDisallowedConfigurationEntry(key, entryValue) || isSensitiveDiagnosticKey(key)
             ? REDACTION_PLACEHOLDER
-            : entryValue
-          : looksLikeCredentialKey(key)
+            : redactValue(entryValue, ancestors, depth + 1)
+          : looksLikeCredentialKey(key) || isSensitiveDiagnosticKey(key)
             ? REDACTION_PLACEHOLDER
             : redactValue(entryValue, ancestors, depth + 1);
       // The *key itself* can be the credential (a raw token pasted into an
@@ -199,8 +204,10 @@ function toGlobalPattern(pattern: RegExp): RegExp {
 // resets a global pattern's `lastIndex` to 0 at the start of every call
 // (per spec) and each call runs to completion synchronously before the
 // next can start, so there is no cross-call state to interfere with.
-const GLOBAL_CREDENTIAL_VALUE_PATTERNS: readonly RegExp[] =
-  CREDENTIAL_VALUE_PATTERNS.map(toGlobalPattern);
+const GLOBAL_SENSITIVE_VALUE_PATTERNS: readonly RegExp[] = [
+  ...CREDENTIAL_VALUE_PATTERNS,
+  ...SENSITIVE_DIAGNOSTIC_VALUE_PATTERNS,
+].map(toGlobalPattern);
 
 /**
  * Redacts credential-*shaped* substrings out of free text (log lines,
@@ -209,7 +216,7 @@ const GLOBAL_CREDENTIAL_VALUE_PATTERNS: readonly RegExp[] =
  */
 export function redactText(text: string): string {
   let result = text;
-  for (const pattern of GLOBAL_CREDENTIAL_VALUE_PATTERNS) {
+  for (const pattern of GLOBAL_SENSITIVE_VALUE_PATTERNS) {
     result = result.replace(pattern, REDACTION_PLACEHOLDER);
   }
   return result;

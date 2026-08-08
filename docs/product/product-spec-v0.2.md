@@ -1538,6 +1538,15 @@ After restart, the runtime:
 - offers explicit resume, retry, or fail decisions;
 - never silently duplicates a write attempt.
 
+Heniek does not claim an independent process-tree-empty attestation when an
+`ExecutionBackend` does not expose one through its versioned public contract. At
+that boundary Heniek must fail closed: an interrupted attempt remains
+`RECOVERY_REQUIRED`, retains its fenced capacity while the backend attempt may
+still exist, and is never silently retried or reported as cleanly terminated.
+Process cleanup remains backend-owned and is sampled by the pinned-backend
+compatibility suite rather than fabricated from a control acknowledgement or
+terminal status.
+
 ### 18.3 Native stage boundary
 
 Native Claude stages cannot run without an active parent session. The durable pipeline waits rather than silently switching to an external profile.
@@ -1949,7 +1958,7 @@ Before promoting a Claudexor version:
 
 - 20-minute external planning run;
 - free-text question and same-session continuation;
-- cancellation and process-tree cleanup;
+- cancellation settlement and process-tree cleanup compatibility sampling;
 - subscription-only auth-route verification;
 - Claude external profile;
 - Codex external profile;
@@ -2106,6 +2115,16 @@ Every run records which engine, model, account, and provider received which task
 - subscription-only profiles remove API-key variables where appropriate;
 - local web tokens are protected;
 - diagnostics exports are previewable.
+
+### 27.5 External-worker termination boundary
+
+- a cancellation acknowledgement is a request, not terminal settlement;
+- Heniek waits for the backend's terminal lifecycle before settling a live attempt;
+- backend-disclosed unconfirmed termination is fail-closed and requires recovery;
+- an attempt interrupted by daemon crash becomes `RECOVERY_REQUIRED` and is not
+  silently retried or treated as releasing its fenced capacity;
+- Heniek reports cleanup evidence at the strength exposed by the versioned
+  `ExecutionBackend` contract and never invents a process-tree-empty attestation.
 
 ---
 

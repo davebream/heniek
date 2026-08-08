@@ -124,6 +124,18 @@ describe("ExecutionBackendV5 profile conformance", () => {
         headers: new Headers(init.headers),
       });
       if (parsed.pathname === "/v2/handshake") return json(handshake());
+      if (parsed.pathname === "/v2/harnesses/claude/auth-readiness") {
+        return json({
+          harnessId: "claude",
+          authRequest: "subscription",
+          requestedSource: "oauth_token_env",
+          readiness: {
+            source: "oauth_token_env",
+            availability: "available",
+            verification: "passed",
+          },
+        });
+      }
       if (parsed.pathname === "/v2/threads" && init.method === "POST") {
         return json({ id: "thread-profile-1" });
       }
@@ -767,6 +779,18 @@ describe("ExecutionBackendV7 scheduling conformance", () => {
         fetch: async (url, init = {}) => {
           const path = new URL(String(url)).pathname;
           if (path === "/v2/handshake") return json(handshake());
+          if (path === "/v2/harnesses/claude/auth-readiness") {
+            return json({
+              harnessId: "claude",
+              authRequest: "subscription",
+              requestedSource: "oauth_token_env",
+              readiness: {
+                source: "oauth_token_env",
+                availability: "available",
+                verification: "passed",
+              },
+            });
+          }
           if (path === "/v2/threads" && init.method === "POST") {
             threadBody = JSON.parse(String(init.body)) as Record<string, unknown>;
             return json({ id: "thread-scheduled-1" });
@@ -795,5 +819,81 @@ describe("ExecutionBackendV7 scheduling conformance", () => {
     });
     expect(threadBody).not.toHaveProperty("accountPool");
     expect(threadBody).not.toHaveProperty("quotaRotation");
+  });
+
+  it("blocks Claude before thread creation when its echoed subscription route differs", async () => {
+    const paths: string[] = [];
+    const adapter = createClaudeProfileExecutionAdapter({
+      baseUrl: "http://127.0.0.1:43001",
+      expectedEngine,
+      fetch: async (url) => {
+        const path = new URL(String(url)).pathname;
+        paths.push(path);
+        if (path === "/v2/handshake") return json(handshake());
+        if (path === "/v2/harnesses/claude/auth-readiness") {
+          return json({
+            harnessId: "claude",
+            authRequest: "subscription",
+            requestedSource: "native_session",
+            readiness: {
+              source: "native_session",
+              availability: "available",
+              verification: "passed",
+            },
+          });
+        }
+        throw new Error(`model work must not start: ${path}`);
+      },
+    });
+
+    await expect(adapter.start(input)).rejects.toMatchObject({
+      code: "claude_subscription_route_unattested",
+      operation: "authReadiness",
+    });
+    expect(paths).toEqual(["/v2/handshake", "/v2/harnesses/claude/auth-readiness"]);
+  });
+
+  it("re-attests Claude before resume and refuses a revoked route without a second turn", async () => {
+    let attested = true;
+    const paths: string[] = [];
+    const adapter = createClaudeProfileExecutionAdapter({
+      baseUrl: "http://127.0.0.1:43001",
+      expectedEngine,
+      fetch: async (url, init = {}) => {
+        const path = new URL(String(url)).pathname;
+        paths.push(path);
+        if (path === "/v2/handshake") return json(handshake());
+        if (path === "/v2/harnesses/claude/auth-readiness") {
+          return json({
+            harnessId: "claude",
+            authRequest: "subscription",
+            requestedSource: "oauth_token_env",
+            readiness: {
+              source: "oauth_token_env",
+              availability: attested ? "available" : "unavailable",
+              verification: attested ? "passed" : "not_run",
+            },
+          });
+        }
+        if (path === "/v2/threads" && init.method === "POST")
+          return json({ id: "thread-claude-2" });
+        if (path === "/v2/threads/thread-claude-2/turns") {
+          return json({ jobId: "run-claude-2", threadId: "thread-claude-2", turnId: "turn-1" });
+        }
+        throw new Error(`unexpected route: ${path}`);
+      },
+    });
+
+    const handle = await adapter.start(input);
+    attested = false;
+    await expect(
+      adapter.resume({
+        schemaVersion: 1,
+        executionId: handle.executionId,
+        operationId: "operation-resume-claude-unattested",
+        inputArtifactRefs: [],
+      }),
+    ).rejects.toMatchObject({ code: "claude_subscription_route_unattested" });
+    expect(paths.filter((path) => path.endsWith("/turns"))).toHaveLength(1);
   });
 });

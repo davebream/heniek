@@ -469,12 +469,30 @@ export function createSchedulingExecutionService(
     leaseRenewedAt.delete(attemptId);
   }
 
+  function fenceUnconfirmedAttempt(attemptId: string, reasonCode: string): void {
+    const recovered = restoreAccountLease(options.db, {
+      attemptId,
+      ownerId: options.instanceId,
+      recoveryReasonCode: reasonCode,
+    });
+    leaseRevisions.set(attemptId, recovered.fencingRevision);
+    leaseRenewedAt.set(attemptId, Date.parse(options.clock.nowIso()));
+  }
+
   async function reconcile(): Promise<void> {
     for (const attempt of readRecoverableSchedulingAttempts(options.db)) {
       if (attempt.backendExecutionId === null) continue;
-      const status = await options.backend.status(attempt.backendExecutionId);
+      let status: Awaited<ReturnType<ExecutionBackendV7["status"]>>;
+      try {
+        status = await options.backend.status(attempt.backendExecutionId);
+      } catch {
+        fenceUnconfirmedAttempt(attempt.attemptId, "backend_status_unconfirmed");
+        continue;
+      }
       if (status === "succeeded" || status === "failed" || status === "cancelled") {
         await finishTerminal(attempt.attemptId, attempt.backendExecutionId);
+      } else if (status === "recovery_required" && attempt.status !== "recovery_required") {
+        fenceUnconfirmedAttempt(attempt.attemptId, "backend_recovery_required");
       } else {
         const revision = leaseRevisions.get(attempt.attemptId);
         if (revision === undefined) {
@@ -618,9 +636,15 @@ export function createSchedulingExecutionService(
         throw new Error("scheduled attempt has not reached a cancellable backend state");
       }
       await options.backend.cancel(attempt.backendExecutionId);
-      const status = await options.backend.status(attempt.backendExecutionId);
+      let status: Awaited<ReturnType<ExecutionBackendV7["status"]>>;
+      try {
+        status = await options.backend.status(attempt.backendExecutionId);
+      } catch {
+        fenceUnconfirmedAttempt(attempt.attemptId, "cancel_status_unconfirmed");
+        return;
+      }
       if (status !== "cancelled" && status !== "failed" && status !== "succeeded") {
-        throw new Error("backend cancellation is not yet terminal");
+        return;
       }
       await finishTerminal(attempt.attemptId, attempt.backendExecutionId);
     },

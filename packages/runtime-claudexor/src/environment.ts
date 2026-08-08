@@ -25,6 +25,7 @@ const CONTROLLED_NAMES = new Set([
   "TEMP",
   "PATH",
 ]);
+const SUBSCRIPTION_CARRIER_NAMES = new Set(["CLAUDE_CODE_OAUTH_TOKEN"]);
 
 export interface RuntimeChildEnvironmentOptions {
   readonly home: string;
@@ -40,8 +41,9 @@ export interface RuntimeChildEnvironmentOptions {
  *
  * Neutral platform settings are allowlisted from the ambient process. Every
  * credential, provider routing switch, config-home override, and unknown
- * variable is absent unless the caller supplies it explicitly. Process-home
- * and XDG locations are always isolated and cannot be overridden.
+ * variable is absent. Only named subscription carriers can be supplied
+ * explicitly. Process-home and XDG locations are always isolated and cannot
+ * be overridden.
  */
 export function buildRuntimeChildEnvironment(
   options: RuntimeChildEnvironmentOptions,
@@ -52,7 +54,10 @@ export function buildRuntimeChildEnvironment(
     if (value !== undefined) environment[name] = value;
   }
   for (const [name, value] of Object.entries(options.explicit ?? {})) {
-    if (value !== undefined && !CONTROLLED_NAMES.has(name)) environment[name] = value;
+    if (value === undefined || CONTROLLED_NAMES.has(name)) continue;
+    if (SUBSCRIPTION_CARRIER_NAMES.has(name)) {
+      environment[name] = value;
+    }
   }
   return {
     ...environment,

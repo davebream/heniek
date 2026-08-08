@@ -186,45 +186,65 @@ export function classifyQuestionAnswer(facts: QuestionAnswerFacts): CanaryResult
 export interface CancellationFacts {
   readonly acceptedControlCall: boolean;
   readonly finalState: string;
-  readonly survivingDescendantPids: number;
   readonly settleMs: number;
 }
 
-/** Classify cancellation and process-tree cleanup. */
+/** Classify cancellation settlement from the backend lifecycle alone. */
 export function classifyCancellation(facts: CancellationFacts): CanaryResult {
   const evidence: CanaryEvidence = {
     acceptedControlCall: facts.acceptedControlCall,
     finalState: facts.finalState,
-    survivingDescendantPids: facts.survivingDescendantPids,
     settleMs: facts.settleMs,
   };
   if (!facts.acceptedControlCall) {
     return {
-      name: "cancellationCleanup",
+      name: "cancellationSettlement",
       outcome: "unsupported",
       evidence,
       fallback:
-        "The control endpoint refused the cancel; Heniek must fall back to terminating the process tree itself.",
+        "The control endpoint refused the cancel, so Heniek must retain the attempt and require operator recovery.",
     };
   }
   if (facts.finalState !== "cancelled") {
     return {
-      name: "cancellationCleanup",
+      name: "cancellationSettlement",
       outcome: "degraded",
       evidence,
       fallback: `Cancel was accepted but the run settled as ${facts.finalState}; Heniek must treat a cancel acknowledgement as a request, not a guarantee.`,
     };
   }
-  if (facts.survivingDescendantPids > 0) {
+  return { name: "cancellationSettlement", outcome: "supported", evidence };
+}
+
+/** Facts from an opt-in local process sample, never a backend cleanup receipt. */
+export interface OrphanProcessSnapshotFacts {
+  readonly instrument: "ps";
+  readonly sampleTiming: "before_terminal" | "after_terminal";
+  readonly baselineDescendantCount: number;
+  readonly observedDescendantCount: number;
+}
+
+/**
+ * Classify an indicative process sample without promoting it to tree-empty proof.
+ */
+export function classifyOrphanProcessSnapshot(facts: OrphanProcessSnapshotFacts): CanaryResult {
+  const evidence: CanaryEvidence = {
+    instrument: facts.instrument,
+    sampleTiming: facts.sampleTiming,
+    baselineDescendantCount: facts.baselineDescendantCount,
+    observedDescendantCount: facts.observedDescendantCount,
+    evidenceStrength: "indicative",
+  };
+  if (facts.observedDescendantCount > facts.baselineDescendantCount) {
     return {
-      name: "cancellationCleanup",
+      name: "orphanProcessSnapshot",
       outcome: "degraded",
       evidence,
       fallback:
-        "The run cancelled but left descendant processes; Heniek must reap the process tree itself rather than trusting the engine's cleanup.",
+        "The indicative process sample grew after settlement; retain the observation for backend compatibility review and do not infer process-tree ownership.",
     };
   }
-  return { name: "cancellationCleanup", outcome: "supported", evidence };
+  return { name: "orphanProcessSnapshot", outcome: "supported", evidence };
 }
 
 /** Observations canary 4 gathers across a daemon restart. */

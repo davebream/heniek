@@ -304,13 +304,36 @@ The integration must:
 5. **Treat a cancel acknowledgement as a request, not a guarantee**, and verify settlement (O6).
 6. **Never silently retry an attempt whose outcome is uncertain** across a restart; classify it and ask
    (O7, §18.2).
+7. **Treat process cleanup as a backend-owned compatibility property**, not a Heniek-generated
+   attestation. Heniek waits for terminal settlement, fails closed on disclosed unconfirmed
+   termination, and records only the evidence strength available through the versioned `/v2` surface
+   (O6, §18.2, §27.5).
+8. **Keep a daemon-interrupted attempt in `recovery_required` with its capacity fenced** while the
+   backend attempt may still exist. A control acknowledgement, terminal status, or missing optional
+   diagnostic must never be upgraded into positive tree-empty proof (O6/O7).
+
+### Q022 boundary clarification (2026-08-08)
+
+Q022 originally required Heniek to prove that daemon crash leaves no orphan credential-bearing
+process. The accepted `/v2` dependency exposes cancellation settlement and an `interrupted` restart
+classification, but no versioned positive process-tree-empty attestation or restart-time cleanup
+receipt. Heniek cannot establish that stronger fact without bypassing the adapter boundary or
+fabricating evidence.
+
+The product decision is therefore to preserve the existing §18.2 recovery boundary: live attempts
+settle only through the backend lifecycle; disclosed unconfirmed termination fails closed; and a
+daemon-interrupted attempt remains `recovery_required`, fenced, and operator-controlled. The pinned
+backend's process cleanup is compatibility-sampled and reported as indicative unless a future
+versioned contract exposes stronger evidence. This is an explicit scope decision, not an inference
+from a successful status or cancellation acknowledgement.
 
 ## Consequences
 
 - Heniek's run projection can be driven from `/v2` without importing Claudexor internals; the canary
   client in `packages/conformance/src/smoke/claudexor/` is the reference shape for that boundary.
-- The `interrupted → recovery_required` mapping is provisional until O7 settles it; it is flagged in
-  code (`INTERRUPTED_MAPPING_IS_PROVISIONAL`) so it cannot quietly become load-bearing.
+- The `interrupted → recovery_required` mapping remains explicitly flagged in code
+  (`INTERRUPTED_MAPPING_IS_PROVISIONAL`) so future Claudexor lifecycle changes cannot quietly alter
+  the recovery boundary.
 - The canaries are opt-in and never run in CI. `pnpm check` stays hermetic and offline; the classifiers
   they depend on are pure and *are* covered by `pnpm check`.
 - A committed, redacted event trace exists as evidence. A repository-level test over `docs/adr/**`

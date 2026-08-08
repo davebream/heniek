@@ -139,13 +139,16 @@ type ResolvedProfile =
   | Static<typeof ExecutionRequestV4>["profile"];
 type ProfileHarness = "claude" | "codex" | "cursor";
 
-/** Harnesses whose subscription route is a Claudexor-owned native session. */
-const NATIVE_SESSION_HARNESSES = ["codex", "cursor"] as const;
-type NativeSessionHarness = (typeof NATIVE_SESSION_HARNESSES)[number];
-
-function isNativeSessionHarness(harness: ProfileHarness): harness is NativeSessionHarness {
-  return (NATIVE_SESSION_HARNESSES as readonly ProfileHarness[]).includes(harness);
-}
+const SUBSCRIPTION_AUTH_SOURCES = {
+  claude: "oauth_token_env",
+  codex: "native_session",
+  cursor: "native_session",
+} as const;
+const SUBSCRIPTION_ROUTE_UNATTESTED_CODES = {
+  claude: "claude_subscription_route_unattested",
+  codex: "codex_native_session_unattested",
+  cursor: "cursor_native_session_unattested",
+} as const;
 
 interface SubscriptionProfileRoute {
   readonly harness: ProfileHarness;
@@ -460,33 +463,38 @@ export function createClaudexorExecutionBackend(
   }
 
   /**
-   * Attest one harness's Claudexor-owned native subscription session.
+   * Attest one harness's selected subscription route.
    *
    * Every one of the six comparisons is load-bearing: Claudexor echoes the
    * request back, so checking only `readiness` would accept an answer about a
    * different harness or a different auth source than the one asked for.
    */
-  async function nativeSessionAttested(harness: NativeSessionHarness): Promise<boolean> {
+  async function subscriptionRouteAttested(harness: ProfileHarness): Promise<boolean> {
+    const source = SUBSCRIPTION_AUTH_SOURCES[harness];
     const response = await callJson(
       "POST",
       `/v2/harnesses/${encodeURIComponent(harness)}/auth-readiness`,
       "authReadiness",
-      { authRequest: "subscription", source: "native_session" },
+      { authRequest: "subscription", source },
     );
     const readiness = field(response, "readiness");
     return (
       field(response, "harnessId") === harness &&
       field(response, "authRequest") === "subscription" &&
-      field(response, "requestedSource") === "native_session" &&
-      field(readiness, "source") === "native_session" &&
+      field(response, "requestedSource") === source &&
+      field(readiness, "source") === source &&
       field(readiness, "availability") === "available" &&
       field(readiness, "verification") === "passed"
     );
   }
 
-  async function requireNativeSession(harness: NativeSessionHarness): Promise<void> {
-    if (!(await nativeSessionAttested(harness))) {
-      throw new ClaudexorControlError(409, `${harness}_native_session_unattested`, "authReadiness");
+  async function requireSubscriptionRoute(harness: ProfileHarness): Promise<void> {
+    if (!(await subscriptionRouteAttested(harness))) {
+      throw new ClaudexorControlError(
+        409,
+        SUBSCRIPTION_ROUTE_UNATTESTED_CODES[harness],
+        "authReadiness",
+      );
     }
   }
 
@@ -627,7 +635,7 @@ export function createClaudexorExecutionBackend(
     async startProfile(input: Static<typeof ExecutionRequestV3>) {
       const route = subscriptionProfileRoute(input.profile, "startProfile");
       await handshake();
-      if (isNativeSessionHarness(route.harness)) await requireNativeSession(route.harness);
+      await requireSubscriptionRoute(route.harness);
       const created = await callJson(
         "POST",
         "/v2/threads",
@@ -667,7 +675,7 @@ export function createClaudexorExecutionBackend(
     async startScheduled(input: Static<typeof ExecutionRequestV4>) {
       const route = subscriptionProfileRoute(input.profile, "startScheduled");
       await handshake();
-      if (isNativeSessionHarness(route.harness)) await requireNativeSession(route.harness);
+      await requireSubscriptionRoute(route.harness);
       const created = await callJson(
         "POST",
         "/v2/threads",
@@ -788,9 +796,7 @@ export function createClaudexorExecutionBackend(
       // Re-attest before every resume: the session can be revoked or expire
       // between the original turn and the follow-up one.
       const resumeRoute = subscriptionProfileRoute(profile, "resume");
-      if (isNativeSessionHarness(resumeRoute.harness)) {
-        await requireNativeSession(resumeRoute.harness);
-      }
+      await requireSubscriptionRoute(resumeRoute.harness);
       await createTurn(
         request.executionId,
         request.inputArtifactRefs.length === 0
@@ -1124,21 +1130,7 @@ export function createClaudexorExecutionBackend(
         if (local.status !== "pass") return local;
         try {
           await handshake();
-          const response = await callJson(
-            "POST",
-            "/v2/harnesses/claude/auth-readiness",
-            "authReadiness",
-            { authRequest: "subscription", source: "oauth_token_env" },
-          );
-          const readiness = field(response, "readiness");
-          if (
-            field(response, "harnessId") !== "claude" ||
-            field(response, "authRequest") !== "subscription" ||
-            field(response, "requestedSource") !== "oauth_token_env" ||
-            field(readiness, "source") !== "oauth_token_env" ||
-            field(readiness, "availability") !== "available" ||
-            field(readiness, "verification") !== "passed"
-          ) {
+          if (!(await subscriptionRouteAttested("claude"))) {
             throw new Error("unattested");
           }
           return local;
@@ -1160,7 +1152,7 @@ export function createClaudexorExecutionBackend(
       return (async () => {
         try {
           await handshake();
-          if (!(await nativeSessionAttested("codex"))) {
+          if (!(await subscriptionRouteAttested("codex"))) {
             throw new Error("unattested");
           }
           return {
@@ -1185,7 +1177,7 @@ export function createClaudexorExecutionBackend(
       return (async () => {
         try {
           await handshake();
-          if (!(await nativeSessionAttested("cursor"))) {
+          if (!(await subscriptionRouteAttested("cursor"))) {
             throw new Error("unattested");
           }
           return {

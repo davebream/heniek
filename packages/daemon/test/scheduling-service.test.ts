@@ -335,4 +335,184 @@ describe("Q021 scheduling execution service", () => {
     service.stop();
     context.db.close();
   });
+
+  it("fences backend-disclosed recovery without reading a result or dispatching fallback", async () => {
+    const context = await fixture();
+    let starts = 0;
+    const backend: ExecutionBackendV7 = {
+      async start() {
+        starts += 1;
+        return { schemaVersion: 1, executionId: "backend-recovery" as never };
+      },
+      async status() {
+        return "recovery_required";
+      },
+      async interactions() {
+        return [];
+      },
+      async answer() {},
+      async resume() {},
+      async result() {
+        throw new Error("result must not be read before terminal settlement");
+      },
+      async cancel() {},
+      async artifacts() {
+        return [];
+      },
+      async readArtifact() {
+        return new Uint8Array();
+      },
+      async *events() {},
+    };
+    const service = createSchedulingExecutionService({
+      db: context.db,
+      backend,
+      workspaceService: context.workspaceService,
+      artifactsDirectory: join(context.root, "artifacts"),
+      instanceId: "daemon-q022",
+      ids: context.ids,
+      clock: context.clock,
+      resolveProfileChain: () => fallbackChain(),
+      createIdentifierReader: (identifiers) =>
+        createScopedSecretReader({ read: async () => undefined }, identifiers),
+      pollMilliseconds: 60_000,
+    });
+    const started = await service.start({
+      currentDirectory: context.source,
+      prompt: "Retain capacity until operator recovery.",
+      artifactPath: "reports/result.md",
+      profileId: "primary",
+    });
+
+    await service.reconcile();
+    expect(readExecutionAttempts(context.db, started.runId)).toMatchObject([
+      { candidateIndex: 0, status: "recovery_required" },
+    ]);
+    expect(starts).toBe(1);
+    service.stop();
+    context.db.close();
+  });
+
+  it("fences an attempt when a backend status probe throws and continues reconciliation", async () => {
+    const context = await fixture();
+    const backend: ExecutionBackendV7 = {
+      async start() {
+        return { schemaVersion: 1, executionId: "backend-unconfirmed" as never };
+      },
+      async status() {
+        throw new Error("control endpoint unavailable");
+      },
+      async interactions() {
+        return [];
+      },
+      async answer() {},
+      async resume() {},
+      async result() {
+        throw new Error("result must not be read after an unconfirmed probe");
+      },
+      async cancel() {},
+      async artifacts() {
+        return [];
+      },
+      async readArtifact() {
+        return new Uint8Array();
+      },
+      async *events() {},
+    };
+    const service = createSchedulingExecutionService({
+      db: context.db,
+      backend,
+      workspaceService: context.workspaceService,
+      artifactsDirectory: join(context.root, "artifacts"),
+      instanceId: "daemon-q022",
+      ids: context.ids,
+      clock: context.clock,
+      resolveProfileChain: () => chain(),
+      createIdentifierReader: (identifiers) =>
+        createScopedSecretReader({ read: async () => undefined }, identifiers),
+      pollMilliseconds: 60_000,
+    });
+    const started = await service.start({
+      currentDirectory: context.source,
+      prompt: "Fail closed when status is unconfirmed.",
+      artifactPath: "reports/result.md",
+      profileId: "primary",
+    });
+
+    await expect(service.reconcile()).resolves.toBeUndefined();
+    expect(readExecutionAttempts(context.db, started.runId)[0]?.status).toBe("recovery_required");
+    service.stop();
+    context.db.close();
+  });
+
+  it("keeps a cancelled attempt active when cancellation acknowledgement has not settled", async () => {
+    const context = await fixture();
+    let cancelCalls = 0;
+    let status: "running" | "cancelled" = "running";
+    const backend: ExecutionBackendV7 = {
+      async start() {
+        return { schemaVersion: 1, executionId: "backend-cancelling" as never };
+      },
+      async status() {
+        return status;
+      },
+      async interactions() {
+        return [];
+      },
+      async answer() {},
+      async resume() {},
+      async result() {
+        if (status !== "cancelled") {
+          throw new Error("result must not be read before terminal settlement");
+        }
+        return {
+          schemaVersion: 5,
+          status: "cancelled",
+          summary: "Cancellation settled.",
+          artifacts: [],
+          telemetry: {},
+        } as never;
+      },
+      async cancel() {
+        cancelCalls += 1;
+      },
+      async artifacts() {
+        return [];
+      },
+      async readArtifact() {
+        return new Uint8Array();
+      },
+      async *events() {},
+    };
+    const service = createSchedulingExecutionService({
+      db: context.db,
+      backend,
+      workspaceService: context.workspaceService,
+      artifactsDirectory: join(context.root, "artifacts"),
+      instanceId: "daemon-q022",
+      ids: context.ids,
+      clock: context.clock,
+      resolveProfileChain: () => fallbackChain(),
+      createIdentifierReader: (identifiers) =>
+        createScopedSecretReader({ read: async () => undefined }, identifiers),
+      pollMilliseconds: 60_000,
+    });
+    const started = await service.start({
+      currentDirectory: context.source,
+      prompt: "Wait for cancellation settlement.",
+      artifactPath: "reports/result.md",
+      profileId: "primary",
+    });
+
+    await service.cancel(started.runId);
+    expect(cancelCalls).toBe(1);
+    expect(readExecutionAttempts(context.db, started.runId)).toMatchObject([
+      { candidateIndex: 0, status: "running" },
+    ]);
+    status = "cancelled";
+    await service.reconcile();
+    expect(readExecutionAttempts(context.db, started.runId)[0]?.status).toBe("cancelled");
+    service.stop();
+    context.db.close();
+  });
 });

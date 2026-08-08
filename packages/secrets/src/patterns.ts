@@ -93,6 +93,25 @@ export const CREDENTIAL_VALUE_PATTERNS: readonly RegExp[] = [
   /\beyJ[A-Za-z0-9_-]{8,4096}\.[A-Za-z0-9_-]{8,4096}\.[A-Za-z0-9_-]{8,4096}\b/,
 ];
 
+/** Sensitive provider diagnostics that are unsafe even when they contain no token-shaped value. */
+export const SENSITIVE_DIAGNOSTIC_VALUE_PATTERNS: readonly RegExp[] = [
+  /\bhttps?:\/\/[^\s"'<>()[\]{}]+/i,
+  /\b(?:authorization|proxy-authorization|cookie|set-cookie|x-api-key)\s*[:=]\s*(?:Bearer\s+)?[^\s,;]+/i,
+];
+
+const SENSITIVE_DIAGNOSTIC_KEY_PATTERN =
+  /^(?:authorization|proxy-authorization|cookies?|set-cookie|x-api-key|provider[_-]?(?:payload|request|response|error)|raw[_-]?(?:request|response|body)|(?:request|response)[_-]?body)$/i;
+
+/** True when a diagnostic property can contain an opaque provider payload or sensitive header material. */
+export function isSensitiveDiagnosticKey(key: string): boolean {
+  return SENSITIVE_DIAGNOSTIC_KEY_PATTERN.test(key);
+}
+
+/** True when a free-text diagnostic contains a URL or a sensitive HTTP header. */
+export function looksLikeSensitiveDiagnosticValue(value: string): boolean {
+  return SENSITIVE_DIAGNOSTIC_VALUE_PATTERNS.some((pattern) => pattern.test(value));
+}
+
 /** True when `value` matches any known credential value shape. */
 export function looksLikeCredentialValue(value: string): boolean {
   return CREDENTIAL_VALUE_PATTERNS.some((pattern) => pattern.test(value));

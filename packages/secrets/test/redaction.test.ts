@@ -384,4 +384,26 @@ describe("redactText", () => {
     const text = "nothing sensitive here, just a normal log line";
     expect(redactText(text)).toBe(text);
   });
+
+  it("redacts absolute URLs and sensitive HTTP headers while preserving relative paths", () => {
+    const text =
+      "GET https://provider.example/v1/runs/123 Authorization: Bearer secret-value at artifacts/result.md";
+    const redacted = redactText(text);
+    expect(redacted).not.toContain("https://provider.example");
+    expect(redacted).not.toContain("secret-value");
+    expect(redacted).toContain("artifacts/result.md");
+  });
+
+  it("redacts provider payload objects and preserves ordinary telemetry fields", () => {
+    const redacted = redactJson({
+      providerPayload: { request: "https://provider.example/v1/runs", detail: "raw" },
+      headers: { Authorization: "Bearer secret-value" },
+      tokenCount: 42,
+      artifactPath: "artifacts/result.md",
+    }) as Record<string, unknown>;
+    expect(redacted.providerPayload).toBe(REDACTION_PLACEHOLDER);
+    expect(redacted.headers).toEqual({ Authorization: REDACTION_PLACEHOLDER });
+    expect(redacted.tokenCount).toBe(42);
+    expect(redacted.artifactPath).toBe("artifacts/result.md");
+  });
 });

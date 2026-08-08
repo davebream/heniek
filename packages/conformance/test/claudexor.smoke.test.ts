@@ -1,11 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { classifyParentIndependence } from "../src/smoke/claudexor/canaries.js";
+import {
+  classifyCancellation,
+  classifyOrphanProcessSnapshot,
+  classifyParentIndependence,
+} from "../src/smoke/claudexor/canaries.js";
 import {
   createControlClient,
   isTerminalClaudexorState,
 } from "../src/smoke/claudexor/control-client.js";
 import { startDaemon } from "../src/smoke/claudexor/daemon-handle.js";
 import { readClaudexorSmokeConfig } from "../src/smoke/claudexor/gate.js";
+import { sampleProcessSnapshot } from "../src/smoke/claudexor/process-snapshot.js";
 import { EXPECTED_ENGINE_SHA, EXPECTED_PROTOCOL_MAJOR } from "../src/smoke/claudexor/protocol.js";
 
 /**
@@ -59,6 +64,7 @@ describe.skipIf(!config.enabled)(
         }
         expect(running).toBe(true);
 
+        const baseline = await sampleProcessSnapshot({ rootPid: daemon.pid });
         const settleStart = Date.now();
         await client.cancel(run.runId);
         let final = "unknown";
@@ -71,12 +77,22 @@ describe.skipIf(!config.enabled)(
           }
         }
 
-        // Only settlement is asserted here. This suite deliberately does NOT
-        // sample the daemon's descendant PIDs, so it must not feed a made-up 0
-        // into the classifier: that would manufacture a process-tree-cleanup
-        // result nothing observed. Cleanup sampling belongs to the long-run
-        // driver, and the ADR records it as indicative rather than verified.
         expect(final).toBe("cancelled");
+        expect(
+          classifyCancellation({
+            acceptedControlCall: true,
+            finalState: final,
+            settleMs: Date.now() - settleStart,
+          }).outcome,
+        ).toBe("supported");
+        const after = await sampleProcessSnapshot({ rootPid: daemon.pid });
+        const scan = classifyOrphanProcessSnapshot({
+          instrument: "ps",
+          sampleTiming: "after_terminal",
+          baselineDescendantCount: baseline.descendantCount,
+          observedDescendantCount: after.descendantCount,
+        });
+        expect(scan.evidence.evidenceStrength).toBe("indicative");
       } finally {
         daemon.stop();
       }

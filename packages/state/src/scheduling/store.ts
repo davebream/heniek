@@ -826,7 +826,12 @@ export function renewAccountLease(
 
 export function restoreAccountLease(
   db: StateDatabase,
-  input: { readonly attemptId: string; readonly ownerId: string; readonly leaseTtlMs?: number },
+  input: {
+    readonly attemptId: string;
+    readonly ownerId: string;
+    readonly leaseTtlMs?: number;
+    readonly recoveryReasonCode?: string;
+  },
 ): { readonly fencingRevision: number; readonly expiresAt: string } {
   const ttl = input.leaseTtlMs ?? DEFAULT_LEASE_TTL_MS;
   return transaction(db, () => {
@@ -844,6 +849,14 @@ export function restoreAccountLease(
     if (row === undefined) throw new StateStoreError("recoverable account lease does not exist");
     const revision =
       toSafeInteger(row.fencing_revision, "account_concurrency_lease.fencing_revision") + 1;
+    if (input.recoveryReasonCode !== undefined) {
+      internalHandle(db)
+        .prepare(
+          `UPDATE execution_attempt SET status = 'recovery_required', updated_at = ?
+            WHERE attempt_id = ?`,
+        )
+        .run(now, input.attemptId);
+    }
     internalHandle(db)
       .prepare(
         `UPDATE account_concurrency_lease SET owner_id = ?, renewed_at = ?, expires_at = ?,
@@ -856,8 +869,8 @@ export function restoreAccountLease(
       candidateIndex: toSafeInteger(row.candidate_index, "execution_attempt.candidate_index"),
       profileId: toText(row.profile_id, "execution_attempt.profile_id"),
       accountId: toText(row.account_id, "account_concurrency_lease.account_id"),
-      kind: "lease_renewed",
-      reasonCode: "daemon_restart_reconciled",
+      kind: input.recoveryReasonCode === undefined ? "lease_renewed" : "attempt_recovery_required",
+      reasonCode: input.recoveryReasonCode ?? "daemon_restart_reconciled",
       now,
     });
     return { fencingRevision: revision, expiresAt };
