@@ -12,7 +12,7 @@ when the separate machine-readable readiness report is also `ready: true`.
 | Artifact | SHA-256 |
 |---|---|
 | Product Specification v0.1 | `c3b2d70578c9a74435dfb407a432636759415a53c5928924ea6680f83a3a5ddd` |
-| Product Specification v0.2 | `cac80dd9c2ce54a703b037b062f5a51f9cb485d6350fabade5255e1f3a570f56` |
+| Product Specification v0.2 | `f3c5b12b1b2cca6c6739333ae00a1ecb746ed91464f095a89bb4b355f39e628c` |
 | Brand report v0.1 | `2fb3fd9b9a7ac7f6444f32af033dae8a6ba6244e3e5e4cdc8dc08a401a3ec0d9` |
 | Decision audit v0.1 | `ccc310ab7897431649173d4b8913aa01cccd2fb2d0442ed2b71443afdbd9e3fa` |
 | Ordered queue revision 1 | `b29fc62f94d7810be5f065d73934504848dab9000997f141351242bc104af908` |
