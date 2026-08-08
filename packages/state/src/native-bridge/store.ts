@@ -1957,6 +1957,8 @@ export interface NativeStageAttemptSnapshot {
   readonly attemptOrdinal: number;
   readonly workspaceId: string | null;
   readonly status: string;
+  /** The pre-dispatch git state, captured only for a read-only attempt — the native bridge service re-verifies it unchanged before accepting a succeeded submission. */
+  readonly readonlyBaselineJson: string | null;
   readonly failureJson: string | null;
   readonly startedAt: string | null;
   readonly finishedAt: string | null;
@@ -1969,7 +1971,7 @@ export function readNativeStageAttempts(
   return internalHandle(db)
     .prepare(
       `SELECT attempt_id, run_id, stage_id, attempt_ordinal, workspace_id, status,
-              failure_json, started_at, finished_at
+              readonly_baseline_json, failure_json, started_at, finished_at
          FROM native_stage_attempt WHERE run_id = ? ORDER BY attempt_ordinal`,
     )
     .all(runId)
@@ -1980,6 +1982,10 @@ export function readNativeStageAttempts(
       attemptOrdinal: toSafeInteger(raw.attempt_ordinal, "native_stage_attempt.attempt_ordinal"),
       workspaceId: toNullableText(raw.workspace_id, "native_stage_attempt.workspace_id"),
       status: toText(raw.status, "native_stage_attempt.status"),
+      readonlyBaselineJson: toNullableText(
+        raw.readonly_baseline_json,
+        "native_stage_attempt.readonly_baseline_json",
+      ),
       failureJson: toNullableText(raw.failure_json, "native_stage_attempt.failure_json"),
       startedAt: toNullableText(raw.started_at, "native_stage_attempt.started_at"),
       finishedAt: toNullableText(raw.finished_at, "native_stage_attempt.finished_at"),

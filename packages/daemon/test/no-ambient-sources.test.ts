@@ -88,6 +88,15 @@ const EXPECTED_EXEMPTIONS: readonly string[] = [
   "runtime/host-witness.ts",
   "runtime/lock-filesystem.ts",
   "runtime/mac.ts",
+  /*
+   * The native bridge service (Q023). Genuinely ambient, unlike
+   * stage-completion.ts above: `execFile` to resolve the repository's git
+   * HEAD (mirrors scheduling-service.ts's own `repositoryHead`) and
+   * `node:fs/promises#readFile` to read a submitted artifact off disk —
+   * exactly the class of filesystem/process work `src/runtime/**` exists to
+   * confine, not a borderline case.
+   */
+  "runtime/native-bridge-service.ts",
   "runtime/process-liveness.ts",
   "runtime/random-source.ts",
   "runtime/scheduling-service.ts",
@@ -114,7 +123,7 @@ const EXPECTED_EXEMPTIONS: readonly string[] = [
  * of Phase 5, the eleven `src/runtime/**` adapters included. A scan whose
  * `srcRoot` were wrong would list zero files and otherwise pass silently.
  */
-const MINIMUM_SCANNED_FILES = 38;
+const MINIMUM_SCANNED_FILES = 39;
 
 async function listTypeScriptFiles(root: string): Promise<string[]> {
   const entries = await readdir(root, { recursive: true, withFileTypes: true });
