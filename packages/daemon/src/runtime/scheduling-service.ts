@@ -1,5 +1,4 @@
 import { execFile } from "node:child_process";
-import { createHash } from "node:crypto";
 import { promisify } from "node:util";
 import type {
   ExecutionBackendV7,
@@ -19,12 +18,10 @@ import {
   claimNextExecutionCandidate,
   commitStateChange,
   completeExecutionAttempt,
-  completeStage,
   createArtifactStore,
   createExecutionSchedule,
   findRegisteredExecutionContext,
   type JsonValue,
-  publishArtifact,
   readCapacityQuestion,
   readExecutionAttempts,
   readExecutionSchedule,
@@ -51,6 +48,7 @@ import {
   resolveAttemptLimits,
   resolveAttemptPermissions,
 } from "../scheduling/policy.js";
+import { finalizeStageArtifact } from "./stage-completion.js";
 
 const execFileAsync = promisify(execFile);
 type ProfileChain = Static<typeof ResolvedProfileChainV1>;
@@ -414,29 +412,17 @@ export function createSchedulingExecutionService(
         const declared = listed.find((artifact) => artifact.path === schedule.artifactPath);
         if (declared === undefined) throw new Error("declared artifact is missing");
         const bytes = await options.backend.readArtifact(backendExecutionId, declared.id);
-        if (bytes.byteLength !== declared.byteLength) throw new Error("artifact length changed");
-        const digest = createHash("sha256").update(bytes).digest("hex");
-        if (declared.sha256 !== undefined && declared.sha256 !== digest) {
-          throw new Error("artifact digest changed");
-        }
-        const receipt = publishArtifact(artifactStore, {
-          bytes,
-          expectedContentHash: digest,
-        });
-        completeStage(options.db, artifactStore, {
+        finalizeStageArtifact(options.db, artifactStore, {
           runId: attempt.runId,
           stageId: attempt.stageId,
-          terminalRunStatus: "succeeded",
-          artifacts: [
-            {
-              receipt,
-              name: schedule.artifactPath,
-              mediaType: declared.mediaType,
-              contentSchemaId: "heniek://contract/ExternalStageResult/v1",
-              producer: "execution-backend",
-              sourceLineage: [declared.id],
-            },
-          ],
+          summary: result.summary,
+          artifactPath: schedule.artifactPath,
+          bytes,
+          mediaType: declared.mediaType,
+          producer: "execution-backend",
+          sourceLineage: [declared.id],
+          declaredByteLength: declared.byteLength,
+          ...(declared.sha256 === undefined ? {} : { declaredSha256: declared.sha256 }),
         });
       } catch {
         const artifactFailure = failure(

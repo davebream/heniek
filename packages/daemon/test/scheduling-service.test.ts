@@ -515,4 +515,98 @@ describe("Q021 scheduling execution service", () => {
     service.stop();
     context.db.close();
   });
+  /**
+   * Regression for a defect found while implementing Q023.
+   *
+   * `ExecutionService.finalizeSuccess` validated the backend's terminal result
+   * against `ExternalStageResult/v1` before publishing. `finishTerminal` did
+   * not — it checked the artifact's length and digest and then completed the
+   * stage, so a scheduled run could succeed on a summary the published
+   * contract rejects. Two execution paths, one contract, two behaviours.
+   *
+   * Q023 needed a third caller for native stages, and the issue's constraint
+   * is that native results pass *the same* stage contract as external ones.
+   * That is only meaningful if there is one implementation, so the sequence
+   * moved into `finalizeStageArtifact` and this pins the behaviour the
+   * scheduled path gained: an empty summary is a contract violation, and a
+   * contract violation is an `artifact_failed` attempt, not a completed stage.
+   */
+  it("rejects a terminal result that violates the stage contract instead of completing it", async () => {
+    const context = await fixture();
+    const bytes = new TextEncoder().encode("# present but unusable\n");
+    const declared = {
+      schemaVersion: 1 as const,
+      id: "artifact-contract" as never,
+      path: "reports/result.md",
+      byteLength: bytes.byteLength,
+      mediaType: "text/markdown",
+    };
+    const backend: ExecutionBackendV7 = {
+      async start() {
+        return { schemaVersion: 1, executionId: "backend-contract" as never };
+      },
+      async status() {
+        return "succeeded";
+      },
+      async interactions() {
+        return [];
+      },
+      async answer() {},
+      async resume() {},
+      async result() {
+        // Empty summary: ExternalStageResult/v1 requires minLength 1.
+        return {
+          schemaVersion: 5,
+          status: "succeeded",
+          summary: "",
+          artifacts: [declared],
+          telemetry: {},
+        } as never;
+      },
+      async cancel() {},
+      async artifacts() {
+        return [declared];
+      },
+      async readArtifact() {
+        return bytes;
+      },
+      async *events() {},
+    };
+    const service = createSchedulingExecutionService({
+      db: context.db,
+      backend,
+      workspaceService: context.workspaceService,
+      artifactsDirectory: join(context.root, "artifacts"),
+      instanceId: "daemon-q023",
+      ids: context.ids,
+      clock: context.clock,
+      resolveProfileChain: () => chain(),
+      createIdentifierReader: (identifiers) =>
+        createScopedSecretReader({ read: async () => undefined }, identifiers),
+      pollMilliseconds: 60_000,
+    });
+    const started = await service.start({
+      currentDirectory: context.source,
+      prompt: "Return a result the contract rejects.",
+      artifactPath: "reports/result.md",
+      profileId: "primary",
+    });
+
+    await service.reconcile();
+
+    expect(readExecutionAttempts(context.db, started.runId)).toMatchObject([
+      {
+        candidateIndex: 0,
+        status: "failed",
+        // Pinned by reason, not just by outcome: a bare "it failed" would
+        // also pass if the run had died in workspace provisioning and never
+        // reached the contract check at all.
+        failure: { classification: "artifact_failed", code: "declared_artifact_invalid" },
+      },
+    ]);
+    // The stage did not complete, and nothing was published for it.
+    expect(readStageArtifacts(context.db, started.runId)).toEqual([]);
+    service.stop();
+    context.db.close();
+  });
 });

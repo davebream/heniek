@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import type {
   ArtifactId,
   DoctorReportV1,
@@ -11,7 +10,6 @@ import type {
   WorkspaceConfiguration,
   WorkspaceId,
 } from "@heniek/contracts";
-import { ExternalStageResultV1 } from "@heniek/contracts";
 import { redactText } from "@heniek/secrets";
 import type { IdGenerator } from "@heniek/state";
 import {
@@ -20,7 +18,6 @@ import {
   assignBackendExecution,
   commitStateChange,
   completePendingArtifactImports,
-  completeStage,
   createArtifactStore,
   createStageExecution,
   executionCleanupCounts,
@@ -28,7 +25,6 @@ import {
   markArtifactImport,
   markExecutionFinalized,
   markExecutionOperationDelivered,
-  publishArtifact,
   type RequestedRunResume,
   readActiveStageExecutions,
   readArtifactRecord,
@@ -47,7 +43,7 @@ import {
 } from "@heniek/state";
 import type { WorkspaceService } from "@heniek/workspace";
 import type { Static } from "@sinclair/typebox";
-import { Value } from "@sinclair/typebox/value";
+import { finalizeStageArtifact } from "./stage-completion.js";
 
 export type DurableExecutionBackend = Omit<ExecutionBackendV2, "resume"> & {
   resume(request: Static<typeof ExecutionResumeRequestV1>): Promise<void>;
@@ -247,54 +243,38 @@ export function createExecutionService(options: ExecutionServiceOptions): Execut
     if (artifact === undefined) {
       throw new Error(`backend did not produce declared artifact ${row.artifactPath}`);
     }
-    if (
-      !Value.Check(ExternalStageResultV1, {
-        schemaVersion: 1,
-        summary: result.summary,
-        artifactPath: artifact.path,
-      })
-    ) {
-      throw new Error("backend terminal result does not satisfy ExternalStageResult/v1");
-    }
     const bytes = await options.backend.readArtifact(executionId, artifact.id);
-    if (bytes.byteLength !== artifact.byteLength) {
-      throw new Error("backend artifact byte length changed between list and retrieval");
-    }
-    const digest = createHash("sha256").update(bytes).digest("hex");
-    if (artifact.sha256 !== undefined && artifact.sha256 !== digest) {
-      throw new Error("backend artifact digest does not match its descriptor");
-    }
-    const receipt = publishArtifact(artifactStore, { bytes, expectedContentHash: digest });
-    markArtifactImport(options.db, {
-      runId: row.runId,
-      backendArtifactId: artifact.id,
-      contentHash: digest,
-      byteLength: bytes.byteLength,
-      state: "pending",
-    });
-    completeStage(options.db, artifactStore, {
+    finalizeStageArtifact(options.db, artifactStore, {
       runId: row.runId,
       stageId: row.stageId,
-      terminalRunStatus: "succeeded",
-      artifacts: [
-        {
-          receipt,
-          name: row.artifactPath,
-          mediaType: artifact.mediaType,
-          contentSchemaId: "heniek://contract/ExternalStageResult/v1",
-          producer: "execution-backend",
-          sourceLineage: [artifact.id],
-        },
-      ],
-    });
-    options.faultInjection?.afterAtomicCompletion?.();
-    markArtifactImport(options.db, {
-      runId: row.runId,
-      backendArtifactId: artifact.id,
-      artifactId: receipt.artifactId,
-      contentHash: digest,
-      byteLength: bytes.byteLength,
-      state: "completed",
+      summary: result.summary,
+      artifactPath: artifact.path,
+      bytes,
+      mediaType: artifact.mediaType,
+      producer: "execution-backend",
+      sourceLineage: [artifact.id],
+      declaredByteLength: artifact.byteLength,
+      ...(artifact.sha256 === undefined ? {} : { declaredSha256: artifact.sha256 }),
+      onPublished: (_receipt, contentHash) => {
+        markArtifactImport(options.db, {
+          runId: row.runId,
+          backendArtifactId: artifact.id,
+          contentHash,
+          byteLength: bytes.byteLength,
+          state: "pending",
+        });
+      },
+      onCompleted: (receipt, contentHash) => {
+        options.faultInjection?.afterAtomicCompletion?.();
+        markArtifactImport(options.db, {
+          runId: row.runId,
+          backendArtifactId: artifact.id,
+          artifactId: receipt.artifactId,
+          contentHash,
+          byteLength: bytes.byteLength,
+          state: "completed",
+        });
+      },
     });
     markExecutionFinalized(options.db, row.runId, {
       status: "succeeded",
