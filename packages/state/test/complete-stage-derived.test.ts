@@ -157,6 +157,7 @@ describe("AC-1's second leg (Phase 4 fix cycle 1, Q2): the package barrel's exac
         "readPendingExecutionOperations",
         "readPendingInteractions",
         "readPendingNativeQuestions",
+        "reapAllExpiredParentSessions",
         "readRecoverableSchedulingAttempts",
         "readRunInteractions",
         "readRunProjection",

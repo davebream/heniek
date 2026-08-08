@@ -353,7 +353,7 @@ function abandonDispatchAndRecover(
  */
 function reapExpirations(
   db: StateDatabase,
-  codebaseId: string,
+  codebaseId: string | undefined,
   now: string,
   witnessOf: WitnessClassifier,
 ): void {
@@ -362,9 +362,9 @@ function reapExpirations(
     .prepare(
       `SELECT session_id, state, boot_witness, process_witness_json
          FROM parent_session
-        WHERE codebase_id = ? AND state IN ('attached','stalled') AND expires_at <= ?`,
+        WHERE (? IS NULL OR codebase_id = ?) AND state IN ('attached','stalled') AND expires_at <= ?`,
     )
-    .all(codebaseId, now);
+    .all(codebaseId ?? null, codebaseId ?? null, now);
   for (const row of expiredSessions) {
     const sessionId = toText(row.session_id, "parent_session.session_id");
     const sessionState = toText(row.state, "parent_session.state");
@@ -433,10 +433,10 @@ function reapExpirations(
       `SELECT d.dispatch_id, d.run_id, d.stage_id, d.attempt_id
          FROM native_dispatch d
          JOIN parent_session s ON s.session_id = d.session_id
-        WHERE s.codebase_id = ? AND d.state IN ('dispatched','waiting_on_user')
+        WHERE (? IS NULL OR s.codebase_id = ?) AND d.state IN ('dispatched','waiting_on_user')
           AND s.state NOT IN ('attached','stalled')`,
     )
-    .all(codebaseId)
+    .all(codebaseId ?? null, codebaseId ?? null)
     .map((raw) => ({
       dispatchId: toText(raw.dispatch_id, "native_dispatch.dispatch_id"),
       runId: toText(raw.run_id, "native_dispatch.run_id"),
@@ -453,6 +453,23 @@ function reapExpirations(
       now,
     );
   }
+}
+
+/**
+ * The background timer's only sanctioned entry point (CR5: "a background
+ * timer may nudge, but must call the same store function — never a second
+ * implementation"). Every mutating call above already reaps inline for its
+ * own codebase; this exists only so a codebase whose plugin never
+ * reconnects is not left with a stale, unreaped session forever. Same
+ * function, `codebaseId` omitted — not a parallel sweep implementation.
+ */
+export function reapAllExpiredParentSessions(
+  db: StateDatabase,
+  witnessOf: WitnessClassifier,
+): void {
+  transaction(db, () => {
+    reapExpirations(db, undefined, internalClock(db).nowIso(), witnessOf);
+  });
 }
 
 // ---------------------------------------------------------------------------

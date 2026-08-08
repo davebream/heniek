@@ -150,6 +150,7 @@ export {
   readNativeStage,
   readNativeStageAttempts,
   readPendingNativeQuestions,
+  reapAllExpiredParentSessions,
   recordNativeAttemptReadonlyBaseline,
   recordNativeAttemptWorkspaceFailure,
   resumeNativeStage,

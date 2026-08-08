@@ -23,6 +23,7 @@ import {
   readNativeStageAttempts,
   readPendingNativeQuestions,
   readRunProjection,
+  reapAllExpiredParentSessions,
   resumeNativeStage,
   runMigrations,
   type StateDatabase,
@@ -737,6 +738,23 @@ describe("Q023 native bridge store — CR1 regression: expiry cannot be raced by
       witnessOf: ALIVE_WITNESS,
     });
     expect(settled).toMatchObject({ accepted: true, requiresArtifactCompletion: true });
+  });
+
+  it("reapAllExpiredParentSessions is the background timer's only entry point — same abandonment as an inline sweep, for a codebase nobody has called back into", () => {
+    seedIdentity();
+    stage("run-1");
+    const session = attach();
+    claimOne(session.sessionId, session.sessionRevision);
+
+    clock.advance(200_000);
+
+    // Nothing has called back into codebase-1 since expiry — a plugin that
+    // never reconnects must still eventually surface as recovery_required,
+    // not sit silently expired forever.
+    reapAllExpiredParentSessions(db, DEAD_WITNESS);
+
+    expect(readNativeStage(db, "run-1")?.state).toBe("recovery_required");
+    expect(readRunProjection(db, "run-1")?.status).toBe("recovery_required");
   });
 });
 
