@@ -1,0 +1,101 @@
+{
+  "$id": "heniek://contract/ParentSessionDetachResult/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "accepted",
+    "released"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "accepted": {
+      "type": "boolean"
+    },
+    "rejectionCode": {
+      "anyOf": [
+        {
+          "const": "session_not_attached",
+          "type": "string"
+        },
+        {
+          "const": "session_expired",
+          "type": "string"
+        },
+        {
+          "const": "stale_session_revision",
+          "type": "string"
+        },
+        {
+          "const": "unknown_dispatch",
+          "type": "string"
+        },
+        {
+          "const": "stale_dispatch_revision",
+          "type": "string"
+        },
+        {
+          "const": "dispatch_revoked",
+          "type": "string"
+        },
+        {
+          "const": "dispatch_already_settled",
+          "type": "string"
+        },
+        {
+          "const": "idempotency_key_reuse",
+          "type": "string"
+        },
+        {
+          "const": "run_terminal",
+          "type": "string"
+        },
+        {
+          "const": "artifact_missing",
+          "type": "string"
+        },
+        {
+          "const": "result_contract_violation",
+          "type": "string"
+        },
+        {
+          "const": "workspace_mutated",
+          "type": "string"
+        }
+      ]
+    },
+    "released": {
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "dispatchId",
+          "disposition"
+        ],
+        "properties": {
+          "dispatchId": {
+            "minLength": 1,
+            "description": "Opaque NativeDispatchId.",
+            "type": "string"
+          },
+          "disposition": {
+            "anyOf": [
+              {
+                "const": "redispatchable",
+                "type": "string"
+              },
+              {
+                "const": "recovery_required",
+                "type": "string"
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

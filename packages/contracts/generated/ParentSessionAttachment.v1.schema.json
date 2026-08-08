@@ -1,0 +1,71 @@
+{
+  "$id": "heniek://contract/ParentSessionAttachment/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "sessionId",
+    "sessionRevision",
+    "codebaseId",
+    "attachedAt",
+    "expiresAt",
+    "leaseTtlMs",
+    "maxDispatches",
+    "pollAfterMs",
+    "resumedDispatchIds"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "sessionId": {
+      "minLength": 1,
+      "description": "Opaque ParentSessionId.",
+      "type": "string"
+    },
+    "sessionRevision": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "codebaseId": {
+      "minLength": 1,
+      "description": "Opaque CodebaseId.",
+      "type": "string"
+    },
+    "attachedAt": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "expiresAt": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "leaseTtlMs": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "maxDispatches": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "pollAfterMs": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "resumedDispatchIds": {
+      "uniqueItems": true,
+      "type": "array",
+      "items": {
+        "minLength": 1,
+        "description": "Opaque NativeDispatchId.",
+        "type": "string"
+      }
+    },
+    "supersededSessionId": {
+      "minLength": 1,
+      "description": "Opaque ParentSessionId.",
+      "type": "string"
+    }
+  }
+}

@@ -1,5 +1,6 @@
 import { Type } from "@sinclair/typebox";
 import { ArtifactId } from "../artifact/index.js";
+import { ProfileExecutionMode } from "../configuration/index.js";
 import {
   ExecutionAttemptV1,
   PendingInteractionV2,
@@ -257,6 +258,31 @@ export const StageStartResultV2 = versioned("StageStartResult", 2, {
   stageId: StageId,
   status: RunStatus.schema,
   schedulingRevision: Type.Integer({ minimum: 1 }),
+});
+
+/**
+ * Q023's one admission door. `stage.start.v3` takes `StageStartRequest/v2`
+ * unchanged — routing is decided by the *resolved profile's* declared
+ * `executionMode`, not by anything the caller adds to the request — and
+ * reports back which mode it took, so a caller never has to pre-decide
+ * "native or external" and pick a method name accordingly.
+ *
+ * `status` may legitimately be `waiting_for_parent_session` here: a native
+ * stage started with no parent session attached is admitted and waits,
+ * which is §18.3's "the durable pipeline waits rather than silently
+ * switching to an external profile".
+ *
+ * The two revisions are mode-specific and each absent in the other mode: a
+ * native stage has no scheduling row, and an external one has no native
+ * stage row.
+ */
+export const StageStartResultV3 = versioned("StageStartResult", 3, {
+  runId: RunId,
+  stageId: StageId,
+  status: RunStatus.schema,
+  executionMode: ProfileExecutionMode,
+  stageRevision: Type.Optional(Type.Integer({ minimum: 1 })),
+  schedulingRevision: Type.Optional(Type.Integer({ minimum: 1 })),
 });
 
 export const StageRunStatusResultV1 = versioned("StageRunStatusResult", 1, {

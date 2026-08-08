@@ -1,0 +1,38 @@
+{
+  "$id": "heniek://contract/ParentSessionAttachRequest/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "currentDirectory",
+    "resumeDispatchIds"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "currentDirectory": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "previousSessionId": {
+      "minLength": 1,
+      "description": "Opaque ParentSessionId.",
+      "type": "string"
+    },
+    "previousSessionRevision": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "resumeDispatchIds": {
+      "uniqueItems": true,
+      "type": "array",
+      "items": {
+        "minLength": 1,
+        "description": "Opaque NativeDispatchId.",
+        "type": "string"
+      }
+    }
+  }
+}
