@@ -1,6 +1,11 @@
 import { Type } from "@sinclair/typebox";
 import { ArtifactId } from "../artifact/index.js";
 import { PendingInteractionV2, StageId } from "../execution-backend/index.js";
+import {
+  InteractionAnswerSubmissionV2,
+  InteractionId,
+  InteractionV2,
+} from "../interaction/index.js";
 import { versioned } from "../kernel/index.js";
 import { RunId } from "../run/ids.js";
 import { RunStatus } from "../run/state.js";
@@ -222,6 +227,59 @@ export const StageRunStatusResultV1 = versioned("StageRunStatusResult", 1, {
   stageId: StageId,
   status: RunStatus.schema,
   interactions: Type.Array(PendingInteractionV2),
+});
+
+export const InteractionInboxResultV1 = versioned("InteractionInboxResult", 1, {
+  items: Type.Array(
+    Type.Object(
+      {
+        runId: RunId,
+        stageId: StageId,
+        runRevision: Type.Integer({ minimum: 1 }),
+        interaction: InteractionV2,
+      },
+      { additionalProperties: false },
+    ),
+  ),
+});
+
+export const StageRunStatusResultV2 = versioned("StageRunStatusResult", 2, {
+  runId: RunId,
+  stageId: StageId,
+  status: RunStatus.schema,
+  runRevision: Type.Integer({ minimum: 1 }),
+  interactions: Type.Array(InteractionV2),
+});
+
+export const RunAnswerRequestV2 = versioned("RunAnswerRequest", 2, {
+  runId: RunId,
+  answer: InteractionAnswerSubmissionV2,
+});
+
+export const RunResumeRequestV2 = versioned("RunResumeRequest", 2, {
+  runId: RunId,
+  expectedRunRevision: Type.Integer({ minimum: 1 }),
+  inputArtifactRefs: Type.Array(ArtifactId),
+});
+
+export const StageRunAnswerResultV2 = versioned("StageRunAnswerResult", 2, {
+  runId: RunId,
+  status: RunStatus.schema,
+  runRevision: Type.Integer({ minimum: 1 }),
+  interactionId: InteractionId,
+  interactionRevision: Type.Integer({ minimum: 1 }),
+  accepted: Type.Literal(true),
+  operationId: Type.String({ minLength: 1 }),
+  deliveryState: Type.Union([Type.Literal("pending"), Type.Literal("delivered")]),
+});
+
+export const StageRunResumeResultV2 = versioned("StageRunResumeResult", 2, {
+  runId: RunId,
+  status: RunStatus.schema,
+  runRevision: Type.Integer({ minimum: 1 }),
+  accepted: Type.Literal(true),
+  operationId: Type.String({ minLength: 1 }),
+  deliveryState: Type.Union([Type.Literal("pending"), Type.Literal("delivered")]),
 });
 
 export const StageRunMutationResultV1 = versioned("StageRunMutationResult", 1, {

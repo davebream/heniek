@@ -570,6 +570,13 @@ export const InteractionAnswerSetV1 = versioned("InteractionAnswerSet", 1, {
   ),
 });
 
+/** Durable recovery operation delivered to a backend exactly once logically. */
+export const ExecutionResumeRequestV1 = versioned("ExecutionResumeRequest", 1, {
+  executionId: BackendExecutionId,
+  operationId: Type.String({ minLength: 1 }),
+  inputArtifactRefs: Type.Array(ArtifactId),
+});
+
 export const BackendArtifactV1 = versioned("BackendArtifact", 1, {
   id: BackendArtifactId,
   path: Type.String({ minLength: 1 }),

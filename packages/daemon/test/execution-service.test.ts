@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import type { BackendArtifactId, ExecutionBackendV2, ExecutionStatus } from "@heniek/contracts";
+import type { BackendArtifactId, ExecutionStatus } from "@heniek/contracts";
 import { createClaudexorExecutionBackend } from "@heniek/execution-claudexor";
 import {
   commitStateChange,
@@ -13,7 +13,9 @@ import {
   readActiveStageExecutions,
   readArtifactRecord,
   readIdentity,
+  readPendingExecutionOperations,
   readPendingInteractions,
+  readRunProjection,
   readStageArtifacts,
   readStageExecution,
   runMigrations,
@@ -27,6 +29,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { startDaemon as startClaudexorDaemon } from "../../conformance/src/smoke/claudexor/daemon-handle.js";
 import {
   createExecutionService,
+  type DurableExecutionBackend,
   ExecutionServiceCrashFault,
 } from "../src/runtime/execution-service.js";
 
@@ -115,12 +118,20 @@ function fakeBackend() {
   let status: ExecutionStatus = "waiting_on_user";
   let pending = true;
   let startCalls = 0;
+  let answerCalls = 0;
+  let answerEffects = 0;
   let resumeCalls = 0;
+  let resumeEffects = 0;
+  const resumeOperationIds: string[] = [];
+  const appliedResumeOperations = new Set<string>();
   const seenHandles: string[] = [];
-  const backend: ExecutionBackendV2 = {
+  const backend: DurableExecutionBackend = {
     async start() {
       startCalls += 1;
-      return { schemaVersion: 1, executionId: "thread-q012" as never };
+      return {
+        schemaVersion: 1,
+        executionId: (startCalls === 1 ? "thread-q012" : `thread-q012-${startCalls}`) as never,
+      };
     },
     async status(executionId) {
       seenHandles.push(executionId);
@@ -148,14 +159,23 @@ function fakeBackend() {
     },
     async answer(executionId, answer) {
       seenHandles.push(executionId);
+      answerCalls += 1;
       expect(answer.interactionId).toBe("interaction-q012");
-      pending = false;
-      status = "succeeded";
+      if (pending) {
+        answerEffects += 1;
+        pending = false;
+        status = "succeeded";
+      }
     },
-    async resume(executionId) {
-      seenHandles.push(executionId);
+    async resume(request) {
+      seenHandles.push(request.executionId);
       resumeCalls += 1;
-      status = "running";
+      resumeOperationIds.push(request.operationId);
+      if (!appliedResumeOperations.has(request.operationId)) {
+        appliedResumeOperations.add(request.operationId);
+        resumeEffects += 1;
+        status = "running";
+      }
     },
     async cancel(executionId) {
       seenHandles.push(executionId);
@@ -212,6 +232,18 @@ function fakeBackend() {
     get resumeCalls() {
       return resumeCalls;
     },
+    get answerCalls() {
+      return answerCalls;
+    },
+    get answerEffects() {
+      return answerEffects;
+    },
+    get resumeEffects() {
+      return resumeEffects;
+    },
+    get resumeOperationIds() {
+      return resumeOperationIds;
+    },
     get seenHandles() {
       return seenHandles;
     },
@@ -261,13 +293,19 @@ describe("Q012 durable execution service", () => {
     await second.observeAll();
     expect(fake.startCalls).toBe(1);
     expect(fake.seenHandles.every((handle) => handle === "thread-q012")).toBe(true);
-    await second.answer(started.runId, {
-      schemaVersion: 1,
-      interactionId: "interaction-q012" as never,
-      answers: [
-        { questionId: "question-q012" as never, selectedLabels: [], freeText: "Release notes" },
-      ],
-    });
+    const answerResult = await second.answer(
+      started.runId,
+      {
+        schemaVersion: 2,
+        interactionId: "interaction-q012" as never,
+        expectedInteractionRevision: 1,
+        answers: [
+          { questionId: "question-q012" as never, kind: "free_text", freeText: "Release notes" },
+        ],
+      },
+      "test-key",
+    );
+    expect(answerResult).toMatchObject({ status: "succeeded", deliveryState: "delivered" });
 
     const execution = readStageExecution(restartedDb, started.runId);
     expect(execution).toMatchObject({
@@ -318,7 +356,13 @@ describe("Q012 durable execution service", () => {
       prompt: "Create a report.",
       artifactPath: "artifacts/report.md",
     });
-    await service.resume(started.runId, []);
+    fake.setStatus("recovery_required");
+    await service.status(started.runId);
+    await service.resume(
+      started.runId,
+      readRunProjection(setup.db, started.runId)?.revision ?? -1,
+      [],
+    );
     expect(fake.resumeCalls).toBe(1);
     await service.cancel(started.runId);
     expect(await service.result(started.runId)).toMatchObject({
@@ -336,7 +380,7 @@ describe("Q012 durable execution service", () => {
     const setup = await fixture();
     const fake = fakeBackend();
     let attempts = 0;
-    const backend: ExecutionBackendV2 = {
+    const backend: DurableExecutionBackend = {
       ...fake.backend,
       async start(input) {
         attempts += 1;
@@ -412,17 +456,22 @@ describe("Q012 durable execution service", () => {
     });
     await first.observeAll();
     await expect(
-      first.answer(started.runId, {
-        schemaVersion: 1,
-        interactionId: "interaction-q012" as never,
-        answers: [
-          {
-            questionId: "question-q012" as never,
-            selectedLabels: [],
-            freeText: "Recovery",
-          },
-        ],
-      }),
+      first.answer(
+        started.runId,
+        {
+          schemaVersion: 2,
+          interactionId: "interaction-q012" as never,
+          expectedInteractionRevision: 1,
+          answers: [
+            {
+              questionId: "question-q012" as never,
+              kind: "free_text",
+              freeText: "Recovery",
+            },
+          ],
+        },
+        "test-key",
+      ),
     ).rejects.toThrow("simulated crash after atomic completion");
     expect(readStageArtifacts(setup.db, started.runId)).toHaveLength(1);
     expect(executionCleanupCounts(setup.db).partialImports).toBe(1);
@@ -452,6 +501,184 @@ describe("Q012 durable execution service", () => {
     expect(restartedWorkspace.leases.current(identity?.checkoutPath ?? "")?.state).toBe("released");
     second.stop();
     restartedDb.close();
+  });
+
+  it("commits an answer before delivery and drains it once after a pre-delivery crash", async () => {
+    const setup = await fixture();
+    const fake = fakeBackend();
+    const first = createExecutionService({
+      db: setup.db,
+      backend: fake.backend,
+      workspaceService: setup.workspace(setup.db),
+      artifactsDirectory: join(setup.root, "artifacts"),
+      instanceId: "daemon-answer-before-delivery",
+      ids: setup.ids,
+      pollMilliseconds: 1_000_000,
+      faultInjection: {
+        afterOperationCommitted() {
+          throw new ExecutionServiceCrashFault("simulated crash before answer delivery");
+        },
+      },
+    });
+    const started = await first.start({
+      currentDirectory: setup.source,
+      prompt: "Ask for a title.",
+      artifactPath: "artifacts/report.md",
+    });
+    await first.observeAll();
+    await expect(
+      first.answer(
+        started.runId,
+        {
+          schemaVersion: 2,
+          interactionId: "interaction-q012" as never,
+          expectedInteractionRevision: 1,
+          answers: [
+            { questionId: "question-q012" as never, kind: "free_text", freeText: "Durable" },
+          ],
+        },
+        "key-before-delivery",
+      ),
+    ).rejects.toThrow("simulated crash before answer delivery");
+    expect(fake.answerCalls).toBe(0);
+    expect(readPendingExecutionOperations(setup.db)).toHaveLength(1);
+    first.stop();
+    setup.db.close();
+
+    const restartedDb = setup.open();
+    const second = createExecutionService({
+      db: restartedDb,
+      backend: fake.backend,
+      workspaceService: setup.workspace(restartedDb),
+      artifactsDirectory: join(setup.root, "artifacts"),
+      instanceId: "daemon-answer-before-delivery-restart",
+      ids: setup.ids,
+      pollMilliseconds: 1_000_000,
+    });
+    await second.observeAll();
+    expect(fake.answerCalls).toBe(1);
+    expect(fake.answerEffects).toBe(1);
+    expect(readPendingExecutionOperations(restartedDb)).toEqual([]);
+    second.stop();
+    restartedDb.close();
+  });
+
+  it("reuses answer and resume idempotency after an acknowledgement-boundary crash", async () => {
+    const setup = await fixture();
+    const fake = fakeBackend();
+    let crashAfterAcknowledgement = true;
+    const first = createExecutionService({
+      db: setup.db,
+      backend: fake.backend,
+      workspaceService: setup.workspace(setup.db),
+      artifactsDirectory: join(setup.root, "artifacts"),
+      instanceId: "daemon-after-ack",
+      ids: setup.ids,
+      pollMilliseconds: 1_000_000,
+      faultInjection: {
+        afterBackendAcknowledged() {
+          if (crashAfterAcknowledgement) {
+            throw new ExecutionServiceCrashFault("simulated crash after backend acknowledgement");
+          }
+        },
+      },
+    });
+    const answered = await first.start({
+      currentDirectory: setup.source,
+      prompt: "Ask for a title.",
+      artifactPath: "artifacts/report.md",
+    });
+    await first.observeAll();
+    await expect(
+      first.answer(
+        answered.runId,
+        {
+          schemaVersion: 2,
+          interactionId: "interaction-q012" as never,
+          expectedInteractionRevision: 1,
+          answers: [
+            { questionId: "question-q012" as never, kind: "free_text", freeText: "Exactly once" },
+          ],
+        },
+        "key-after-ack",
+      ),
+    ).rejects.toThrow("simulated crash after backend acknowledgement");
+    expect(fake.answerCalls).toBe(1);
+    expect(fake.answerEffects).toBe(1);
+    first.stop();
+    setup.db.close();
+
+    crashAfterAcknowledgement = false;
+    const restartedDb = setup.open();
+    const second = createExecutionService({
+      db: restartedDb,
+      backend: fake.backend,
+      workspaceService: setup.workspace(restartedDb),
+      artifactsDirectory: join(setup.root, "artifacts"),
+      instanceId: "daemon-after-ack-restart",
+      ids: setup.ids,
+      pollMilliseconds: 1_000_000,
+    });
+    await second.observeAll();
+    expect(fake.answerCalls).toBe(2);
+    expect(fake.answerEffects).toBe(1);
+    expect(readPendingExecutionOperations(restartedDb)).toEqual([]);
+
+    fake.setStatus("recovery_required");
+    const recoverable = await second.start({
+      currentDirectory: setup.source,
+      prompt: "Recover this run.",
+      artifactPath: "artifacts/recovered.md",
+    });
+    await second.status(recoverable.runId);
+    let crashResumeAfterAcknowledgement = true;
+    second.stop();
+    const third = createExecutionService({
+      db: restartedDb,
+      backend: fake.backend,
+      workspaceService: setup.workspace(restartedDb),
+      artifactsDirectory: join(setup.root, "artifacts"),
+      instanceId: "daemon-resume-after-ack",
+      ids: setup.ids,
+      pollMilliseconds: 1_000_000,
+      faultInjection: {
+        afterBackendAcknowledged() {
+          if (crashResumeAfterAcknowledgement) {
+            throw new ExecutionServiceCrashFault("simulated crash after resume acknowledgement");
+          }
+        },
+      },
+    });
+    await expect(
+      third.resume(
+        recoverable.runId,
+        readRunProjection(restartedDb, recoverable.runId)?.revision ?? -1,
+        [],
+      ),
+    ).rejects.toThrow("simulated crash after resume acknowledgement");
+    const durableOperationId = fake.resumeOperationIds.at(-1);
+    expect(fake.resumeEffects).toBe(1);
+    third.stop();
+    restartedDb.close();
+
+    crashResumeAfterAcknowledgement = false;
+    const finalDb = setup.open();
+    const fourth = createExecutionService({
+      db: finalDb,
+      backend: fake.backend,
+      workspaceService: setup.workspace(finalDb),
+      artifactsDirectory: join(setup.root, "artifacts"),
+      instanceId: "daemon-resume-after-ack-restart",
+      ids: setup.ids,
+      pollMilliseconds: 1_000_000,
+    });
+    await fourth.drainPendingOperations();
+    expect(fake.resumeCalls).toBe(2);
+    expect(fake.resumeEffects).toBe(1);
+    expect(fake.resumeOperationIds).toEqual([durableOperationId, durableOperationId]);
+    expect(readStageExecution(finalDb, recoverable.runId)).toMatchObject({ status: "running" });
+    fourth.stop();
+    finalDb.close();
   });
 });
 
@@ -552,16 +779,27 @@ describe.skipIf(!realClaudeEnabled)("Q012 real Claude vertical [opt-in]", () => 
           ? readPendingInteractions(db, started.runId)[0]
           : undefined;
       expect(interaction).toBeDefined();
-      await service.answer(started.runId, {
-        schemaVersion: 1,
-        interactionId: interaction?.id ?? ("missing" as never),
-        answers:
-          interaction?.questions.map((question) => ({
-            questionId: question.id,
-            selectedLabels: question.options[0] === undefined ? [] : [question.options[0].label],
-            freeText: "Q012 continuity answer",
-          })) ?? [],
-      });
+      await service.answer(
+        started.runId,
+        {
+          schemaVersion: 2,
+          interactionId: interaction?.id ?? ("missing" as never),
+          expectedInteractionRevision: 1,
+          answers:
+            interaction?.questions.map((question) => ({
+              questionId: question.id,
+              ...(question.options[0] === undefined
+                ? { kind: "free_text" as const, freeText: "Q012 continuity answer" }
+                : {
+                    kind: question.multiSelect
+                      ? ("multiple_choice" as const)
+                      : ("single_choice" as const),
+                    selectedLabels: [question.options[0].label],
+                  }),
+            })) ?? [],
+        },
+        "test-key",
+      );
       const finishDeadline = Date.now() + 240_000;
       let completed = await service.result(started.runId);
       while (completed.status !== "succeeded" && Date.now() < finishDeadline) {

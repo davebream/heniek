@@ -10,6 +10,13 @@ import { commitStateChange } from "../command/commit.js";
 import { internalClock, internalHandle, type StateDatabase } from "../database/open.js";
 import { toNullableText, toSafeInteger, toText } from "../database/pragma.js";
 import { StateDatabaseCorruptionError, StateStoreError } from "../errors.js";
+import {
+  acceptInteractionAnswer,
+  legacyAnswerSubmission,
+  markExecutionOperationDelivered,
+  readLegacyPendingInteractions,
+  synchronizePendingInteractions,
+} from "../interaction/store.js";
 import { readRunProjection } from "../projection/run.js";
 
 export interface RegisteredExecutionContext {
@@ -265,68 +272,14 @@ export function replacePendingInteractions(
   runId: string,
   interactions: readonly Static<typeof PendingInteractionV2>[],
 ): void {
-  const handle = internalHandle(db);
-  const now = internalClock(db).nowIso();
-  handle.exec("BEGIN IMMEDIATE");
-  try {
-    const activeIds = new Set<string>(interactions.map((entry) => entry.id));
-    for (const interaction of interactions) {
-      handle
-        .prepare(
-          `INSERT INTO execution_interaction (
-             run_id, interaction_id, payload_json, answer_json, state, updated_at
-           ) VALUES (?, ?, ?, NULL, 'pending', ?)
-           ON CONFLICT(run_id, interaction_id) DO UPDATE SET
-             payload_json = excluded.payload_json,
-             state = CASE WHEN execution_interaction.state = 'answered' THEN 'answered' ELSE 'pending' END,
-             updated_at = excluded.updated_at`,
-        )
-        .run(runId, interaction.id, JSON.stringify(interaction), now);
-    }
-    const pending = handle
-      .prepare(
-        "SELECT interaction_id FROM execution_interaction WHERE run_id = ? AND state = 'pending'",
-      )
-      .all(runId);
-    for (const row of pending) {
-      const interactionId = toText(row.interaction_id, "execution_interaction.interaction_id");
-      if (!activeIds.has(interactionId)) {
-        handle
-          .prepare(
-            `UPDATE execution_interaction SET state = 'resolved', updated_at = ?
-              WHERE run_id = ? AND interaction_id = ?`,
-          )
-          .run(now, runId, interactionId);
-      }
-    }
-    handle.exec("COMMIT");
-  } catch (error) {
-    handle.exec("ROLLBACK");
-    throw error;
-  }
+  synchronizePendingInteractions(db, runId, interactions);
 }
 
 export function readPendingInteractions(
   db: StateDatabase,
   runId: string,
 ): readonly Static<typeof PendingInteractionV2>[] {
-  return internalHandle(db)
-    .prepare(
-      `SELECT payload_json FROM execution_interaction
-        WHERE run_id = ? AND state = 'pending'
-        ORDER BY interaction_id`,
-    )
-    .all(runId)
-    .map((row) => {
-      const raw = toText(row.payload_json, "execution_interaction.payload_json");
-      try {
-        return JSON.parse(raw) as Static<typeof PendingInteractionV2>;
-      } catch (error) {
-        throw new StateDatabaseCorruptionError("execution interaction JSON is malformed", {
-          cause: error,
-        });
-      }
-    });
+  return readLegacyPendingInteractions(db, runId);
 }
 
 export function recordInteractionAnswer(
@@ -334,16 +287,13 @@ export function recordInteractionAnswer(
   runId: string,
   answer: Static<typeof InteractionAnswerSetV1>,
 ): void {
-  const report = internalHandle(db)
-    .prepare(
-      `UPDATE execution_interaction
-          SET answer_json = ?, state = 'answered', updated_at = ?
-        WHERE run_id = ? AND interaction_id = ? AND state = 'pending'`,
-    )
-    .run(JSON.stringify(answer), internalClock(db).nowIso(), runId, answer.interactionId);
-  if (report.changes !== 1) {
-    throw new StateStoreError(`pending interaction does not exist: ${answer.interactionId}`);
-  }
+  const accepted = acceptInteractionAnswer(
+    db,
+    runId,
+    legacyAnswerSubmission(db, runId, answer),
+    "legacy-internal",
+  );
+  markExecutionOperationDelivered(db, accepted.operationId);
 }
 
 export function markArtifactImport(

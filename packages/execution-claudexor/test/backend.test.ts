@@ -9,6 +9,7 @@ import {
   CLAUDEXOR_ENGINE_VERSION,
   ClaudexorControlError,
   createClaudexorExecutionBackend,
+  REQUIRED_OPERATION_IDEMPOTENCY,
   REQUIRED_OPERATIONS,
 } from "../src/index.js";
 
@@ -63,7 +64,15 @@ describe("Claudexor ExecutionBackendV2", () => {
           return json({
             operations: REQUIRED_OPERATIONS.map((operation) => {
               const [method, ...pathParts] = operation.split(" ");
-              return { method, path: pathParts.join(" ") };
+              const path = pathParts.join(" ");
+              return {
+                method,
+                path,
+                idempotency:
+                  REQUIRED_OPERATION_IDEMPOTENCY[
+                    `${method} ${path}` as keyof typeof REQUIRED_OPERATION_IDEMPOTENCY
+                  ],
+              };
             }),
           });
         }
@@ -181,7 +190,15 @@ describe("Claudexor ExecutionBackendV2", () => {
         { questionId: "question-2" as never, selectedLabels: [], freeText: "Yes" },
       ],
     });
-    await backend.resume(handle.executionId, []);
+    expect(calls.filter((call) => call.path.endsWith("/turns"))).toHaveLength(1);
+    const resumeRequest = {
+      schemaVersion: 1 as const,
+      executionId: handle.executionId,
+      operationId: "operation-resume-1",
+      inputArtifactRefs: [],
+    };
+    await backend.resume(resumeRequest);
+    await backend.resume(resumeRequest);
     await backend.cancel(handle.executionId);
     state = "succeeded";
     const result = await backend.result(handle.executionId);
@@ -198,13 +215,13 @@ describe("Claudexor ExecutionBackendV2", () => {
     const threadCreates = calls.filter((call) => call.path === "/v2/threads");
     const turns = calls.filter((call) => call.path.endsWith("/turns"));
     expect(threadCreates).toHaveLength(1);
-    expect(turns).toHaveLength(2);
+    expect(turns).toHaveLength(3);
     expect(turns.every((call) => call.path.includes("thread-stable-1"))).toBe(true);
     expect(threadCreates[0]?.idempotencyKey).toMatch(/^heniek-thread-/);
-    expect(turns.map((call) => call.idempotencyKey)).toEqual([
-      expect.stringMatching(/^heniek-turn-/),
-      expect.stringMatching(/^heniek-turn-/),
-    ]);
+    expect(turns[0]?.idempotencyKey).toMatch(/^heniek-turn-/);
+    expect(turns[1]?.idempotencyKey).toMatch(/^heniek-turn-/);
+    expect(turns[2]?.idempotencyKey).toBe(turns[1]?.idempotencyKey);
+    expect(turns[1]?.idempotencyKey).not.toBe(turns[0]?.idempotencyKey);
     expect(calls.find((call) => call.path.endsWith("/answer"))?.body).toEqual({
       answers: [
         { questionId: "question-1", selectedLabels: ["Markdown"], freeText: null },
@@ -274,7 +291,16 @@ describe("Claudexor ExecutionBackendV2", () => {
           protocolMajor: 3,
           operations: REQUIRED_OPERATIONS.map((operation) => {
             const space = operation.indexOf(" ");
-            return { method: operation.slice(0, space), path: operation.slice(space + 1) };
+            const method = operation.slice(0, space);
+            const path = operation.slice(space + 1);
+            return {
+              method,
+              path,
+              idempotency:
+                REQUIRED_OPERATION_IDEMPOTENCY[
+                  `${method} ${path}` as keyof typeof REQUIRED_OPERATION_IDEMPOTENCY
+                ],
+            };
           }),
         });
       }

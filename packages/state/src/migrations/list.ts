@@ -435,6 +435,226 @@ const MIGRATION_0008_CAPABILITY_CACHE: Migration = {
 Object.freeze(MIGRATION_0008_CAPABILITY_CACHE.statements);
 Object.freeze(MIGRATION_0008_CAPABILITY_CACHE);
 
+const MIGRATION_0009_DURABLE_INTERACTIONS: Migration = {
+  version: 9,
+  name: "durable-interactions",
+  statements: [
+    `CREATE TABLE interaction_record (
+      run_id                 TEXT NOT NULL REFERENCES stage_execution(run_id),
+      interaction_id         TEXT NOT NULL,
+      stage_id               TEXT NOT NULL,
+      purpose                TEXT NOT NULL,
+      source_payload_json    TEXT NOT NULL CHECK (json_valid(source_payload_json)),
+      canonical_payload_json TEXT CHECK (canonical_payload_json IS NULL OR json_valid(canonical_payload_json)),
+      legacy_state           TEXT,
+      requested_at           TEXT NOT NULL,
+      timeout_at             TEXT,
+      created_event_id       TEXT REFERENCES state_event(event_id),
+      PRIMARY KEY (run_id, interaction_id),
+      CHECK (purpose IN ('question','approval'))
+    ) STRICT`,
+    `CREATE TRIGGER interaction_record_immutable_update BEFORE UPDATE ON interaction_record
+      BEGIN SELECT RAISE(ABORT, 'interaction records are immutable'); END`,
+    `CREATE TRIGGER interaction_record_immutable_delete BEFORE DELETE ON interaction_record
+      BEGIN SELECT RAISE(ABORT, 'interaction records are immutable'); END`,
+    `CREATE TABLE interaction_answer_record (
+      answer_id                TEXT NOT NULL PRIMARY KEY,
+      run_id                   TEXT NOT NULL,
+      interaction_id           TEXT NOT NULL,
+      operation_id             TEXT NOT NULL UNIQUE,
+      source_answer_json       TEXT NOT NULL CHECK (json_valid(source_answer_json)),
+      canonical_answer_json    TEXT CHECK (canonical_answer_json IS NULL OR json_valid(canonical_answer_json)),
+      answered_by_key_id       TEXT NOT NULL,
+      answered_at              TEXT NOT NULL,
+      accepted_event_id        TEXT REFERENCES state_event(event_id),
+      UNIQUE (run_id, interaction_id),
+      FOREIGN KEY (run_id, interaction_id)
+        REFERENCES interaction_record(run_id, interaction_id)
+    ) STRICT`,
+    `CREATE TRIGGER interaction_answer_immutable_update BEFORE UPDATE ON interaction_answer_record
+      BEGIN SELECT RAISE(ABORT, 'interaction answers are immutable'); END`,
+    `CREATE TRIGGER interaction_answer_immutable_delete BEFORE DELETE ON interaction_answer_record
+      BEGIN SELECT RAISE(ABORT, 'interaction answers are immutable'); END`,
+    `CREATE TABLE pending_interaction_projection (
+      run_id                 TEXT NOT NULL,
+      interaction_id        TEXT NOT NULL,
+      state                  TEXT NOT NULL,
+      revision               INTEGER NOT NULL,
+      delivery_state         TEXT NOT NULL,
+      cancellation_reason    TEXT,
+      resolved_at            TEXT,
+      answer_id              TEXT REFERENCES interaction_answer_record(answer_id),
+      last_event_sequence    INTEGER NOT NULL REFERENCES state_event(sequence),
+      updated_at             TEXT NOT NULL,
+      PRIMARY KEY (run_id, interaction_id),
+      FOREIGN KEY (run_id, interaction_id)
+        REFERENCES interaction_record(run_id, interaction_id),
+      CHECK (state IN ('pending','answered','cancelled')),
+      CHECK (delivery_state IN ('not_applicable','pending','delivered')),
+      CHECK (revision >= 1),
+      CHECK (cancellation_reason IS NULL OR cancellation_reason IN
+        ('withdrawn','timed_out','run_terminal','migration_unresolved'))
+    ) STRICT`,
+    `CREATE INDEX pending_interaction_inbox
+      ON pending_interaction_projection(state, updated_at, run_id, interaction_id)`,
+    `CREATE TRIGGER pending_interaction_causal_update BEFORE UPDATE ON pending_interaction_projection
+      WHEN NEW.last_event_sequence <= OLD.last_event_sequence OR NEW.revision <> OLD.revision + 1
+      BEGIN SELECT RAISE(ABORT, 'interaction projection must advance revision by 1'); END`,
+    `CREATE TABLE execution_operation_outbox (
+      operation_id           TEXT NOT NULL PRIMARY KEY,
+      run_id                 TEXT NOT NULL REFERENCES stage_execution(run_id),
+      interaction_id         TEXT,
+      kind                   TEXT NOT NULL,
+      payload_json           TEXT NOT NULL CHECK (json_valid(payload_json)),
+      state                  TEXT NOT NULL,
+      attempt_count          INTEGER NOT NULL DEFAULT 0,
+      last_error             TEXT,
+      created_at             TEXT NOT NULL,
+      delivered_at           TEXT,
+      last_event_sequence    INTEGER NOT NULL REFERENCES state_event(sequence),
+      FOREIGN KEY (run_id, interaction_id)
+        REFERENCES interaction_record(run_id, interaction_id),
+      CHECK (kind IN ('answer','resume')),
+      CHECK (state IN ('pending','delivered')),
+      CHECK (attempt_count >= 0),
+      CHECK ((kind = 'answer' AND interaction_id IS NOT NULL) OR
+             (kind = 'resume' AND interaction_id IS NULL))
+    ) STRICT`,
+    `CREATE INDEX execution_operation_pending
+      ON execution_operation_outbox(state, created_at, operation_id)`,
+    `CREATE TRIGGER migration_0009_run_revision AFTER INSERT ON state_event
+      WHEN NEW.type IN ('interaction.created','interaction.answer_accepted','interaction.cancelled')
+      BEGIN
+        UPDATE run_projection
+          SET revision = revision + 1,
+              last_event_sequence = NEW.sequence,
+              updated_at = NEW.recorded_at
+          WHERE run_id = NEW.run_id;
+      END`,
+    `INSERT INTO state_event
+      (event_id, run_id, correlation_id, causation_event_id, type, recorded_at, payload)
+      SELECT
+        'm9c:' || length(run_id) || ':' || run_id || ':' || interaction_id,
+        run_id,
+        'm9:' || length(run_id) || ':' || run_id || ':' || interaction_id,
+        NULL,
+        'interaction.created',
+        COALESCE(json_extract(payload_json, '$.requestedAt'), updated_at),
+        json_object(
+          'interactionId', interaction_id,
+          'stageId', (SELECT stage_id FROM stage_execution WHERE run_id = execution_interaction.run_id),
+          'purpose', 'question',
+          'sourcePayload', json(payload_json),
+          'legacyState', state,
+          'migrationVersion', 9
+        )
+      FROM execution_interaction`,
+    `INSERT INTO state_event
+      (event_id, run_id, correlation_id, causation_event_id, type, recorded_at, payload)
+      SELECT
+        'm9a:' || length(run_id) || ':' || run_id || ':' || interaction_id,
+        run_id,
+        'm9:' || length(run_id) || ':' || run_id || ':' || interaction_id,
+        'm9c:' || length(run_id) || ':' || run_id || ':' || interaction_id,
+        'interaction.answer_accepted',
+        updated_at,
+        json_object(
+          'interactionId', interaction_id,
+          'sourceAnswer', json(answer_json),
+          'answeredByKeyId', 'legacy-migration',
+          'migrationVersion', 9
+        )
+      FROM execution_interaction
+      WHERE answer_json IS NOT NULL`,
+    `INSERT INTO state_event
+      (event_id, run_id, correlation_id, causation_event_id, type, recorded_at, payload)
+      SELECT
+        'm9x:' || length(run_id) || ':' || run_id || ':' || interaction_id,
+        run_id,
+        'm9:' || length(run_id) || ':' || run_id || ':' || interaction_id,
+        'm9c:' || length(run_id) || ':' || run_id || ':' || interaction_id,
+        'interaction.cancelled',
+        updated_at,
+        json_object(
+          'interactionId', interaction_id,
+          'reason', 'migration_unresolved',
+          'legacyState', state,
+          'migrationVersion', 9
+        )
+      FROM execution_interaction
+      WHERE answer_json IS NULL AND state <> 'pending'`,
+    "DROP TRIGGER migration_0009_run_revision",
+    `INSERT INTO interaction_record
+      (run_id, interaction_id, stage_id, purpose, source_payload_json,
+       canonical_payload_json, legacy_state, requested_at, timeout_at, created_event_id)
+      SELECT
+        run_id,
+        interaction_id,
+        (SELECT stage_id FROM stage_execution WHERE run_id = execution_interaction.run_id),
+        'question',
+        payload_json,
+        NULL,
+        state,
+        COALESCE(json_extract(payload_json, '$.requestedAt'), updated_at),
+        json_extract(payload_json, '$.timeoutAt'),
+        'm9c:' || length(run_id) || ':' || run_id || ':' || interaction_id
+      FROM execution_interaction`,
+    `INSERT INTO interaction_answer_record
+      (answer_id, run_id, interaction_id, operation_id, source_answer_json,
+       canonical_answer_json, answered_by_key_id, answered_at, accepted_event_id)
+      SELECT
+        'legacy-answer:' || length(run_id) || ':' || run_id || ':' || interaction_id,
+        run_id,
+        interaction_id,
+        'legacy-operation:' || length(run_id) || ':' || run_id || ':' || interaction_id,
+        answer_json,
+        NULL,
+        'legacy-migration',
+        updated_at,
+        'm9a:' || length(run_id) || ':' || run_id || ':' || interaction_id
+      FROM execution_interaction
+      WHERE answer_json IS NOT NULL`,
+    `INSERT INTO pending_interaction_projection
+      (run_id, interaction_id, state, revision, delivery_state, cancellation_reason,
+       resolved_at, answer_id, last_event_sequence, updated_at)
+      SELECT
+        run_id,
+        interaction_id,
+        CASE
+          WHEN answer_json IS NOT NULL THEN 'answered'
+          WHEN state = 'pending' THEN 'pending'
+          ELSE 'cancelled'
+        END,
+        CASE WHEN state = 'pending' AND answer_json IS NULL THEN 1 ELSE 2 END,
+        CASE WHEN answer_json IS NOT NULL THEN 'delivered' ELSE 'not_applicable' END,
+        CASE WHEN answer_json IS NULL AND state <> 'pending' THEN 'migration_unresolved' ELSE NULL END,
+        CASE WHEN state = 'pending' AND answer_json IS NULL THEN NULL ELSE updated_at END,
+        CASE WHEN answer_json IS NOT NULL
+          THEN 'legacy-answer:' || length(run_id) || ':' || run_id || ':' || interaction_id
+          ELSE NULL END,
+        (SELECT sequence FROM state_event WHERE event_id =
+          CASE
+            WHEN answer_json IS NOT NULL
+              THEN 'm9a:' || length(run_id) || ':' || run_id || ':' || interaction_id
+            WHEN state <> 'pending'
+              THEN 'm9x:' || length(run_id) || ':' || run_id || ':' || interaction_id
+            ELSE 'm9c:' || length(run_id) || ':' || run_id || ':' || interaction_id
+          END),
+        CASE
+          WHEN state = 'pending' AND answer_json IS NULL
+            THEN COALESCE(json_extract(payload_json, '$.requestedAt'), updated_at)
+          ELSE updated_at
+        END
+      FROM execution_interaction`,
+    "DROP TABLE execution_interaction",
+    `CREATE TRIGGER pending_interaction_first_revision BEFORE INSERT ON pending_interaction_projection
+      WHEN NEW.revision <> 1
+      BEGIN SELECT RAISE(ABORT, 'first interaction projection revision must be 1'); END`,
+  ],
+};
+Object.freeze(MIGRATION_0009_DURABLE_INTERACTIONS.statements);
+Object.freeze(MIGRATION_0009_DURABLE_INTERACTIONS);
+
 export const MIGRATIONS: readonly Migration[] = Object.freeze([
   MIGRATION_0001_JOURNAL,
   MIGRATION_0002_RUN_PROJECTION,
@@ -444,5 +664,6 @@ export const MIGRATIONS: readonly Migration[] = Object.freeze([
   MIGRATION_0006_WORKSPACE_LIFECYCLE,
   MIGRATION_0007_STAGE_EXECUTION,
   MIGRATION_0008_CAPABILITY_CACHE,
+  MIGRATION_0009_DURABLE_INTERACTIONS,
 ]);
 assertAppendOnly(MIGRATIONS);

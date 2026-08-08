@@ -69,6 +69,27 @@ export {
   type StageExecutionRow,
   updateStageExecutionStatus,
 } from "./execution/store.js";
+export {
+  compareInteractionProjectionToJournal,
+  type ReplayedInteractionProjection,
+  replayInteractionEvents,
+} from "./interaction/replay.js";
+export {
+  type AcceptedInteractionAnswer,
+  acceptInteractionAnswer,
+  type InteractionInboxItem,
+  legacyAnswerSubmission,
+  listInteractionInbox,
+  markExecutionOperationDelivered,
+  type PendingExecutionOperation,
+  type RequestedRunResume,
+  readLegacyPendingInteractions,
+  readPendingExecutionOperations,
+  readRunInteractions,
+  recordExecutionOperationFailure,
+  requestRunResume,
+  synchronizePendingInteractions,
+} from "./interaction/store.js";
 export type {
   AppendEventInput,
   CausationEventId,

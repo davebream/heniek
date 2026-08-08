@@ -18,10 +18,15 @@ export const STAGE_START_METHOD = "stage.start";
 export const STAGE_START_V1_METHOD = "stage.start.v1";
 export const RUN_STATUS_METHOD = "run.status";
 export const RUN_STATUS_V1_METHOD = "run.status.v1";
+export const RUN_STATUS_V2_METHOD = "run.status.v2";
 export const RUN_ANSWER_METHOD = "run.answer";
 export const RUN_ANSWER_V1_METHOD = "run.answer.v1";
+export const RUN_ANSWER_V2_METHOD = "run.answer.v2";
 export const RUN_RESUME_METHOD = "run.resume";
 export const RUN_RESUME_V1_METHOD = "run.resume.v1";
+export const RUN_RESUME_V2_METHOD = "run.resume.v2";
+export const INBOX_LIST_METHOD = "inbox.list";
+export const INBOX_LIST_V1_METHOD = "inbox.list.v1";
 export const RUN_CANCEL_METHOD = "run.cancel";
 export const RUN_CANCEL_V1_METHOD = "run.cancel.v1";
 export const RUN_RESULT_METHOD = "run.result";
@@ -62,7 +67,7 @@ export interface DaemonCredential {
 
 export interface NegotiatedMethodV1 {
   readonly name: string;
-  readonly methodVersion: 1;
+  readonly methodVersion: number;
   readonly wireMethod: string;
   readonly resultSchemaId: string;
   readonly resultSchemaSha256: string;
@@ -86,9 +91,21 @@ export const STAGE_START_SCHEMA_SHA256 =
 export const RUN_STATUS_SCHEMA_ID = "heniek://contract/StageRunStatusResult/v1";
 export const RUN_STATUS_SCHEMA_SHA256 =
   "69c0bd03d97d24dab4ee7b8b552b224ec23ddc5536db25e08bdd70b82a88fc79";
+export const RUN_STATUS_V2_SCHEMA_ID = "heniek://contract/StageRunStatusResult/v2";
+export const RUN_STATUS_V2_SCHEMA_SHA256 =
+  "f9d6117ced1e9ecf64569e2a15285e13999d0d67cd28e83f6b909a7df0c15601";
 export const RUN_MUTATION_SCHEMA_ID = "heniek://contract/StageRunMutationResult/v1";
 export const RUN_MUTATION_SCHEMA_SHA256 =
   "7491e0d1842751707d3658b7c71c058f1d2a6b1194d8c6752511b8293f1c9e3b";
+export const RUN_ANSWER_V2_SCHEMA_ID = "heniek://contract/StageRunAnswerResult/v2";
+export const RUN_ANSWER_V2_SCHEMA_SHA256 =
+  "f2a8f8fc1020ec5371e769db12fe0aeaca865caa669077d7c35167a29efc265c";
+export const RUN_RESUME_V2_SCHEMA_ID = "heniek://contract/StageRunResumeResult/v2";
+export const RUN_RESUME_V2_SCHEMA_SHA256 =
+  "39164d439fdce631fadae6a7baa7ca926d6c3fc76b76c25f8f9411e6da65b4c7";
+export const INBOX_LIST_SCHEMA_ID = "heniek://contract/InteractionInboxResult/v1";
+export const INBOX_LIST_SCHEMA_SHA256 =
+  "5df66ed00d0e1f61793299773df14d61885013e5d234bcb533f69d16bac04428";
 export const RUN_RESULT_SCHEMA_ID = "heniek://contract/StageRunResult/v1";
 export const RUN_RESULT_SCHEMA_SHA256 =
   "8f0faffeabe166f355b7033e9a45b6cf2bae829d1ab64ab10f086fce501fc8fa";

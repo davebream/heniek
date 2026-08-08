@@ -87,8 +87,8 @@ const manifestPath = resolve(packageRoot, "../contracts/generated/manifest.json"
  * Q017 raises the count 61 → 63 by adding structured execution events and
  * normalized result usage/diff fields. Existing contracts remain byte-identical.
  *
- * Q019 raises the count 63 → 66 by pure addition: `ExecutionTelemetry/v1`,
- * `ExecutionEvent/v3`, and `ExecutionResult/v4`. All 63 prior hashes remain
+ * Q020 raises the count 66 → 76 by pure addition for durable interaction,
+ * answer, resume, inbox, and v2 daemon result contracts. All 66 prior hashes remain
  * byte-identical; the new event and result reference the standalone telemetry
  * schema instead of duplicating its definition.
  */
@@ -303,6 +303,12 @@ const EXPECTED_SCHEMAS: readonly {
     path: "generated/ExecutionResult.v4.schema.json",
   },
   {
+    schemaId: "heniek://contract/ExecutionResumeRequest/v1",
+    schemaVersion: 1,
+    sha256: "32973343072198df77494c995a00632ed655c80cfa44b557c4df3c49783538ab",
+    path: "generated/ExecutionResumeRequest.v1.schema.json",
+  },
+  {
     schemaId: "heniek://contract/ExecutionTelemetry/v1",
     schemaVersion: 1,
     sha256: "ebf92b2b848a42cedb66191b4fe8b00a9aaea6d32182e1409f5f0b8123f0a306",
@@ -333,16 +339,40 @@ const EXPECTED_SCHEMAS: readonly {
     path: "generated/Interaction.v1.schema.json",
   },
   {
+    schemaId: "heniek://contract/Interaction/v2",
+    schemaVersion: 2,
+    sha256: "b3747e6f817f5ba8c30714ec96154a928a2c89e495996d9ed061663137406c50",
+    path: "generated/Interaction.v2.schema.json",
+  },
+  {
     schemaId: "heniek://contract/InteractionAnswer/v1",
     schemaVersion: 1,
     sha256: "8d290caa830edd351698906634f6748080e6c682b776b0ba6cbda39e0bbc5a3d",
     path: "generated/InteractionAnswer.v1.schema.json",
   },
   {
+    schemaId: "heniek://contract/InteractionAnswer/v2",
+    schemaVersion: 2,
+    sha256: "f6237959267166f29fcc2a2b86bd22bd80254792541aeed0942b462462d3d7c4",
+    path: "generated/InteractionAnswer.v2.schema.json",
+  },
+  {
     schemaId: "heniek://contract/InteractionAnswerSet/v1",
     schemaVersion: 1,
     sha256: "4507e20f81c05c301a8a383dc48f87c56816408c9b8f901285c927cc1e21064b",
     path: "generated/InteractionAnswerSet.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/InteractionAnswerSubmission/v2",
+    schemaVersion: 2,
+    sha256: "f0ef40120c5e2f3ee400cf55e7f98cd7862345a7c9372316bc7ce80f5a0e4291",
+    path: "generated/InteractionAnswerSubmission.v2.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/InteractionInboxResult/v1",
+    schemaVersion: 1,
+    sha256: "5df66ed00d0e1f61793299773df14d61885013e5d234bcb533f69d16bac04428",
+    path: "generated/InteractionInboxResult.v1.schema.json",
   },
   {
     schemaId: "heniek://contract/PendingInteraction/v1",
@@ -411,10 +441,22 @@ const EXPECTED_SCHEMAS: readonly {
     path: "generated/Run.v2.schema.json",
   },
   {
+    schemaId: "heniek://contract/RunAnswerRequest/v2",
+    schemaVersion: 2,
+    sha256: "e84ca2f90d9b689e8faaaf044906d6ffd791742b2043ab90ef04cba88606a3ee",
+    path: "generated/RunAnswerRequest.v2.schema.json",
+  },
+  {
     schemaId: "heniek://contract/RunRecoveryClassification/v1",
     schemaVersion: 1,
     sha256: "bd4fe19884b2fcf1f6377f202def77a6cf7fce170349ee186bfdc7bf504b077c",
     path: "generated/RunRecoveryClassification.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/RunResumeRequest/v2",
+    schemaVersion: 2,
+    sha256: "02fb218210633df96e45324c297ed3228ac605768a52bcc1e452d4f71d549c66",
+    path: "generated/RunResumeRequest.v2.schema.json",
   },
   {
     schemaId: "heniek://contract/RuntimeCompatibilityReport/v1",
@@ -441,6 +483,12 @@ const EXPECTED_SCHEMAS: readonly {
     path: "generated/RuntimeMutationResult.v1.schema.json",
   },
   {
+    schemaId: "heniek://contract/StageRunAnswerResult/v2",
+    schemaVersion: 2,
+    sha256: "f2a8f8fc1020ec5371e769db12fe0aeaca865caa669077d7c35167a29efc265c",
+    path: "generated/StageRunAnswerResult.v2.schema.json",
+  },
+  {
     schemaId: "heniek://contract/StageRunMutationResult/v1",
     schemaVersion: 1,
     sha256: "7491e0d1842751707d3658b7c71c058f1d2a6b1194d8c6752511b8293f1c9e3b",
@@ -453,10 +501,22 @@ const EXPECTED_SCHEMAS: readonly {
     path: "generated/StageRunResult.v1.schema.json",
   },
   {
+    schemaId: "heniek://contract/StageRunResumeResult/v2",
+    schemaVersion: 2,
+    sha256: "39164d439fdce631fadae6a7baa7ca926d6c3fc76b76c25f8f9411e6da65b4c7",
+    path: "generated/StageRunResumeResult.v2.schema.json",
+  },
+  {
     schemaId: "heniek://contract/StageRunStatusResult/v1",
     schemaVersion: 1,
     sha256: "69c0bd03d97d24dab4ee7b8b552b224ec23ddc5536db25e08bdd70b82a88fc79",
     path: "generated/StageRunStatusResult.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/StageRunStatusResult/v2",
+    schemaVersion: 2,
+    sha256: "f9d6117ced1e9ecf64569e2a15285e13999d0d67cd28e83f6b909a7df0c15601",
+    path: "generated/StageRunStatusResult.v2.schema.json",
   },
   {
     schemaId: "heniek://contract/StageStartResult/v1",

@@ -1,11 +1,11 @@
 import type {
-  ArtifactId,
   BackendArtifactV1,
   BackendExecutionHandleV1,
-  ExecutionBackendV5,
+  ExecutionBackendV6,
   ExecutionEventV3,
   ExecutionRequestV3,
   ExecutionResultV4,
+  ExecutionResumeRequestV1,
   ExecutionStatus,
   InteractionAnswerSetV1,
   PendingInteractionV2,
@@ -23,7 +23,7 @@ import {
  * native-Claude configuration: the resolved profile is its complete routing
  * authority and the underlying control client rejects anything else.
  */
-interface ProfileExecutionAdapter extends ExecutionBackendV5 {
+interface ProfileExecutionAdapter extends ExecutionBackendV6 {
   diagnoseCompatibility(): ReturnType<ClaudexorExecutionBackend["diagnoseCompatibility"]>;
   diagnoseRuntime(): ReturnType<ClaudexorExecutionBackend["diagnoseRuntime"]>;
   diagnoseAuthRoute(): ReturnType<ClaudexorExecutionBackend["diagnoseAuthRoute"]>;
@@ -56,8 +56,8 @@ function createProfileExecutionAdapter(
       backend.interactions(executionId),
     answer: (executionId: string, answer: Static<typeof InteractionAnswerSetV1>): Promise<void> =>
       backend.answer(executionId, answer),
-    resume: (executionId: string, inputArtifactRefs: ArtifactId[]): Promise<void> =>
-      backend.resumeProfile(executionId, inputArtifactRefs),
+    resume: (request: Static<typeof ExecutionResumeRequestV1>): Promise<void> =>
+      backend.resumeProfile(request),
     result: (executionId: string): Promise<Static<typeof ExecutionResultV4>> =>
       backend.resultProfile(executionId),
     cancel: (executionId: string): Promise<void> => backend.cancel(executionId),

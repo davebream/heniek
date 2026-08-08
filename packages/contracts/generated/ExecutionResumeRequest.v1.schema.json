@@ -1,0 +1,34 @@
+{
+  "$id": "heniek://contract/ExecutionResumeRequest/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "executionId",
+    "operationId",
+    "inputArtifactRefs"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "executionId": {
+      "minLength": 1,
+      "description": "Opaque BackendExecutionId.",
+      "type": "string"
+    },
+    "operationId": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "inputArtifactRefs": {
+      "type": "array",
+      "items": {
+        "minLength": 1,
+        "description": "Opaque ArtifactId.",
+        "type": "string"
+      }
+    }
+  }
+}

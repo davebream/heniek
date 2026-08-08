@@ -3,7 +3,9 @@ import type {
   ArtifactId,
   DoctorReportV1,
   ExecutionBackendV2,
+  ExecutionResumeRequestV1,
   InteractionAnswerSetV1,
+  InteractionAnswerSubmissionV2,
   RunId,
   StageId,
   WorkspaceConfiguration,
@@ -12,6 +14,8 @@ import type {
 import { ExternalStageResultV1 } from "@heniek/contracts";
 import type { IdGenerator } from "@heniek/state";
 import {
+  type AcceptedInteractionAnswer,
+  acceptInteractionAnswer,
   assignBackendExecution,
   commitStateChange,
   completePendingArtifactImports,
@@ -22,26 +26,35 @@ import {
   findRegisteredExecutionContext,
   markArtifactImport,
   markExecutionFinalized,
+  markExecutionOperationDelivered,
   publishArtifact,
+  type RequestedRunResume,
   readActiveStageExecutions,
   readArtifactRecord,
   readIdentity,
-  readPendingInteractions,
+  readPendingExecutionOperations,
+  readRunInteractions,
+  readRunProjection,
   readStageArtifacts,
   readStageExecution,
-  recordInteractionAnswer,
-  replacePendingInteractions,
+  recordExecutionOperationFailure,
+  requestRunResume,
   type StageExecutionRow,
   type StateDatabase,
+  synchronizePendingInteractions,
   updateStageExecutionStatus,
 } from "@heniek/state";
 import type { WorkspaceService } from "@heniek/workspace";
 import type { Static } from "@sinclair/typebox";
 import { Value } from "@sinclair/typebox/value";
 
+export type DurableExecutionBackend = Omit<ExecutionBackendV2, "resume"> & {
+  resume(request: Static<typeof ExecutionResumeRequestV1>): Promise<void>;
+};
+
 export interface ExecutionServiceOptions {
   readonly db: StateDatabase;
-  readonly backend: ExecutionBackendV2;
+  readonly backend: DurableExecutionBackend;
   readonly workspaceService: WorkspaceService;
   readonly artifactsDirectory: string;
   readonly instanceId: string;
@@ -49,6 +62,8 @@ export interface ExecutionServiceOptions {
   readonly pollMilliseconds?: number;
   readonly faultInjection?: {
     readonly afterAtomicCompletion?: () => void;
+    readonly afterOperationCommitted?: () => void;
+    readonly afterBackendAcknowledged?: () => void;
   };
 }
 
@@ -66,12 +81,31 @@ export interface StartStageInput {
 export interface ExecutionService {
   start(input: StartStageInput): Promise<{ readonly runId: string; readonly stageId: string }>;
   status(runId: string): Promise<StageExecutionRow>;
-  answer(runId: string, answer: Static<typeof InteractionAnswerSetV1>): Promise<void>;
-  resume(runId: string, inputArtifactRefs: ArtifactId[]): Promise<void>;
+  answer(
+    runId: string,
+    answer: Static<typeof InteractionAnswerSubmissionV2>,
+    answeredByKeyId: string,
+  ): Promise<
+    AcceptedInteractionAnswer & {
+      readonly deliveryState: "pending" | "delivered";
+      readonly interactionRevision: number;
+    }
+  >;
+  resume(
+    runId: string,
+    expectedRunRevision: number,
+    inputArtifactRefs: ArtifactId[],
+  ): Promise<
+    Omit<RequestedRunResume, "status"> & {
+      readonly deliveryState: "pending" | "delivered";
+      readonly status: "recovery_required" | "running";
+    }
+  >;
   cancel(runId: string): Promise<void>;
   result(runId: string): Promise<StageExecutionRow>;
   doctor(): Promise<Static<typeof DoctorReportV1>>;
   observeAll(): Promise<void>;
+  drainPendingOperations(): Promise<void>;
   stop(): void;
 }
 
@@ -105,6 +139,51 @@ export function createExecutionService(options: ExecutionServiceOptions): Execut
   let stopped = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
   const observing = new Set<string>();
+  const delivering = new Set<string>();
+
+  async function deliverOperation(
+    operation: ReturnType<typeof readPendingExecutionOperations>[number],
+  ): Promise<number | null> {
+    if (delivering.has(operation.operationId)) return null;
+    delivering.add(operation.operationId);
+    try {
+      if (operation.kind === "answer") {
+        await options.backend.answer(
+          operation.backendExecutionId,
+          operation.payload as Static<typeof InteractionAnswerSetV1>,
+        );
+      } else {
+        const payload = operation.payload as { readonly inputArtifactRefs: readonly string[] };
+        await options.backend.resume({
+          schemaVersion: 1,
+          executionId: operation.backendExecutionId as never,
+          operationId: operation.operationId,
+          inputArtifactRefs: payload.inputArtifactRefs as ArtifactId[],
+        });
+      }
+      options.faultInjection?.afterBackendAcknowledged?.();
+      const revision = markExecutionOperationDelivered(options.db, operation.operationId);
+      if (operation.kind === "resume") {
+        updateStageExecutionStatus(options.db, operation.runId, "running");
+        return executionOrThrow(options.db, operation.runId).status === "running"
+          ? (readRunProjection(options.db, operation.runId)?.revision ?? revision)
+          : revision;
+      }
+      return revision;
+    } catch (error) {
+      if (error instanceof ExecutionServiceCrashFault) throw error;
+      recordExecutionOperationFailure(options.db, operation.operationId, "backend delivery failed");
+      return null;
+    } finally {
+      delivering.delete(operation.operationId);
+    }
+  }
+
+  async function drainPendingOperations(): Promise<void> {
+    for (const operation of readPendingExecutionOperations(options.db)) {
+      await deliverOperation(operation);
+    }
+  }
 
   function workspaceConfiguration(remote: string, branch: string): WorkspaceConfiguration {
     return {
@@ -237,7 +316,7 @@ export function createExecutionService(options: ExecutionServiceOptions): Execut
       if (executionId === null) return;
       const status = await options.backend.status(executionId);
       const interactions = await options.backend.interactions(executionId);
-      replacePendingInteractions(options.db, runId, interactions);
+      synchronizePendingInteractions(options.db, runId, interactions, "question", status);
       if (status === "succeeded") {
         try {
           await finalizeSuccess(row);
@@ -273,6 +352,7 @@ export function createExecutionService(options: ExecutionServiceOptions): Execut
   }
 
   async function observeAll(): Promise<void> {
+    await drainPendingOperations();
     for (const row of readActiveStageExecutions(options.db)) {
       try {
         await observe(row.runId);
@@ -374,26 +454,43 @@ export function createExecutionService(options: ExecutionServiceOptions): Execut
       return executionOrThrow(options.db, runId);
     },
 
-    async answer(runId, answer) {
-      const row = executionOrThrow(options.db, runId);
-      if (row.backendExecutionId === null) throw new Error("backend handle is unavailable");
-      const pending = readPendingInteractions(options.db, runId);
-      if (!pending.some((entry) => entry.id === answer.interactionId)) {
-        throw new Error(`pending interaction does not exist: ${answer.interactionId}`);
-      }
-      await options.backend.answer(row.backendExecutionId, answer);
-      recordInteractionAnswer(options.db, runId, answer);
-      await observe(runId);
+    async answer(runId, answer, answeredByKeyId) {
+      const accepted = acceptInteractionAnswer(options.db, runId, answer, answeredByKeyId);
+      options.faultInjection?.afterOperationCommitted?.();
+      const operation = readPendingExecutionOperations(options.db).find(
+        (candidate) => candidate.operationId === accepted.operationId,
+      );
+      const deliveredRevision = operation === undefined ? null : await deliverOperation(operation);
+      if (deliveredRevision !== null) await observe(runId);
+      const interaction = readRunInteractions(options.db, runId).find(
+        (candidate) => candidate.interactionId === answer.interactionId,
+      );
+      const current = executionOrThrow(options.db, runId);
+      return {
+        ...accepted,
+        status: current.status,
+        runRevision:
+          readRunProjection(options.db, runId)?.revision ??
+          deliveredRevision ??
+          accepted.runRevision,
+        interactionRevision: interaction?.revision ?? accepted.interactionRevision,
+        deliveryState: deliveredRevision === null ? "pending" : "delivered",
+      };
     },
 
-    async resume(runId, inputArtifactRefs) {
-      const row = executionOrThrow(options.db, runId);
-      if (row.backendExecutionId === null) throw new Error("backend handle is unavailable");
-      if (row.status === "succeeded" || row.status === "failed" || row.status === "cancelled") {
-        throw new Error("terminal runs cannot be resumed");
-      }
-      await options.backend.resume(row.backendExecutionId, inputArtifactRefs);
-      updateStageExecutionStatus(options.db, runId, "running");
+    async resume(runId, expectedRunRevision, inputArtifactRefs) {
+      const requested = requestRunResume(options.db, runId, expectedRunRevision, inputArtifactRefs);
+      options.faultInjection?.afterOperationCommitted?.();
+      const operation = readPendingExecutionOperations(options.db).find(
+        (candidate) => candidate.operationId === requested.operationId,
+      );
+      const deliveredRevision = operation === undefined ? null : await deliverOperation(operation);
+      return {
+        ...requested,
+        runRevision: deliveredRevision ?? requested.runRevision,
+        deliveryState: deliveredRevision === null ? "pending" : "delivered",
+        status: deliveredRevision === null ? "recovery_required" : "running",
+      };
     },
 
     async cancel(runId) {
@@ -408,7 +505,7 @@ export function createExecutionService(options: ExecutionServiceOptions): Execut
     },
 
     async doctor() {
-      const diagnosticBackend = options.backend as ExecutionBackendV2 & {
+      const diagnosticBackend = options.backend as DurableExecutionBackend & {
         diagnoseRuntime?: () => Promise<Static<typeof DoctorReportV1>["checks"][number]>;
         diagnoseAuthRoute?: () => Promise<Static<typeof DoctorReportV1>["checks"][number]>;
         diagnoseCompatibility?: () => Promise<
@@ -480,6 +577,7 @@ export function createExecutionService(options: ExecutionServiceOptions): Execut
     },
 
     observeAll,
+    drainPendingOperations,
 
     stop() {
       stopped = true;

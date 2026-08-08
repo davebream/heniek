@@ -1,0 +1,34 @@
+{
+  "$id": "heniek://contract/RunResumeRequest/v2",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "runId",
+    "expectedRunRevision",
+    "inputArtifactRefs"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 2,
+      "type": "number"
+    },
+    "runId": {
+      "minLength": 1,
+      "description": "Opaque RunId.",
+      "type": "string"
+    },
+    "expectedRunRevision": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "inputArtifactRefs": {
+      "type": "array",
+      "items": {
+        "minLength": 1,
+        "description": "Opaque ArtifactId.",
+        "type": "string"
+      }
+    }
+  }
+}
