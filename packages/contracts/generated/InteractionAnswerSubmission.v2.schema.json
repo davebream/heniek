@@ -1,0 +1,117 @@
+{
+  "$id": "heniek://contract/InteractionAnswerSubmission/v2",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "interactionId",
+    "expectedInteractionRevision",
+    "answers"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 2,
+      "type": "number"
+    },
+    "interactionId": {
+      "minLength": 1,
+      "description": "Opaque InteractionId.",
+      "type": "string"
+    },
+    "expectedInteractionRevision": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "answers": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "anyOf": [
+          {
+            "additionalProperties": false,
+            "type": "object",
+            "required": [
+              "questionId",
+              "kind",
+              "freeText"
+            ],
+            "properties": {
+              "questionId": {
+                "minLength": 1,
+                "description": "Opaque InteractionQuestionId.",
+                "type": "string"
+              },
+              "kind": {
+                "const": "free_text",
+                "type": "string"
+              },
+              "freeText": {
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          },
+          {
+            "additionalProperties": false,
+            "type": "object",
+            "required": [
+              "questionId",
+              "kind",
+              "selectedLabels"
+            ],
+            "properties": {
+              "questionId": {
+                "minLength": 1,
+                "description": "Opaque InteractionQuestionId.",
+                "type": "string"
+              },
+              "kind": {
+                "const": "single_choice",
+                "type": "string"
+              },
+              "selectedLabels": {
+                "minItems": 1,
+                "maxItems": 1,
+                "uniqueItems": true,
+                "type": "array",
+                "items": {
+                  "minLength": 1,
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "additionalProperties": false,
+            "type": "object",
+            "required": [
+              "questionId",
+              "kind",
+              "selectedLabels"
+            ],
+            "properties": {
+              "questionId": {
+                "minLength": 1,
+                "description": "Opaque InteractionQuestionId.",
+                "type": "string"
+              },
+              "kind": {
+                "const": "multiple_choice",
+                "type": "string"
+              },
+              "selectedLabels": {
+                "minItems": 1,
+                "uniqueItems": true,
+                "type": "array",
+                "items": {
+                  "minLength": 1,
+                  "type": "string"
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

@@ -14,6 +14,7 @@ import type {
   ExecutionResultV2,
   ExecutionResultV3,
   ExecutionResultV4,
+  ExecutionResumeRequestV1,
   InteractionAnswerSetV1,
   PendingInteractionV1,
   PendingInteractionV2,
@@ -108,6 +109,22 @@ export interface ExecutionBackendV5 {
   interactions(executionId: string): Promise<Static<typeof PendingInteractionV2>[]>;
   answer(executionId: string, answer: Static<typeof InteractionAnswerSetV1>): Promise<void>;
   resume(executionId: string, inputArtifactRefs: ArtifactId[]): Promise<void>;
+  result(executionId: string): Promise<Static<typeof ExecutionResultV4>>;
+  cancel(executionId: string): Promise<void>;
+  artifacts(executionId: string): Promise<Static<typeof BackendArtifactV1>[]>;
+  readArtifact(executionId: string, artifactId: string): Promise<Uint8Array>;
+  events(executionId: string, after?: string): AsyncIterable<Static<typeof ExecutionEventV3>>;
+}
+
+/** Q020's recovery-safe backend boundary. V1-V5 remain frozen. */
+export interface ExecutionBackendV6 {
+  start(
+    request: Static<typeof ExecutionRequestV3>,
+  ): Promise<Static<typeof BackendExecutionHandleV1>>;
+  status(executionId: string): Promise<ExecutionStatus>;
+  interactions(executionId: string): Promise<Static<typeof PendingInteractionV2>[]>;
+  answer(executionId: string, answer: Static<typeof InteractionAnswerSetV1>): Promise<void>;
+  resume(request: Static<typeof ExecutionResumeRequestV1>): Promise<void>;
   result(executionId: string): Promise<Static<typeof ExecutionResultV4>>;
   cancel(executionId: string): Promise<void>;
   artifacts(executionId: string): Promise<Static<typeof BackendArtifactV1>[]>;

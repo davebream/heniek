@@ -76,7 +76,7 @@ import { openOwnedStateDatabase } from "./open-owned.js";
 export interface ReconcileDeps {
   readonly lock: LockHandle;
   readonly backend: ExecutionBackend;
-  readonly backendV2?: ExecutionBackendV2;
+  readonly backendV2?: Pick<ExecutionBackendV2, "status">;
 }
 
 export interface ReconcileOptions {

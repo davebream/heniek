@@ -8,10 +8,15 @@ import type {
   CodebaseDetectionResult,
   DoctorReportV1,
   InteractionAnswerSetV1,
+  InteractionAnswerSubmissionV2,
+  InteractionInboxResultV1,
   RegisteredCodebase,
+  StageRunAnswerResultV2,
   StageRunMutationResultV1,
   StageRunResultV1,
+  StageRunResumeResultV2,
   StageRunStatusResultV1,
+  StageRunStatusResultV2,
   StageStartResultV1,
 } from "@heniek/contracts";
 import {
@@ -41,6 +46,10 @@ import {
   DOCTOR_V1_METHOD,
   ENGINE_CATALOGUE_METHOD,
   ENGINE_CATALOGUE_V1_METHOD,
+  INBOX_LIST_METHOD,
+  INBOX_LIST_SCHEMA_ID,
+  INBOX_LIST_SCHEMA_SHA256,
+  INBOX_LIST_V1_METHOD,
   JSON_RPC_VERSION,
   MAX_LINE_BYTES,
   REGISTERED_CODEBASE_SCHEMA_ID,
@@ -48,6 +57,9 @@ import {
   RPC_CANCEL_METHOD,
   RUN_ANSWER_METHOD,
   RUN_ANSWER_V1_METHOD,
+  RUN_ANSWER_V2_METHOD,
+  RUN_ANSWER_V2_SCHEMA_ID,
+  RUN_ANSWER_V2_SCHEMA_SHA256,
   RUN_CANCEL_METHOD,
   RUN_CANCEL_V1_METHOD,
   RUN_MUTATION_SCHEMA_ID,
@@ -58,10 +70,16 @@ import {
   RUN_RESULT_V1_METHOD,
   RUN_RESUME_METHOD,
   RUN_RESUME_V1_METHOD,
+  RUN_RESUME_V2_METHOD,
+  RUN_RESUME_V2_SCHEMA_ID,
+  RUN_RESUME_V2_SCHEMA_SHA256,
   RUN_STATUS_METHOD,
   RUN_STATUS_SCHEMA_ID,
   RUN_STATUS_SCHEMA_SHA256,
   RUN_STATUS_V1_METHOD,
+  RUN_STATUS_V2_METHOD,
+  RUN_STATUS_V2_SCHEMA_ID,
+  RUN_STATUS_V2_SCHEMA_SHA256,
   STAGE_START_METHOD,
   STAGE_START_SCHEMA_ID,
   STAGE_START_SCHEMA_SHA256,
@@ -115,6 +133,7 @@ export type { CodebaseDetectionResult, RegisteredCodebase } from "@heniek/contra
 
 interface RpcRequirement {
   readonly name: string;
+  readonly methodVersion?: number;
   readonly wireMethod: string;
   readonly schemaId: string;
   readonly sha256: string;
@@ -252,7 +271,7 @@ function parseNegotiation(
         "wireMethod",
       ]) &&
       method.name === requirement.name &&
-      method.methodVersion === 1 &&
+      method.methodVersion === (requirement.methodVersion ?? 1) &&
       method.wireMethod === requirement.wireMethod &&
       method.resultSchemaId === requirement.schemaId &&
       method.resultSchemaSha256 === requirement.sha256,
@@ -349,6 +368,37 @@ const RUN_STATUS_REQUIREMENT: RpcRequirement = {
   wireMethod: RUN_STATUS_V1_METHOD,
   schemaId: RUN_STATUS_SCHEMA_ID,
   sha256: RUN_STATUS_SCHEMA_SHA256,
+};
+
+const RUN_STATUS_V2_REQUIREMENT: RpcRequirement = {
+  name: RUN_STATUS_METHOD,
+  methodVersion: 2,
+  wireMethod: RUN_STATUS_V2_METHOD,
+  schemaId: RUN_STATUS_V2_SCHEMA_ID,
+  sha256: RUN_STATUS_V2_SCHEMA_SHA256,
+};
+
+const INBOX_LIST_REQUIREMENT: RpcRequirement = {
+  name: INBOX_LIST_METHOD,
+  wireMethod: INBOX_LIST_V1_METHOD,
+  schemaId: INBOX_LIST_SCHEMA_ID,
+  sha256: INBOX_LIST_SCHEMA_SHA256,
+};
+
+const RUN_ANSWER_V2_REQUIREMENT: RpcRequirement = {
+  name: RUN_ANSWER_METHOD,
+  methodVersion: 2,
+  wireMethod: RUN_ANSWER_V2_METHOD,
+  schemaId: RUN_ANSWER_V2_SCHEMA_ID,
+  sha256: RUN_ANSWER_V2_SCHEMA_SHA256,
+};
+
+const RUN_RESUME_V2_REQUIREMENT: RpcRequirement = {
+  name: RUN_RESUME_METHOD,
+  methodVersion: 2,
+  wireMethod: RUN_RESUME_V2_METHOD,
+  schemaId: RUN_RESUME_V2_SCHEMA_ID,
+  sha256: RUN_RESUME_V2_SCHEMA_SHA256,
 };
 
 function mutationRequirement(name: string, wireMethod: string): RpcRequirement {
@@ -679,7 +729,7 @@ async function authenticatedOnce<T>(
           requiredMethods: [
             {
               name: requirement.name,
-              methodVersions: [1],
+              methodVersions: [requirement.methodVersion ?? 1],
               resultSchemas: [{ schemaId: requirement.schemaId, sha256: requirement.sha256 }],
             },
           ],
@@ -849,6 +899,21 @@ export function fetchRunStatusViaDaemon(
   return domainCall(home, RUN_STATUS_REQUIREMENT, { runId }, "run status", signal);
 }
 
+export function fetchRunStatusV2ViaDaemon(
+  home: ApplicationHome,
+  runId: string,
+  signal?: AbortSignal,
+): Promise<Static<typeof StageRunStatusResultV2>> {
+  return domainCall(home, RUN_STATUS_V2_REQUIREMENT, { runId }, "run status v2", signal);
+}
+
+export function listInteractionInboxViaDaemon(
+  home: ApplicationHome,
+  signal?: AbortSignal,
+): Promise<Static<typeof InteractionInboxResultV1>> {
+  return domainCall(home, INBOX_LIST_REQUIREMENT, {}, "interaction inbox", signal);
+}
+
 export function answerRunViaDaemon(
   home: ApplicationHome,
   runId: string,
@@ -862,6 +927,19 @@ export function answerRunViaDaemon(
   );
 }
 
+export function answerRunV2ViaDaemon(
+  home: ApplicationHome,
+  runId: string,
+  answer: Static<typeof InteractionAnswerSubmissionV2>,
+): Promise<Static<typeof StageRunAnswerResultV2>> {
+  return domainCall(
+    home,
+    RUN_ANSWER_V2_REQUIREMENT,
+    { schemaVersion: 2, runId, answer },
+    "run answer v2",
+  );
+}
+
 export function resumeRunViaDaemon(
   home: ApplicationHome,
   runId: string,
@@ -872,6 +950,20 @@ export function resumeRunViaDaemon(
     mutationRequirement(RUN_RESUME_METHOD, RUN_RESUME_V1_METHOD),
     { runId, inputArtifactRefs },
     "run resume",
+  );
+}
+
+export function resumeRunV2ViaDaemon(
+  home: ApplicationHome,
+  runId: string,
+  expectedRunRevision: number,
+  inputArtifactRefs: ArtifactId[],
+): Promise<Static<typeof StageRunResumeResultV2>> {
+  return domainCall(
+    home,
+    RUN_RESUME_V2_REQUIREMENT,
+    { schemaVersion: 2, runId, expectedRunRevision, inputArtifactRefs },
+    "run resume v2",
   );
 }
 

@@ -1,0 +1,242 @@
+{
+  "$id": "heniek://contract/Interaction/v2",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "interactionId",
+    "purpose",
+    "status",
+    "revision",
+    "questions",
+    "requestedAt",
+    "deliveryState"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 2,
+      "type": "number"
+    },
+    "interactionId": {
+      "minLength": 1,
+      "description": "Opaque InteractionId.",
+      "type": "string"
+    },
+    "purpose": {
+      "anyOf": [
+        {
+          "const": "question",
+          "type": "string"
+        },
+        {
+          "const": "approval",
+          "type": "string"
+        }
+      ]
+    },
+    "status": {
+      "anyOf": [
+        {
+          "const": "pending",
+          "type": "string"
+        },
+        {
+          "const": "answered",
+          "type": "string"
+        },
+        {
+          "const": "cancelled",
+          "type": "string"
+        }
+      ]
+    },
+    "revision": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "questions": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "anyOf": [
+          {
+            "additionalProperties": false,
+            "type": "object",
+            "required": [
+              "questionId",
+              "kind",
+              "prompt"
+            ],
+            "properties": {
+              "questionId": {
+                "minLength": 1,
+                "description": "Opaque InteractionQuestionId.",
+                "type": "string"
+              },
+              "kind": {
+                "const": "free_text",
+                "type": "string"
+              },
+              "prompt": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "header": {
+                "minLength": 1,
+                "type": "string"
+              }
+            }
+          },
+          {
+            "additionalProperties": false,
+            "type": "object",
+            "required": [
+              "questionId",
+              "kind",
+              "prompt",
+              "options"
+            ],
+            "properties": {
+              "questionId": {
+                "minLength": 1,
+                "description": "Opaque InteractionQuestionId.",
+                "type": "string"
+              },
+              "kind": {
+                "const": "single_choice",
+                "type": "string"
+              },
+              "prompt": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "header": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "options": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "label"
+                  ],
+                  "properties": {
+                    "label": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "description": {
+                      "minLength": 1,
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "additionalProperties": false,
+            "type": "object",
+            "required": [
+              "questionId",
+              "kind",
+              "prompt",
+              "options"
+            ],
+            "properties": {
+              "questionId": {
+                "minLength": 1,
+                "description": "Opaque InteractionQuestionId.",
+                "type": "string"
+              },
+              "kind": {
+                "const": "multiple_choice",
+                "type": "string"
+              },
+              "prompt": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "header": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "options": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "label"
+                  ],
+                  "properties": {
+                    "label": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "description": {
+                      "minLength": 1,
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "requestedAt": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "timeoutAt": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "resolvedAt": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "cancellationReason": {
+      "anyOf": [
+        {
+          "const": "withdrawn",
+          "type": "string"
+        },
+        {
+          "const": "timed_out",
+          "type": "string"
+        },
+        {
+          "const": "run_terminal",
+          "type": "string"
+        },
+        {
+          "const": "migration_unresolved",
+          "type": "string"
+        }
+      ]
+    },
+    "deliveryState": {
+      "anyOf": [
+        {
+          "const": "not_applicable",
+          "type": "string"
+        },
+        {
+          "const": "pending",
+          "type": "string"
+        },
+        {
+          "const": "delivered",
+          "type": "string"
+        }
+      ]
+    }
+  }
+}

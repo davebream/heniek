@@ -20,11 +20,15 @@ export {
   CODEBASE_REGISTER_V1_METHOD,
   DOCTOR_V1_METHOD,
   ENGINE_CATALOGUE_V1_METHOD,
+  INBOX_LIST_V1_METHOD,
   RUN_ANSWER_V1_METHOD,
+  RUN_ANSWER_V2_METHOD,
   RUN_CANCEL_V1_METHOD,
   RUN_RESULT_V1_METHOD,
   RUN_RESUME_V1_METHOD,
+  RUN_RESUME_V2_METHOD,
   RUN_STATUS_V1_METHOD,
+  RUN_STATUS_V2_METHOD,
   STAGE_START_V1_METHOD,
 } from "@heniek/protocol";
 export const RPC_CANCEL_METHOD = "rpc.cancel";
@@ -43,6 +47,7 @@ export const AUTHENTICATED_METHODS = [
   "codebase.register",
   "stage.start",
   "run.status",
+  "inbox.list",
   "run.answer",
   "run.resume",
   "run.cancel",
@@ -54,6 +59,7 @@ export const AUTHENTICATED_METHODS = [
 
 export interface MethodContext {
   readonly signal: AbortSignal;
+  readonly authenticatedKeyId?: string;
 }
 
 export type MethodHandler = (params: unknown, context: MethodContext) => unknown | Promise<unknown>;

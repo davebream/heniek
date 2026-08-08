@@ -1,6 +1,5 @@
 import { createHash } from "node:crypto";
 import type {
-  ArtifactId,
   BackendArtifactId,
   BackendArtifactV1,
   BackendExecutionId,
@@ -10,6 +9,7 @@ import type {
   ExecutionRequestV3,
   ExecutionResultV2,
   ExecutionResultV4,
+  ExecutionResumeRequestV1,
   ExecutionStatus,
   ExecutionTelemetryV1,
   InteractionAnswerSetV1,
@@ -30,6 +30,7 @@ import {
   type ClaudexorEngineIdentity,
   claudexorHeaders,
   parseHandshake,
+  REQUIRED_OPERATION_IDEMPOTENCY,
   REQUIRED_OPERATIONS,
 } from "./protocol.js";
 
@@ -45,13 +46,14 @@ export interface ClaudexorBackendOptions {
   readonly diagnosticRunner?: DiagnosticRunner;
 }
 
-export interface ClaudexorExecutionBackend extends ExecutionBackendV2 {
+export interface ClaudexorExecutionBackend extends Omit<ExecutionBackendV2, "resume"> {
+  resume(request: Static<typeof ExecutionResumeRequestV1>): Promise<void>;
   /** Internal primitive used by the subscription-only profile adapter. */
   startProfile(
     request: Static<typeof ExecutionRequestV3>,
   ): Promise<Static<typeof import("@heniek/contracts").BackendExecutionHandleV1>>;
   /** Internal primitive used by the subscription-only profile adapter. */
-  resumeProfile(executionId: string, inputArtifactRefs: ArtifactId[]): Promise<void>;
+  resumeProfile(request: Static<typeof ExecutionResumeRequestV1>): Promise<void>;
   /** Normalized, replayable lifecycle facts; raw SSE payloads never escape. */
   events(executionId: string, after?: string): AsyncIterable<Static<typeof ExecutionEventV3>>;
   /** Internal structured result used by the Q019 profile adapter. */
@@ -719,18 +721,18 @@ export function createClaudexorExecutionBackend(
       }
     },
 
-    async resume(executionId: string, inputArtifactRefs: ArtifactId[]) {
+    async resume(request: Static<typeof ExecutionResumeRequestV1>) {
       await createTurn(
-        executionId,
-        inputArtifactRefs.length === 0
+        request.executionId,
+        request.inputArtifactRefs.length === 0
           ? "Continue the stage from the current workspace state."
-          : `Continue the stage using these Heniek input artifact references: ${inputArtifactRefs.join(", ")}.`,
-        `${executionId}:resume:${inputArtifactRefs.join(",")}`,
+          : `Continue the stage using these Heniek input artifact references: ${request.inputArtifactRefs.join(", ")}.`,
+        request.operationId,
       );
     },
 
-    async resumeProfile(executionId: string, inputArtifactRefs: ArtifactId[]) {
-      const profile = profiles.get(executionId);
+    async resumeProfile(request: Static<typeof ExecutionResumeRequestV1>) {
+      const profile = profiles.get(request.executionId);
       if (profile === undefined) {
         throw new ClaudexorControlError(409, "profile_context_unavailable", "resume");
       }
@@ -741,11 +743,11 @@ export function createClaudexorExecutionBackend(
         await requireNativeSession(resumeRoute.harness);
       }
       await createTurn(
-        executionId,
-        inputArtifactRefs.length === 0
+        request.executionId,
+        request.inputArtifactRefs.length === 0
           ? "Continue the stage from the current workspace state."
-          : `Continue the stage using these Heniek input artifact references: ${inputArtifactRefs.join(", ")}.`,
-        `${executionId}:${profile.fingerprint}:resume:${inputArtifactRefs.join(",")}`,
+          : `Continue the stage using these Heniek input artifact references: ${request.inputArtifactRefs.join(", ")}.`,
+        request.operationId,
         undefined,
         profile,
       );
@@ -957,16 +959,15 @@ export function createClaudexorExecutionBackend(
         await handshake();
         const response = await callJson("GET", "/v2/operations", "operations");
         const operations = field(response, "operations");
+        const descriptors = Array.isArray(operations) ? operations : [];
         const available = new Set(
-          Array.isArray(operations)
-            ? operations.flatMap((entry) => {
-                const method = field(entry, "method");
-                const path = field(entry, "path");
-                return typeof method === "string" && typeof path === "string"
-                  ? [`${method.toUpperCase()} ${path}`]
-                  : [];
-              })
-            : [],
+          descriptors.flatMap((entry) => {
+            const method = field(entry, "method");
+            const path = field(entry, "path");
+            return typeof method === "string" && typeof path === "string"
+              ? [`${method.toUpperCase()} ${path}`]
+              : [];
+          }),
         );
         const missing = REQUIRED_OPERATIONS.filter((operation) => !available.has(operation));
         if (missing.length > 0) {
@@ -976,6 +977,27 @@ export function createClaudexorExecutionBackend(
               status: "fail" as const,
               code: "CLAUDEXOR_OPERATIONS_MISSING",
               message: `${missing.length} required Claudexor operation(s) are unavailable.`,
+              remediation: `Use selected Claudexor ${options.expectedEngine.version}/${options.expectedEngine.buildSha}.`,
+            },
+          ];
+        }
+        const policyMismatch = Object.entries(REQUIRED_OPERATION_IDEMPOTENCY).filter(
+          ([operation, expected]) => {
+            const descriptor = descriptors.find((entry) => {
+              const method = field(entry, "method");
+              const path = field(entry, "path");
+              return `${String(method).toUpperCase()} ${String(path)}` === operation;
+            });
+            return field(descriptor, "idempotency") !== expected;
+          },
+        );
+        if (policyMismatch.length > 0) {
+          return [
+            {
+              category: "compatibility" as const,
+              status: "fail" as const,
+              code: "CLAUDEXOR_IDEMPOTENCY_INCOMPATIBLE",
+              message: `${policyMismatch.length} required Claudexor idempotency declaration(s) are incompatible.`,
               remediation: `Use selected Claudexor ${options.expectedEngine.version}/${options.expectedEngine.buildSha}.`,
             },
           ];

@@ -23,14 +23,22 @@ import {
   CODEBASE_DETECTION_SCHEMA_SHA256,
   DOCTOR_SCHEMA_ID,
   DOCTOR_SCHEMA_SHA256,
+  INBOX_LIST_SCHEMA_ID,
+  INBOX_LIST_SCHEMA_SHA256,
   REGISTERED_CODEBASE_SCHEMA_ID,
   REGISTERED_CODEBASE_SCHEMA_SHA256,
+  RUN_ANSWER_V2_SCHEMA_ID,
+  RUN_ANSWER_V2_SCHEMA_SHA256,
   RUN_MUTATION_SCHEMA_ID,
   RUN_MUTATION_SCHEMA_SHA256,
   RUN_RESULT_SCHEMA_ID,
   RUN_RESULT_SCHEMA_SHA256,
+  RUN_RESUME_V2_SCHEMA_ID,
+  RUN_RESUME_V2_SCHEMA_SHA256,
   RUN_STATUS_SCHEMA_ID,
   RUN_STATUS_SCHEMA_SHA256,
+  RUN_STATUS_V2_SCHEMA_ID,
+  RUN_STATUS_V2_SCHEMA_SHA256,
   STAGE_START_SCHEMA_ID,
   STAGE_START_SCHEMA_SHA256,
 } from "@heniek/protocol";
@@ -57,14 +65,18 @@ import {
   DAEMON_STATUS_V1_METHOD,
   DOCTOR_V1_METHOD,
   ENGINE_CATALOGUE_V1_METHOD,
+  INBOX_LIST_V1_METHOD,
   type MethodContext,
   type MethodRegistry,
   RPC_CANCEL_METHOD,
   RUN_ANSWER_V1_METHOD,
+  RUN_ANSWER_V2_METHOD,
   RUN_CANCEL_V1_METHOD,
   RUN_RESULT_V1_METHOD,
   RUN_RESUME_V1_METHOD,
+  RUN_RESUME_V2_METHOD,
   RUN_STATUS_V1_METHOD,
+  RUN_STATUS_V2_METHOD,
   STAGE_START_V1_METHOD,
 } from "./methods.js";
 
@@ -130,7 +142,9 @@ function isNegotiationParams(value: unknown): value is Record<string, unknown> {
     }
     return (
       Array.isArray(method.methodVersions) &&
-      method.methodVersions.every((version) => version === 1) &&
+      method.methodVersions.every(
+        (version) => typeof version === "number" && Number.isInteger(version) && version >= 1,
+      ) &&
       Array.isArray(method.resultSchemas) &&
       method.resultSchemas.every(
         (schema) =>
@@ -173,102 +187,178 @@ function negotiateResult(params: Record<string, unknown>) {
   }
   const methods: Array<{
     name: string;
-    methodVersion: 1;
+    methodVersion: number;
     wireMethod: string;
     resultSchemaId: string;
     resultSchemaSha256: string;
   }> = [];
-  for (const required of requiredMethods) {
-    const name = required.name as string;
-    const versions = required.methodVersions as readonly number[];
-    const schemas = required.resultSchemas as readonly Record<string, unknown>[];
-    const available = {
-      "daemon.status": {
+  interface AvailableMethod {
+    readonly methodVersion: number;
+    readonly schemaId: string;
+    readonly sha256: string;
+    readonly wireMethod: string;
+  }
+  const availableByName: Readonly<Record<string, readonly AvailableMethod[]>> = {
+    "daemon.status": [
+      {
+        methodVersion: 1,
         schemaId: STATUS_SCHEMA_ID,
         sha256: STATUS_SCHEMA_SHA256,
         wireMethod: DAEMON_STATUS_V1_METHOD,
       },
-      "daemon.recovery": {
+    ],
+    "daemon.recovery": [
+      {
+        methodVersion: 1,
         schemaId: RECOVERY_SCHEMA_ID,
         sha256: RECOVERY_SCHEMA_SHA256,
         wireMethod: DAEMON_RECOVERY_V1_METHOD,
       },
-      "codebase.detect": {
+    ],
+    "codebase.detect": [
+      {
+        methodVersion: 1,
         schemaId: CODEBASE_DETECTION_SCHEMA_ID,
         sha256: CODEBASE_DETECTION_SCHEMA_SHA256,
         wireMethod: CODEBASE_DETECT_V1_METHOD,
       },
-      "codebase.register": {
+    ],
+    "codebase.register": [
+      {
+        methodVersion: 1,
         schemaId: REGISTERED_CODEBASE_SCHEMA_ID,
         sha256: REGISTERED_CODEBASE_SCHEMA_SHA256,
         wireMethod: CODEBASE_REGISTER_V1_METHOD,
       },
-      "stage.start": {
+    ],
+    "stage.start": [
+      {
+        methodVersion: 1,
         schemaId: STAGE_START_SCHEMA_ID,
         sha256: STAGE_START_SCHEMA_SHA256,
         wireMethod: STAGE_START_V1_METHOD,
       },
-      "run.status": {
+    ],
+    "run.status": [
+      {
+        methodVersion: 2,
+        schemaId: RUN_STATUS_V2_SCHEMA_ID,
+        sha256: RUN_STATUS_V2_SCHEMA_SHA256,
+        wireMethod: RUN_STATUS_V2_METHOD,
+      },
+      {
+        methodVersion: 1,
         schemaId: RUN_STATUS_SCHEMA_ID,
         sha256: RUN_STATUS_SCHEMA_SHA256,
         wireMethod: RUN_STATUS_V1_METHOD,
       },
-      "run.answer": {
+    ],
+    "run.answer": [
+      {
+        methodVersion: 2,
+        schemaId: RUN_ANSWER_V2_SCHEMA_ID,
+        sha256: RUN_ANSWER_V2_SCHEMA_SHA256,
+        wireMethod: RUN_ANSWER_V2_METHOD,
+      },
+      {
+        methodVersion: 1,
         schemaId: RUN_MUTATION_SCHEMA_ID,
         sha256: RUN_MUTATION_SCHEMA_SHA256,
         wireMethod: RUN_ANSWER_V1_METHOD,
       },
-      "run.resume": {
+    ],
+    "run.resume": [
+      {
+        methodVersion: 2,
+        schemaId: RUN_RESUME_V2_SCHEMA_ID,
+        sha256: RUN_RESUME_V2_SCHEMA_SHA256,
+        wireMethod: RUN_RESUME_V2_METHOD,
+      },
+      {
+        methodVersion: 1,
         schemaId: RUN_MUTATION_SCHEMA_ID,
         sha256: RUN_MUTATION_SCHEMA_SHA256,
         wireMethod: RUN_RESUME_V1_METHOD,
       },
-      "run.cancel": {
+    ],
+    "inbox.list": [
+      {
+        methodVersion: 1,
+        schemaId: INBOX_LIST_SCHEMA_ID,
+        sha256: INBOX_LIST_SCHEMA_SHA256,
+        wireMethod: INBOX_LIST_V1_METHOD,
+      },
+    ],
+    "run.cancel": [
+      {
+        methodVersion: 1,
         schemaId: RUN_MUTATION_SCHEMA_ID,
         sha256: RUN_MUTATION_SCHEMA_SHA256,
         wireMethod: RUN_CANCEL_V1_METHOD,
       },
-      "run.result": {
+    ],
+    "run.result": [
+      {
+        methodVersion: 1,
         schemaId: RUN_RESULT_SCHEMA_ID,
         sha256: RUN_RESULT_SCHEMA_SHA256,
         wireMethod: RUN_RESULT_V1_METHOD,
       },
-      "artifact.get": {
+    ],
+    "artifact.get": [
+      {
+        methodVersion: 1,
         schemaId: ARTIFACT_GET_SCHEMA_ID,
         sha256: ARTIFACT_GET_SCHEMA_SHA256,
         wireMethod: ARTIFACT_GET_V1_METHOD,
       },
-      doctor: {
+    ],
+    doctor: [
+      {
+        methodVersion: 1,
         schemaId: DOCTOR_SCHEMA_ID,
         sha256: DOCTOR_SCHEMA_SHA256,
         wireMethod: DOCTOR_V1_METHOD,
       },
-      "engine.catalogue": {
+    ],
+    "engine.catalogue": [
+      {
+        methodVersion: 1,
         schemaId: CAPABILITY_CATALOGUE_SCHEMA_ID,
         sha256: CAPABILITY_CATALOGUE_SCHEMA_SHA256,
         wireMethod: ENGINE_CATALOGUE_V1_METHOD,
       },
-    }[name];
-    if (available === undefined || !versions.includes(1)) {
+    ],
+  };
+  for (const required of requiredMethods) {
+    const name = required.name as string;
+    const versions = required.methodVersions as readonly number[];
+    const schemas = required.resultSchemas as readonly Record<string, unknown>[];
+    const available = availableByName[name];
+    if (
+      available === undefined ||
+      !available.some((candidate) => versions.includes(candidate.methodVersion))
+    ) {
       reasons.push("METHOD_UNAVAILABLE");
       continue;
     }
-    const resultSchemaId = available.schemaId;
-    const resultSchemaSha256 = available.sha256;
-    const schema = schemas.find(
+    const selected = available.find(
       (candidate) =>
-        candidate.schemaId === resultSchemaId && candidate.sha256 === resultSchemaSha256,
+        versions.includes(candidate.methodVersion) &&
+        schemas.some(
+          (schema) => schema.schemaId === candidate.schemaId && schema.sha256 === candidate.sha256,
+        ),
     );
-    if (schema === undefined) {
+    if (selected === undefined) {
       reasons.push("RESULT_SCHEMA_UNAVAILABLE");
       continue;
     }
     methods.push({
       name,
-      methodVersion: 1,
-      wireMethod: available.wireMethod,
-      resultSchemaId,
-      resultSchemaSha256,
+      methodVersion: selected.methodVersion,
+      wireMethod: selected.wireMethod,
+      resultSchemaId: selected.schemaId,
+      resultSchemaSha256: selected.sha256,
     });
   }
   const compatibility = reasons.length === 0 ? "compatible" : "incompatible";
@@ -320,17 +410,7 @@ async function dispatchRequest(
   }
 
   const handler = deps.registry.get(frame.method);
-  if (
-    (
-      [
-        DAEMON_STATUS_V1_METHOD,
-        DAEMON_RECOVERY_V1_METHOD,
-        CODEBASE_DETECT_V1_METHOD,
-        CODEBASE_REGISTER_V1_METHOD,
-      ] as readonly string[]
-    ).includes(frame.method) &&
-    !connection.negotiated
-  ) {
+  if (/\.v[1-9][0-9]*$/.test(frame.method) && !connection.negotiated) {
     return encodeError(frame.id, ERROR_CODES.protocolNotNegotiated, "protocol not negotiated");
   }
 
@@ -372,7 +452,10 @@ async function dispatchRequest(
   if (deps.createRequestContext !== undefined && createdContext === undefined) {
     return encodeError(frame.id, ERROR_CODES.invalidRequest, "duplicate active request id");
   }
-  const context: MethodContext = createdContext ?? { signal: new AbortController().signal };
+  const context: MethodContext = {
+    ...(createdContext ?? { signal: new AbortController().signal }),
+    authenticatedKeyId: deps.credential.keyId,
+  };
   try {
     const result = await Promise.race([
       Promise.resolve(handler(frame.params, context)),

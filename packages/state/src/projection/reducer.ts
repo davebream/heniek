@@ -29,7 +29,17 @@ import { stageArtifactAliasKey } from "./state.js";
 export type Reducer = (state: ProjectionState, event: StateEvent) => ProjectionState;
 
 /** The six-member vocabulary (P3) — the minimum that exercises the run projection, the identity rows, and a relationship. */
-const RUN_SCOPED_TYPES = new Set(["run.created", "run.status_changed", "run.workspace_assigned"]);
+const RUN_SCOPED_TYPES = new Set([
+  "run.created",
+  "run.status_changed",
+  "run.workspace_assigned",
+  "run.resume_requested",
+  "run.resume_delivered",
+  "interaction.created",
+  "interaction.answer_accepted",
+  "interaction.cancelled",
+  "interaction.answer_delivered",
+]);
 
 /**
  * Q007's two new event types (design D4, D11; plan Task 2.2). Both are
@@ -549,6 +559,20 @@ export function eventScope(event: StateEvent): ProjectionScope {
         artifacts: [],
         stageArtifactAliases: [],
       };
+    case "interaction.created":
+    case "interaction.answer_accepted":
+    case "interaction.cancelled":
+    case "interaction.answer_delivered":
+    case "run.resume_requested":
+    case "run.resume_delivered":
+      return {
+        runs: [requireRunId(event, payload)],
+        codebases: [],
+        repositories: [],
+        workspaces: [],
+        artifacts: [],
+        stageArtifactAliases: [],
+      };
     case "run.workspace_assigned":
       return {
         runs: [requireRunId(event, payload)],
@@ -726,6 +750,30 @@ export const applyEvent: Reducer = (state, event) => {
           [runId]: {
             ...previous,
             status,
+            revision: previous.revision + 1,
+            lastEventSequence: event.sequence,
+            updatedAt: event.recordedAt,
+          },
+        },
+      };
+    }
+    case "interaction.created":
+    case "interaction.answer_accepted":
+    case "interaction.cancelled":
+    case "interaction.answer_delivered":
+    case "run.resume_requested":
+    case "run.resume_delivered": {
+      const runId = requireRunId(event, payload);
+      const previous = state.runs[runId];
+      if (previous === undefined) {
+        throw new ReducerError(event.eventId, event.type, `run does not exist: ${runId}`);
+      }
+      return {
+        ...state,
+        runs: {
+          ...state.runs,
+          [runId]: {
+            ...previous,
             revision: previous.revision + 1,
             lastEventSequence: event.sequence,
             updatedAt: event.recordedAt,

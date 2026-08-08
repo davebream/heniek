@@ -18,6 +18,11 @@ export const REQUIRED_OPERATIONS = [
   "GET /v2/runs/:id/produced/<path>",
 ] as const;
 
+export const REQUIRED_OPERATION_IDEMPOTENCY = {
+  "POST /v2/runs/:id/interactions/:id/answer": "natural",
+  "POST /v2/threads/:id/turns": "key_required",
+} as const;
+
 export interface ClaudexorHandshake {
   readonly protocolMajor: number;
   readonly operationsPath: string;

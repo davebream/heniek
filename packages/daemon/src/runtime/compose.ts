@@ -50,11 +50,20 @@ import {
   type ArtifactId,
   type DoctorReportV1,
   type ExecutionBackend,
-  type ExecutionBackendV2,
   InteractionAnswerSetV1,
+  RunAnswerRequestV2,
+  RunResumeRequestV2,
 } from "@heniek/contracts";
 import { createFileSecretStore } from "@heniek/secrets";
-import { openStateDatabase, readPendingInteractions, runMigrations } from "@heniek/state";
+import {
+  legacyAnswerSubmission,
+  listInteractionInbox,
+  openStateDatabase,
+  readPendingInteractions,
+  readRunInteractions,
+  readRunProjection,
+  runMigrations,
+} from "@heniek/state";
 import {
   createNodeOwnerLiveness,
   createWorkspaceService,
@@ -92,19 +101,24 @@ import {
   DAEMON_STATUS_V1_METHOD,
   DOCTOR_V1_METHOD,
   ENGINE_CATALOGUE_V1_METHOD,
+  INBOX_LIST_V1_METHOD,
   type MethodHandler,
   type MethodRegistry,
   RUN_ANSWER_V1_METHOD,
+  RUN_ANSWER_V2_METHOD,
   RUN_CANCEL_V1_METHOD,
   RUN_RESULT_V1_METHOD,
   RUN_RESUME_V1_METHOD,
+  RUN_RESUME_V2_METHOD,
   RUN_STATUS_V1_METHOD,
+  RUN_STATUS_V2_METHOD,
   STAGE_START_V1_METHOD,
 } from "../rpc/methods.js";
 import { createSystemClock } from "./clock.js";
 import {
   artifactResult,
   createExecutionService,
+  type DurableExecutionBackend,
   type ExecutionService,
   stageRunResult,
 } from "./execution-service.js";
@@ -278,7 +292,7 @@ export interface StartDaemonDeps {
    */
   readonly backend: ExecutionBackend;
   /** Q012 stage backend; omitted for legacy daemon/recovery consumers. */
-  readonly backendV2?: ExecutionBackendV2;
+  readonly backendV2?: DurableExecutionBackend;
   /** Provider-neutral catalogue source. Raw Claudexor DTOs stay inside its adapter. */
   readonly capability?: {
     readonly source: CapabilityDiscoverySource;
@@ -657,6 +671,8 @@ export async function startDaemon(deps: StartDaemonDeps): Promise<StartDaemonOut
     if (typeof value !== "string" || value.length === 0) throw new Error(`invalid ${name}`);
     return value;
   };
+  const withoutAuth = (params: Record<string, unknown>): Record<string, unknown> =>
+    Object.fromEntries(Object.entries(params).filter(([key]) => key !== "auth"));
   const doctorHandler = async () => {
     const base: Static<typeof DoctorReportV1> =
       executionService === undefined
@@ -721,6 +737,10 @@ export async function startDaemon(deps: StartDaemonDeps): Promise<StartDaemonOut
   if (executionService !== undefined) {
     entries.push(
       [
+        INBOX_LIST_V1_METHOD,
+        async () => ({ schemaVersion: 1, items: listInteractionInbox(workspaceDatabase) }),
+      ],
+      [
         STAGE_START_V1_METHOD,
         async (params) => {
           const input = recordParams(params);
@@ -752,17 +772,64 @@ export async function startDaemon(deps: StartDaemonDeps): Promise<StartDaemonOut
         },
       ],
       [
-        RUN_ANSWER_V1_METHOD,
+        RUN_STATUS_V2_METHOD,
         async (params) => {
+          const row = await executionService.status(requiredParam(recordParams(params), "runId"));
+          const projection = readRunProjection(workspaceDatabase, row.runId);
+          if (projection === undefined) throw new Error("run projection does not exist");
+          return {
+            schemaVersion: 2,
+            runId: row.runId,
+            stageId: row.stageId,
+            status: row.status,
+            runRevision: projection.revision,
+            interactions: readRunInteractions(workspaceDatabase, row.runId),
+          };
+        },
+      ],
+      [
+        RUN_ANSWER_V1_METHOD,
+        async (params, context) => {
           const input = recordParams(params);
           const runId = requiredParam(input, "runId");
           const answer = input.answer;
           if (!Value.Check(InteractionAnswerSetV1, answer)) {
             throw new Error("invalid answer");
           }
-          await executionService.answer(runId, answer);
+          if (context.authenticatedKeyId === undefined)
+            throw new Error("authenticated key missing");
+          await executionService.answer(
+            runId,
+            legacyAnswerSubmission(workspaceDatabase, runId, answer),
+            context.authenticatedKeyId,
+          );
           const row = await executionService.status(runId);
           return { schemaVersion: 1, runId, status: row.status, accepted: true };
+        },
+      ],
+      [
+        RUN_ANSWER_V2_METHOD,
+        async (params, context) => {
+          const input = withoutAuth(recordParams(params));
+          if (!Value.Check(RunAnswerRequestV2, input)) throw new Error("invalid answer request");
+          if (context.authenticatedKeyId === undefined)
+            throw new Error("authenticated key missing");
+          const accepted = await executionService.answer(
+            input.runId,
+            input.answer,
+            context.authenticatedKeyId,
+          );
+          return {
+            schemaVersion: 2,
+            runId: accepted.runId,
+            status: accepted.status,
+            runRevision: accepted.runRevision,
+            interactionId: accepted.answer.interactionId,
+            interactionRevision: accepted.interactionRevision,
+            accepted: true,
+            operationId: accepted.operationId,
+            deliveryState: accepted.deliveryState,
+          };
         },
       ],
       [
@@ -775,8 +842,31 @@ export async function startDaemon(deps: StartDaemonDeps): Promise<StartDaemonOut
                 (value): value is ArtifactId => typeof value === "string",
               )
             : [];
-          await executionService.resume(runId, refs);
-          return { schemaVersion: 1, runId, status: "running", accepted: true };
+          const projection = readRunProjection(workspaceDatabase, runId);
+          if (projection === undefined) throw new Error("run projection does not exist");
+          const resumed = await executionService.resume(runId, projection.revision, refs);
+          return { schemaVersion: 1, runId, status: resumed.status, accepted: true };
+        },
+      ],
+      [
+        RUN_RESUME_V2_METHOD,
+        async (params) => {
+          const input = withoutAuth(recordParams(params));
+          if (!Value.Check(RunResumeRequestV2, input)) throw new Error("invalid resume request");
+          const resumed = await executionService.resume(
+            input.runId,
+            input.expectedRunRevision,
+            input.inputArtifactRefs,
+          );
+          return {
+            schemaVersion: 2,
+            runId: resumed.runId,
+            status: resumed.status,
+            runRevision: resumed.runRevision,
+            accepted: true,
+            operationId: resumed.operationId,
+            deliveryState: resumed.deliveryState,
+          };
         },
       ],
       [
