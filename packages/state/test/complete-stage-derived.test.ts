@@ -17,6 +17,18 @@ import * as packageBarrel from "../src/index.js";
 /** Matches any plausible "release/dispatch dependants" naming a future issue might reach for. */
 const RELEASE_OR_DISPATCH_NAME_PATTERN = /release|dispatch|unblock|notify/i;
 
+/**
+ * Q023's native bridge introduced a legitimate, unrelated domain noun this
+ * package never had before: a "dispatch" is one handover of a native stage
+ * to an attached parent session (see `native-bridge/store.ts`'s own header),
+ * with no connection to §16.6's "release stage dependants" concept this
+ * test otherwise guards. Every export here was reviewed at the time it was
+ * added; a name landing here is not a silent exemption; a new export that
+ * merely happens to trip the pattern still fails below and must be added
+ * explicitly, same as before.
+ */
+const KNOWN_DISPATCH_VOCABULARY_EXEMPTIONS = new Set(["settleNativeDispatch"]);
+
 describe("§16.6 step 6 is derived, never performed (design D7, plan Task 4.6)", () => {
   it("artifact/complete-stage.ts exports exactly completeStage at runtime — no second, release-shaped export", () => {
     const runtimeExports = Object.keys(completeStageModule);
@@ -24,8 +36,10 @@ describe("§16.6 step 6 is derived, never performed (design D7, plan Task 4.6)",
   });
 
   it("no export anywhere in the package barrel is named like a release/dispatch call", () => {
-    const suspicious = Object.keys(packageBarrel).filter((name) =>
-      RELEASE_OR_DISPATCH_NAME_PATTERN.test(name),
+    const suspicious = Object.keys(packageBarrel).filter(
+      (name) =>
+        RELEASE_OR_DISPATCH_NAME_PATTERN.test(name) &&
+        !KNOWN_DISPATCH_VOCABULARY_EXEMPTIONS.has(name),
     );
     expect(suspicious).toEqual([]);
   });
@@ -84,23 +98,32 @@ describe("AC-1's second leg (Phase 4 fix cycle 1, Q2): the package barrel's exac
         "StateDatabaseCorruptionError",
         "StateStoreError",
         "acceptInteractionAnswer",
+        "answerNativeQuestion",
         "applyCapacityAnswer",
         "answerCapacityQuestion",
         "applyEvent",
         "assignAttemptWorkspace",
         "assignBackendExecution",
+        "assignNativeAttemptWorkspace",
+        "attachParentSession",
+        "cancelNativeStage",
         "claimNextExecutionCandidate",
         "cancelQueuedExecutionSchedule",
         "commitStateChange",
         "compareInteractionProjectionToJournal",
+        "compareNativeQuestionProjectionToJournal",
         "compareProjectionToReplay",
         "completeExecutionAttempt",
+        "completeNativeAttemptArtifactOutcome",
         "completePendingArtifactImports",
         "completeStage",
         "createArtifactStore",
         "createExecutionSchedule",
+        "createNativeStage",
         "createStageExecution",
         "currentSchemaVersion",
+        "detachParentSession",
+        "downgradeNativeAttemptToFailed",
         "eventScope",
         "executionCleanupCounts",
         "findRegisteredExecutionContext",
@@ -108,13 +131,16 @@ describe("AC-1's second leg (Phase 4 fix cycle 1, Q2): the package barrel's exac
         "legacyAnswerSubmission",
         "listArtifacts",
         "listInteractionInbox",
+        "listNativeQuestionInbox",
         "markArtifactImport",
         "markExecutionFinalized",
         "markExecutionOperationDelivered",
         "migrationManifest",
         "openStateDatabase",
+        "pollNativeBridge",
         "projectionDigest",
         "publishArtifact",
+        "raiseNativeQuestion",
         "readActiveStageExecutions",
         "readAllRunProjections",
         "readArtifactRecord",
@@ -126,8 +152,11 @@ describe("AC-1's second leg (Phase 4 fix cycle 1, Q2): the package barrel's exac
         "readIdentity",
         "readLatestCapabilitySnapshot",
         "readLegacyPendingInteractions",
+        "readNativeStage",
+        "readNativeStageAttempts",
         "readPendingExecutionOperations",
         "readPendingInteractions",
+        "readPendingNativeQuestions",
         "readRecoverableSchedulingAttempts",
         "readRunInteractions",
         "readRunProjection",
@@ -138,15 +167,20 @@ describe("AC-1's second leg (Phase 4 fix cycle 1, Q2): the package barrel's exac
         "recordAttemptReadonlyBaseline",
         "recordExecutionOperationFailure",
         "recordInteractionAnswer",
+        "recordNativeAttemptReadonlyBaseline",
+        "recordNativeAttemptWorkspaceFailure",
         "recoverArtifacts",
         "renewAccountLease",
         "replacePendingInteractions",
         "replayInteractionEvents",
         "replayJournal",
+        "replayNativeQuestionEvents",
         "requestRunResume",
         "restoreAccountLease",
+        "resumeNativeStage",
         "runMigrations",
         "schemaFingerprint",
+        "settleNativeDispatch",
         "stageArtifactAliasKey",
         "startExecutionAttempt",
         "synchronizePendingInteractions",
