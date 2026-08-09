@@ -87,8 +87,8 @@ function seedRunnerAttempt(handle: ReturnType<typeof internalHandle>, attemptId 
 describe("migration 14 — pipeline runner operations", () => {
   it("creates the operation ledger tables on a fresh database", () => {
     runMigrations(db);
-    expect(readUserVersion(internalHandle(db))).toBe(14);
-    expect(currentSchemaVersion()).toBe(14);
+    expect(readUserVersion(internalHandle(db))).toBe(currentSchemaVersion());
+    expect(currentSchemaVersion()).toBeGreaterThanOrEqual(14);
     const names = new Set(
       internalHandle(db)
         .prepare("SELECT name FROM sqlite_schema WHERE type = 'table'")
@@ -109,8 +109,11 @@ describe("migration 14 — pipeline runner operations", () => {
     runMigrationList(db, MIGRATIONS, 13);
     expect(readUserVersion(internalHandle(db))).toBe(13);
     seedRunnerAttempt(internalHandle(db));
-    expect(runMigrations(db)).toMatchObject({ fromVersion: 13, toVersion: 14 });
-    expect(readUserVersion(internalHandle(db))).toBe(14);
+    expect(runMigrations(db)).toMatchObject({
+      fromVersion: 13,
+      toVersion: currentSchemaVersion(),
+    });
+    expect(readUserVersion(internalHandle(db))).toBe(currentSchemaVersion());
 
     const attempt = internalHandle(db)
       .prepare(

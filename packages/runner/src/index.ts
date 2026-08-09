@@ -47,6 +47,7 @@ export type {
   StageRunnerPrepareInput,
   StageRunnerPrepareOutcome,
   StageRunnerResult,
+  StageRunnerRetryDirective,
   StageRunnerStageType,
   StageRunnerStoreCallbacks,
   StageRunnerValidationReport,

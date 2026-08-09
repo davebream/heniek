@@ -1,0 +1,117 @@
+{
+  "$id": "heniek://contract/PipelineStageAttempt/v2",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "attemptId",
+    "runId",
+    "pipelineId",
+    "stageId",
+    "graphRevision",
+    "generation",
+    "attemptOrdinal",
+    "stageType",
+    "createdAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 2,
+      "type": "number"
+    },
+    "attemptId": {
+      "minLength": 1,
+      "description": "Opaque PipelineAttemptId.",
+      "type": "string"
+    },
+    "runId": {
+      "minLength": 1,
+      "description": "Opaque RunId.",
+      "type": "string"
+    },
+    "pipelineId": {
+      "minLength": 1,
+      "description": "Opaque PipelineId.",
+      "type": "string"
+    },
+    "stageId": {
+      "minLength": 1,
+      "description": "Opaque PipelineStageId.",
+      "type": "string"
+    },
+    "graphRevision": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "generation": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "attemptOrdinal": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "stageType": {
+      "anyOf": [
+        {
+          "const": "agent",
+          "type": "string"
+        },
+        {
+          "const": "command",
+          "type": "string"
+        },
+        {
+          "const": "approval",
+          "type": "string"
+        },
+        {
+          "const": "integration",
+          "type": "string"
+        },
+        {
+          "const": "verify",
+          "type": "string"
+        },
+        {
+          "const": "publish",
+          "type": "string"
+        }
+      ]
+    },
+    "createdAt": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "sessionPolicy": {
+      "anyOf": [
+        {
+          "const": "fresh",
+          "type": "string"
+        },
+        {
+          "const": "resume",
+          "type": "string"
+        }
+      ]
+    },
+    "priorAttemptId": {
+      "minLength": 1,
+      "description": "Opaque PipelineAttemptId.",
+      "type": "string"
+    },
+    "recoveryDecisionId": {
+      "minLength": 1,
+      "description": "Opaque PipelineRecoveryDecisionId.",
+      "type": "string"
+    },
+    "delegatedProfileId": {
+      "minLength": 1,
+      "description": "Opaque ProfileId.",
+      "type": "string"
+    },
+    "retryDirective": {
+      "$ref": "heniek://contract/PipelineRetryDirective/v1"
+    }
+  }
+}

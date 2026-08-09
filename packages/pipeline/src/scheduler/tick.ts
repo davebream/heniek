@@ -6,16 +6,39 @@
  * canonical stage id; attempt and intent ids are derived, never minted.
  * Nothing here reads a clock, the filesystem, or the network — `now` arrives
  * as an explicit input.
+ *
+ * Optional recovery fields (Q028) layer onto the same tick without breaking
+ * V1 callers: when `observation.failure` (or classifiable fields) is present,
+ * `decideRecovery` drives retry/propose/fail; otherwise the legacy
+ * `retryable && repairsUsed < maxRepairs` path remains.
  */
 
 import type {
   PipelineSchedulerDecisionAction,
+  PipelineSchedulerDecisionActionV2,
   PipelineStageState,
   PipelineTransitionReason,
+  PipelineTransitionReasonV2,
 } from "@heniek/contracts";
 import type { PipelineEdge, PipelineGraph, PipelineStage } from "../document.js";
 import { evaluateExpressionCondition, type JsonValue } from "../expression/evaluate.js";
-import { deriveAttemptId, deriveDecisionId, deriveIntentId, edgeKey } from "./ids.js";
+import {
+  classifyFailure,
+  decideRecovery,
+  type PipelineFailurePlain,
+  type PipelineRecoveryDecisionPlain,
+  type PipelineRetryDirectivePlain,
+  resolveEffectiveConcurrency,
+  resolveRepairBudget,
+  type StageRecoveryCounters,
+} from "../recovery/index.js";
+import {
+  deriveAttemptId,
+  deriveDecisionId,
+  deriveIntentId,
+  deriveRecoveryDecisionId,
+  edgeKey,
+} from "./ids.js";
 import { assertPermittedTransition, isTerminalStageState } from "./transitions.js";
 
 /**
@@ -39,7 +62,7 @@ export interface StageSnapshot {
 }
 
 export interface SchedulerObservation {
-  schemaVersion: 1;
+  schemaVersion: 1 | 2;
   observationId: string;
   kind:
     | "attempt_started"
@@ -49,45 +72,77 @@ export interface SchedulerObservation {
     | "cancellation_settled"
     | "evaluator_decided"
     | "cancel_requested"
-    | "manual_rerun";
+    | "manual_rerun"
+    | "recovery_proposed"
+    | "recovery_approved"
+    | "recovery_rejected";
   stageId?: string;
   attemptId?: string;
   retryable?: boolean;
   edgeKey?: string;
   selected?: boolean;
   recordedAt: string;
+  failure?: PipelineFailurePlain;
+  signature?: {
+    schemaVersion: 1;
+    digest: string;
+    category: string;
+    classification: string;
+    phase: string;
+    code: string;
+    backendClassification?: string;
+    validationFailures?: readonly string[];
+  };
+  recoveryDecisionId?: string;
+  proposalId?: string;
+  approved?: boolean;
+  /** Runner classification fields used when `failure` is absent. */
+  classification?: string;
+  phase?: string;
+  code?: string;
+  backendClassification?: string;
+  validationFailures?: readonly string[];
+  resumeAvailable?: boolean;
+  priorBackendExecutionId?: string;
 }
 
+export type SchedulerDecisionAction =
+  | PipelineSchedulerDecisionAction
+  | PipelineSchedulerDecisionActionV2;
+export type SchedulerTransitionReason = PipelineTransitionReason | PipelineTransitionReasonV2;
+
 export interface SchedulerDecision {
-  schemaVersion: 1;
+  schemaVersion: 1 | 2;
   decisionId: string;
   runId: string;
   stageId?: string;
   graphRevision: number;
   generation: number;
   attemptOrdinal: number;
-  action: PipelineSchedulerDecisionAction;
-  reason: PipelineTransitionReason;
+  action: SchedulerDecisionAction;
+  reason: SchedulerTransitionReason;
   fromState?: PipelineStageState;
   toState?: PipelineStageState;
   attemptId?: string;
   intentId?: string;
   detail?: string;
   recordedAt: string;
+  recoveryDecisionId?: string;
+  signatureDigest?: string;
 }
 
 export interface SchedulerIntent {
-  schemaVersion: 1;
+  schemaVersion: 1 | 2;
   intentId: string;
   runId: string;
   graphRevision: number;
-  kind: "dispatch" | "cancel" | "evaluator";
+  kind: "dispatch" | "cancel" | "evaluator" | "recovery_dispatch";
   payload: unknown;
   createdAt: string;
 }
 
 export interface StageAttempt {
-  schemaVersion: 1;
+  schemaVersion: 1 | 2;
   attemptId: string;
   runId: string;
   pipelineId: string;
@@ -97,6 +152,11 @@ export interface StageAttempt {
   attemptOrdinal: number;
   stageType: string;
   createdAt: string;
+  sessionPolicy?: "fresh" | "resume";
+  priorAttemptId?: string;
+  recoveryDecisionId?: string;
+  delegatedProfileId?: string;
+  retryDirective?: PipelineRetryDirectivePlain;
 }
 
 export interface StageTransition {
@@ -117,8 +177,27 @@ export interface ScheduleTerminal {
   blockedStageId?: string;
 }
 
+export interface StageRecoveryStatePlain {
+  stageId: string;
+  generation: number;
+  repairsUsed: number;
+  lastSignatureDigest?: string;
+  identicalSignatureCount: number;
+  pendingProposalId?: string;
+  pendingProposalJson?: unknown;
+  pendingDirective?: PipelineRetryDirectivePlain;
+}
+
+export interface EffectiveLimitsPlain {
+  maxRepairAttempts?: number;
+  maxConcurrentWorkers?: number;
+  maxPipelineDurationMs?: number;
+  maxGraphRevisions?: number;
+  stageDurationMsByStageId?: Record<string, number>;
+}
+
 export interface SchedulerInput {
-  schemaVersion: 1;
+  schemaVersion: 1 | 2;
   runId: string;
   pipelineId: string;
   graphRevision: number;
@@ -131,10 +210,13 @@ export interface SchedulerInput {
   canonicalState: unknown;
   pendingEvaluatorEdgeKeys: string[];
   evaluatorDecisions: { edgeKey: string; selected: boolean; recordedAt: string }[];
+  recoveryState?: StageRecoveryStatePlain[];
+  effectiveLimits?: EffectiveLimitsPlain;
+  executionMode?: "autonomous" | "hitl";
 }
 
 export interface SchedulerPlan {
-  schemaVersion: 1;
+  schemaVersion: 1 | 2;
   runId: string;
   graphRevision: number;
   expectedScheduleRevision: number;
@@ -147,7 +229,18 @@ export interface SchedulerPlan {
   stagePatches: StageSnapshot[];
   consumedObservationIds: string[];
   terminal?: ScheduleTerminal;
+  recoveryDecisions?: PipelineRecoveryDecisionPlain[];
+  recoveryState?: StageRecoveryStatePlain[];
 }
+
+/** V2 plain input mirroring PipelineSchedulerInput/v2 without brands. */
+export type SchedulerInputV2Plain = SchedulerInput & { schemaVersion: 2 };
+
+/** V2 plain plan mirroring PipelineSchedulerPlan/v2 without brands. */
+export type SchedulerPlanV2Plain = SchedulerPlan & {
+  schemaVersion: 2;
+  recoveryDecisions: PipelineRecoveryDecisionPlain[];
+};
 
 interface MutableStage {
   runId: string;
@@ -174,13 +267,80 @@ interface TickContext {
   readonly working: Map<string, MutableStage>;
   readonly evaluatorDecisions: Map<string, boolean>;
   readonly pendingEvaluators: Set<string>;
+  readonly recoveryByKey: Map<string, StageRecoveryCounters & { generation: number }>;
   readonly transitions: StageTransition[];
   readonly decisions: SchedulerDecision[];
   readonly intents: SchedulerIntent[];
   readonly attempts: StageAttempt[];
+  readonly recoveryDecisions: PipelineRecoveryDecisionPlain[];
   readonly consumedObservationIds: string[];
+  readonly v2: boolean;
   cancelRequested: boolean;
   deadlineExceeded: boolean;
+}
+
+function recoveryKey(stageId: string, generation: number): string {
+  return `${stageId}:${generation}`;
+}
+
+function getRecoveryCounters(
+  ctx: TickContext,
+  stage: MutableStage,
+): StageRecoveryCounters & { generation: number } {
+  const key = recoveryKey(stage.stageId, stage.generation);
+  const existing = ctx.recoveryByKey.get(key);
+  if (existing !== undefined) {
+    return existing;
+  }
+  const created: StageRecoveryCounters & { generation: number } = {
+    generation: stage.generation,
+    repairsUsed: 0,
+    identicalSignatureCount: 0,
+  };
+  ctx.recoveryByKey.set(key, created);
+  return created;
+}
+
+function setRecoveryCounters(
+  ctx: TickContext,
+  stage: MutableStage,
+  counters: StageRecoveryCounters,
+): void {
+  ctx.recoveryByKey.set(recoveryKey(stage.stageId, stage.generation), {
+    ...counters,
+    generation: stage.generation,
+  });
+}
+
+function freezeRecoveryState(ctx: TickContext): StageRecoveryStatePlain[] {
+  return [...ctx.recoveryByKey.entries()]
+    .map(([key, counters]) => {
+      const stageId = key.slice(0, key.lastIndexOf(":"));
+      const state: StageRecoveryStatePlain = {
+        stageId,
+        generation: counters.generation,
+        repairsUsed: counters.repairsUsed,
+        identicalSignatureCount: counters.identicalSignatureCount,
+      };
+      if (counters.lastSignatureDigest !== undefined) {
+        state.lastSignatureDigest = counters.lastSignatureDigest;
+      }
+      if (counters.pendingProposalId !== undefined) {
+        state.pendingProposalId = counters.pendingProposalId;
+      }
+      if (counters.pendingDirective !== undefined) {
+        state.pendingDirective = counters.pendingDirective;
+        state.pendingProposalJson = counters.pendingDirective;
+      }
+      return state;
+    })
+    .sort((left, right) =>
+      left.stageId !== right.stageId
+        ? left.stageId < right.stageId
+          ? -1
+          : 1
+        : left.generation - right.generation,
+    );
 }
 
 function freezeSnapshot(stage: MutableStage): StageSnapshot {
@@ -273,8 +433,8 @@ function recordDecision(
   ctx: TickContext,
   input: {
     readonly stageId: string;
-    readonly action: PipelineSchedulerDecisionAction;
-    readonly reason: PipelineTransitionReason;
+    readonly action: SchedulerDecisionAction;
+    readonly reason: SchedulerTransitionReason;
     readonly fromState?: PipelineStageState;
     readonly toState?: PipelineStageState;
     readonly attemptId?: string;
@@ -282,6 +442,8 @@ function recordDecision(
     readonly detail?: string;
     readonly generation: number;
     readonly attemptOrdinal: number;
+    readonly recoveryDecisionId?: string;
+    readonly signatureDigest?: string;
   },
 ): void {
   const decisionId = deriveDecisionId({
@@ -296,7 +458,7 @@ function recordDecision(
     return;
   }
   const decision: SchedulerDecision = {
-    schemaVersion: 1,
+    schemaVersion: ctx.v2 ? 2 : 1,
     decisionId,
     runId: ctx.input.runId,
     stageId: input.stageId,
@@ -322,6 +484,12 @@ function recordDecision(
   if (input.detail !== undefined) {
     (decision as { detail?: string }).detail = input.detail;
   }
+  if (input.recoveryDecisionId !== undefined) {
+    (decision as { recoveryDecisionId?: string }).recoveryDecisionId = input.recoveryDecisionId;
+  }
+  if (input.signatureDigest !== undefined) {
+    (decision as { signatureDigest?: string }).signatureDigest = input.signatureDigest;
+  }
   ctx.decisions.push(decision);
 }
 
@@ -331,13 +499,16 @@ function applyTransition(
   to: PipelineStageState,
   reason: PipelineTransitionReason,
   options: {
-    readonly action: PipelineSchedulerDecisionAction;
+    readonly action: SchedulerDecisionAction;
     readonly attemptId?: string | undefined;
     readonly intentId?: string | undefined;
     readonly detail?: string | undefined;
     readonly blockReason?: string | undefined;
     readonly clearAttempt?: boolean;
     readonly selected?: boolean;
+    readonly decisionReason?: SchedulerTransitionReason;
+    readonly recoveryDecisionId?: string;
+    readonly signatureDigest?: string;
   },
 ): void {
   assertPermittedTransition(stage.state, to, reason);
@@ -372,7 +543,7 @@ function applyTransition(
   recordDecision(ctx, {
     stageId: stage.stageId,
     action: options.action,
-    reason,
+    reason: options.decisionReason ?? reason,
     fromState: from,
     toState: to,
     ...(options.attemptId !== undefined
@@ -386,26 +557,34 @@ function applyTransition(
       : options.blockReason !== undefined
         ? { detail: options.blockReason }
         : {}),
+    ...(options.recoveryDecisionId !== undefined
+      ? { recoveryDecisionId: options.recoveryDecisionId }
+      : {}),
+    ...(options.signatureDigest !== undefined ? { signatureDigest: options.signatureDigest } : {}),
     generation: stage.generation,
     attemptOrdinal: stage.attemptOrdinal,
   });
 }
 
-function maxRepairAttemptsFor(stage: PipelineStage, graph: PipelineGraph): number {
-  const stageLimit = stage.limits?.maxRepairAttempts;
-  const pipelineLimit = graph.limits.maxRepairAttempts;
-  if (stageLimit !== undefined && pipelineLimit !== undefined) {
-    return Math.min(stageLimit, pipelineLimit);
-  }
-  if (stageLimit !== undefined) {
-    return stageLimit;
-  }
-  if (pipelineLimit !== undefined) {
-    return pipelineLimit;
-  }
-  // Unresolved limit: one try, zero repairs. Defaults belong to configuration
-  // layering; inventing a backoff or a silent default here would invent policy.
-  return 0;
+function maxRepairAttemptsFor(
+  stage: PipelineStage,
+  graph: PipelineGraph,
+  effectiveLimits?: EffectiveLimitsPlain,
+): number {
+  return resolveRepairBudget({
+    ...(effectiveLimits?.maxRepairAttempts !== undefined
+      ? { effectiveMaxRepairAttempts: effectiveLimits.maxRepairAttempts }
+      : {}),
+    ...(stage.limits?.maxRepairAttempts !== undefined
+      ? { stageMaxRepairAttempts: stage.limits.maxRepairAttempts }
+      : {}),
+    ...(graph.limits.maxRepairAttempts !== undefined
+      ? { pipelineMaxRepairAttempts: graph.limits.maxRepairAttempts }
+      : {}),
+    ...(stage.onValidationFailure?.maxAttempts !== undefined
+      ? { validationMaxAttempts: stage.onValidationFailure.maxAttempts }
+      : {}),
+  });
 }
 
 function producedWrites(ctx: TickContext, excludingStageId: string): ReadonlySet<string> {
@@ -486,7 +665,6 @@ function resolveIncomingEdge(ctx: TickContext, edge: PipelineEdge): EdgeResoluti
   if (ctx.pendingEvaluators.has(key)) {
     return { status: "pending" };
   }
-  // Request evaluator once the predecessor has succeeded.
   const intentId = deriveIntentId({
     runId: ctx.input.runId,
     graphRevision: ctx.input.graphRevision,
@@ -495,7 +673,7 @@ function resolveIncomingEdge(ctx: TickContext, edge: PipelineEdge): EdgeResoluti
   });
   if (!ctx.intents.some((intent) => intent.intentId === intentId)) {
     ctx.intents.push({
-      schemaVersion: 1,
+      schemaVersion: ctx.v2 ? 2 : 1,
       intentId,
       runId: ctx.input.runId,
       graphRevision: ctx.input.graphRevision,
@@ -527,8 +705,6 @@ function resolveIncomingEdge(ctx: TickContext, edge: PipelineEdge): EdgeResoluti
 function unsatisfiedReads(ctx: TickContext, stage: PipelineStage): string | undefined {
   const available = producedWrites(ctx, stage.id);
   for (const read of stage.reads) {
-    // Roots and early stages may read ambient canonical state (task.*, etc.).
-    // Only require graph-produced writes when some succeeded stage declares them.
     const producedSomewhere = ctx.graph.stages.some(
       (candidate) => candidate.id !== stage.id && candidate.writes.includes(read),
     );
@@ -620,7 +796,7 @@ function requestCancelForActive(ctx: TickContext, stage: MutableStage): void {
     return;
   }
   ctx.intents.push({
-    schemaVersion: 1,
+    schemaVersion: ctx.v2 ? 2 : 1,
     intentId,
     runId: ctx.input.runId,
     graphRevision: ctx.input.graphRevision,
@@ -654,7 +830,6 @@ function processManualRerun(ctx: TickContext, stageId: string): void {
   for (const targetId of targets) {
     const stage = ctx.working.get(targetId)!;
     if (!isTerminalStageState(stage.state) && stage.state !== "pending") {
-      // Active work must settle before a rerun can reset the generation.
       continue;
     }
     const from = stage.state;
@@ -665,6 +840,10 @@ function processManualRerun(ctx: TickContext, stageId: string): void {
     stage.selected = true;
     stage.lastTransitionReason = "manual_rerun";
     stage.updatedAt = ctx.input.now;
+    setRecoveryCounters(ctx, stage, {
+      repairsUsed: 0,
+      identicalSignatureCount: 0,
+    });
     if (from !== "pending") {
       assertPermittedTransition(from, "pending", "manual_rerun");
       stage.state = "pending";
@@ -689,6 +868,312 @@ function processManualRerun(ctx: TickContext, stageId: string): void {
       attemptOrdinal: 0,
     });
   }
+}
+
+function resolveFailureFromObservation(
+  observation: SchedulerObservation,
+): PipelineFailurePlain | undefined {
+  if (observation.failure !== undefined) {
+    return observation.failure;
+  }
+  if (
+    observation.classification === undefined ||
+    observation.phase === undefined ||
+    observation.code === undefined
+  ) {
+    return undefined;
+  }
+  return classifyFailure({
+    classification: observation.classification,
+    phase: observation.phase,
+    code: observation.code,
+    retryable: observation.retryable === true,
+    ...(observation.backendClassification !== undefined
+      ? { backendClassification: observation.backendClassification }
+      : {}),
+    ...(observation.validationFailures !== undefined
+      ? { validationFailures: observation.validationFailures }
+      : {}),
+  });
+}
+
+function applyRecoveryDecision(
+  ctx: TickContext,
+  stage: MutableStage,
+  observation: SchedulerObservation,
+  result: ReturnType<typeof decideRecovery>,
+): void {
+  ctx.recoveryDecisions.push(result.recoveryDecision);
+  setRecoveryCounters(ctx, stage, result.nextCounters);
+  const attemptId = observation.attemptId ?? stage.currentAttemptId;
+  const signatureDigest = result.recoveryDecision.signature?.digest;
+  const signatureFields = signatureDigest !== undefined ? { signatureDigest } : {};
+
+  switch (result.kind) {
+    case "fail": {
+      const transitionReason: PipelineTransitionReason =
+        result.reason === "repair_exhausted" || result.reason === "unchanged_failure_exhausted"
+          ? "retry_exhausted"
+          : "attempt_failed";
+      const decisionReason: SchedulerTransitionReason =
+        result.reason === "repair_exhausted"
+          ? "repair_exhausted"
+          : result.reason === "unchanged_failure_exhausted"
+            ? "unchanged_failure_exhausted"
+            : result.reason === "recovery_rejected"
+              ? "recovery_rejected"
+              : "attempt_failed";
+      applyTransition(ctx, stage, "failed", transitionReason, {
+        action: "fail",
+        attemptId,
+        decisionReason,
+        recoveryDecisionId: result.recoveryDecision.decisionId,
+        ...signatureFields,
+      });
+      return;
+    }
+    case "block": {
+      applyTransition(ctx, stage, "blocked", "condition_blocked", {
+        action: "block",
+        attemptId,
+        blockReason: result.blockReason,
+        decisionReason: "condition_blocked",
+        recoveryDecisionId: result.recoveryDecision.decisionId,
+        ...signatureFields,
+      });
+      return;
+    }
+    case "propose": {
+      applyTransition(ctx, stage, "waiting", "attempt_waiting", {
+        action: "propose_recovery",
+        attemptId,
+        decisionReason: "recovery_proposed",
+        recoveryDecisionId: result.recoveryDecision.decisionId,
+        ...signatureFields,
+      });
+      return;
+    }
+    case "retry": {
+      applyTransition(ctx, stage, "retrying", "retry_scheduled", {
+        action: result.reason === "recovery_approved" ? "approve_recovery" : "retry",
+        attemptId,
+        decisionReason:
+          result.reason === "recovery_approved" ? "recovery_approved" : "retry_scheduled",
+        recoveryDecisionId: result.recoveryDecision.decisionId,
+        ...signatureFields,
+      });
+      return;
+    }
+  }
+}
+
+function processAttemptFailed(
+  ctx: TickContext,
+  stage: MutableStage,
+  observation: SchedulerObservation,
+): void {
+  if (stage.state !== "running" && stage.state !== "waiting") {
+    return;
+  }
+  const definition = ctx.stagesById.get(stage.stageId)!;
+  const failure = resolveFailureFromObservation(observation);
+  if (failure !== undefined) {
+    const counters = getRecoveryCounters(ctx, stage);
+    const repairBudget = maxRepairAttemptsFor(definition, ctx.graph, ctx.input.effectiveLimits);
+    const priorAttemptId = observation.attemptId ?? stage.currentAttemptId;
+    const result = decideRecovery({
+      runId: ctx.input.runId,
+      stageId: stage.stageId,
+      graphRevision: ctx.input.graphRevision,
+      generation: stage.generation,
+      attemptOrdinal: stage.attemptOrdinal,
+      now: ctx.input.now,
+      failure,
+      stageType: definition.type,
+      ...(definition.session?.policy !== undefined
+        ? { sessionPolicy: definition.session.policy }
+        : {}),
+      ...(definition.onValidationFailure !== undefined
+        ? {
+            onValidationFailure: {
+              strategy: definition.onValidationFailure.strategy,
+              ...(definition.onValidationFailure.session !== undefined
+                ? { session: definition.onValidationFailure.session }
+                : {}),
+              ...(definition.onValidationFailure.maxAttempts !== undefined
+                ? { maxAttempts: definition.onValidationFailure.maxAttempts }
+                : {}),
+              ...(definition.onValidationFailure.delegateTo !== undefined
+                ? { delegateTo: definition.onValidationFailure.delegateTo }
+                : {}),
+            },
+          }
+        : {}),
+      executionMode: ctx.input.executionMode ?? definition.mode ?? ctx.graph.mode,
+      counters,
+      repairBudget,
+      ...(priorAttemptId !== undefined ? { priorAttemptId } : {}),
+      ...(observation.priorBackendExecutionId !== undefined
+        ? { priorBackendExecutionId: observation.priorBackendExecutionId }
+        : {}),
+      resumeAvailable: observation.resumeAvailable === true,
+    });
+    applyRecoveryDecision(ctx, stage, observation, result);
+    return;
+  }
+
+  const maxRepairs = maxRepairAttemptsFor(definition, ctx.graph, ctx.input.effectiveLimits);
+  const repairsUsed = Math.max(0, stage.attemptOrdinal - 1);
+  const canRetry = observation.retryable === true && repairsUsed < maxRepairs;
+  if (canRetry) {
+    applyTransition(ctx, stage, "retrying", "retry_scheduled", {
+      action: "retry",
+      attemptId: observation.attemptId ?? stage.currentAttemptId,
+    });
+  } else {
+    applyTransition(
+      ctx,
+      stage,
+      "failed",
+      repairsUsed >= maxRepairs && observation.retryable === true
+        ? "retry_exhausted"
+        : "attempt_failed",
+      {
+        action: "fail",
+        attemptId: observation.attemptId ?? stage.currentAttemptId,
+      },
+    );
+  }
+}
+
+function processRecoveryApproved(
+  ctx: TickContext,
+  stage: MutableStage,
+  observation: SchedulerObservation,
+): void {
+  if (stage.state !== "waiting") {
+    return;
+  }
+  const counters = getRecoveryCounters(ctx, stage);
+  if (
+    observation.proposalId === undefined ||
+    counters.pendingProposalId === undefined ||
+    observation.proposalId !== counters.pendingProposalId
+  ) {
+    return;
+  }
+  const directive = counters.pendingDirective;
+  if (directive === undefined) {
+    return;
+  }
+  const nextCounters: StageRecoveryCounters = {
+    repairsUsed: counters.repairsUsed + 1,
+    identicalSignatureCount: counters.identicalSignatureCount,
+    ...(counters.lastSignatureDigest !== undefined
+      ? { lastSignatureDigest: counters.lastSignatureDigest }
+      : {}),
+    pendingDirective: directive,
+  };
+  const recoveryDecision: PipelineRecoveryDecisionPlain = {
+    schemaVersion: 1,
+    decisionId: deriveRecoveryDecisionId({
+      runId: ctx.input.runId,
+      graphRevision: ctx.input.graphRevision,
+      stageId: stage.stageId,
+      generation: stage.generation,
+      attemptOrdinal: stage.attemptOrdinal,
+      action: "approve",
+    }),
+    runId: ctx.input.runId,
+    stageId: stage.stageId,
+    graphRevision: ctx.input.graphRevision,
+    generation: stage.generation,
+    attemptOrdinal: stage.attemptOrdinal,
+    action: "approve",
+    outcome:
+      directive.mode === "delegate"
+        ? "delegate"
+        : directive.mode === "resume"
+          ? "repair"
+          : "repair_fresh",
+    directive,
+    proposalId: observation.proposalId,
+    repairsUsed: nextCounters.repairsUsed,
+    repairBudget: maxRepairAttemptsFor(
+      ctx.stagesById.get(stage.stageId)!,
+      ctx.graph,
+      ctx.input.effectiveLimits,
+    ),
+    identicalSignatureCount: nextCounters.identicalSignatureCount,
+    recordedAt: ctx.input.now,
+  };
+  ctx.recoveryDecisions.push(recoveryDecision);
+  setRecoveryCounters(ctx, stage, nextCounters);
+  applyTransition(ctx, stage, "retrying", "retry_scheduled", {
+    action: "approve_recovery",
+    attemptId: observation.attemptId ?? stage.currentAttemptId,
+    decisionReason: "recovery_approved",
+    recoveryDecisionId: recoveryDecision.decisionId,
+  });
+}
+
+function processRecoveryRejected(
+  ctx: TickContext,
+  stage: MutableStage,
+  observation: SchedulerObservation,
+): void {
+  if (stage.state !== "waiting") {
+    return;
+  }
+  const counters = getRecoveryCounters(ctx, stage);
+  if (
+    observation.proposalId !== undefined &&
+    counters.pendingProposalId !== undefined &&
+    observation.proposalId !== counters.pendingProposalId
+  ) {
+    return;
+  }
+  const recoveryDecision: PipelineRecoveryDecisionPlain = {
+    schemaVersion: 1,
+    decisionId: deriveRecoveryDecisionId({
+      runId: ctx.input.runId,
+      graphRevision: ctx.input.graphRevision,
+      stageId: stage.stageId,
+      generation: stage.generation,
+      attemptOrdinal: stage.attemptOrdinal,
+      action: "reject",
+    }),
+    runId: ctx.input.runId,
+    stageId: stage.stageId,
+    graphRevision: ctx.input.graphRevision,
+    generation: stage.generation,
+    attemptOrdinal: stage.attemptOrdinal,
+    action: "reject",
+    outcome: "rejected",
+    ...(observation.proposalId !== undefined ? { proposalId: observation.proposalId } : {}),
+    repairsUsed: counters.repairsUsed,
+    repairBudget: maxRepairAttemptsFor(
+      ctx.stagesById.get(stage.stageId)!,
+      ctx.graph,
+      ctx.input.effectiveLimits,
+    ),
+    identicalSignatureCount: counters.identicalSignatureCount,
+    recordedAt: ctx.input.now,
+  };
+  ctx.recoveryDecisions.push(recoveryDecision);
+  setRecoveryCounters(ctx, stage, {
+    repairsUsed: counters.repairsUsed,
+    identicalSignatureCount: counters.identicalSignatureCount,
+    ...(counters.lastSignatureDigest !== undefined
+      ? { lastSignatureDigest: counters.lastSignatureDigest }
+      : {}),
+  });
+  applyTransition(ctx, stage, "failed", "attempt_failed", {
+    action: "reject_recovery",
+    attemptId: observation.attemptId ?? stage.currentAttemptId,
+    decisionReason: "recovery_rejected",
+    recoveryDecisionId: recoveryDecision.decisionId,
+  });
 }
 
 function processObservation(ctx: TickContext, observation: SchedulerObservation): void {
@@ -764,32 +1249,18 @@ function processObservation(ctx: TickContext, observation: SchedulerObservation)
       return;
     }
     case "attempt_failed": {
-      if (stage.state !== "running" && stage.state !== "waiting") {
-        return;
-      }
-      const definition = ctx.stagesById.get(stage.stageId)!;
-      const maxRepairs = maxRepairAttemptsFor(definition, ctx.graph);
-      const repairsUsed = Math.max(0, stage.attemptOrdinal - 1);
-      const canRetry = observation.retryable === true && repairsUsed < maxRepairs;
-      if (canRetry) {
-        applyTransition(ctx, stage, "retrying", "retry_scheduled", {
-          action: "retry",
-          attemptId: observation.attemptId ?? stage.currentAttemptId,
-        });
-      } else {
-        applyTransition(
-          ctx,
-          stage,
-          "failed",
-          repairsUsed >= maxRepairs && observation.retryable === true
-            ? "retry_exhausted"
-            : "attempt_failed",
-          {
-            action: "fail",
-            attemptId: observation.attemptId ?? stage.currentAttemptId,
-          },
-        );
-      }
+      processAttemptFailed(ctx, stage, observation);
+      return;
+    }
+    case "recovery_approved": {
+      processRecoveryApproved(ctx, stage, observation);
+      return;
+    }
+    case "recovery_rejected": {
+      processRecoveryRejected(ctx, stage, observation);
+      return;
+    }
+    case "recovery_proposed": {
       return;
     }
     case "cancellation_settled": {
@@ -810,9 +1281,6 @@ function processObservation(ctx: TickContext, observation: SchedulerObservation)
 function rearmRetries(ctx: TickContext, retryingAtTickStart: ReadonlySet<string>): void {
   for (const stageId of [...retryingAtTickStart].sort()) {
     const stage = ctx.working.get(stageId)!;
-    // Only rearm stages that entered this tick already in `retrying`. A
-    // failure observed on this tick stops at `retrying` so running →
-    // retrying → ready never collapses onto one tick.
     if (stage.state !== "retrying") {
       continue;
     }
@@ -827,7 +1295,14 @@ function rearmRetries(ctx: TickContext, retryingAtTickStart: ReadonlySet<string>
 }
 
 function queueReadyStages(ctx: TickContext): void {
-  const maxConcurrent = ctx.graph.limits.maxConcurrentWorkers;
+  const maxConcurrent = resolveEffectiveConcurrency({
+    ...(ctx.input.effectiveLimits?.maxConcurrentWorkers !== undefined
+      ? { effectiveMaxConcurrentWorkers: ctx.input.effectiveLimits.maxConcurrentWorkers }
+      : {}),
+    ...(ctx.graph.limits.maxConcurrentWorkers !== undefined
+      ? { pipelineMaxConcurrentWorkers: ctx.graph.limits.maxConcurrentWorkers }
+      : {}),
+  });
   let inFlight = 0;
   for (const stage of ctx.working.values()) {
     if (stage.state === "queued" || stage.state === "running" || stage.state === "waiting") {
@@ -863,8 +1338,10 @@ function queueReadyStages(ctx: TickContext): void {
       key: `${stage.stageId}:${stage.generation}:${stage.attemptOrdinal}`,
     });
 
-    ctx.attempts.push({
-      schemaVersion: 1,
+    const counters = getRecoveryCounters(ctx, stage);
+    const directive = counters.pendingDirective;
+    const attempt: StageAttempt = {
+      schemaVersion: ctx.v2 || directive !== undefined ? 2 : 1,
       attemptId,
       runId: ctx.input.runId,
       pipelineId: ctx.input.pipelineId,
@@ -874,9 +1351,34 @@ function queueReadyStages(ctx: TickContext): void {
       attemptOrdinal: stage.attemptOrdinal,
       stageType: definition.type,
       createdAt: ctx.input.now,
-    });
+    };
+    if (directive !== undefined) {
+      attempt.retryDirective = directive;
+      attempt.sessionPolicy = directive.sessionPolicy;
+      if (directive.priorAttemptId !== undefined) {
+        attempt.priorAttemptId = directive.priorAttemptId;
+      }
+      if (directive.delegateTo !== undefined) {
+        attempt.delegatedProfileId = directive.delegateTo;
+      }
+      const lastRecovery = [...ctx.recoveryDecisions]
+        .reverse()
+        .find((decision) => decision.stageId === stage.stageId);
+      if (lastRecovery !== undefined) {
+        attempt.recoveryDecisionId = lastRecovery.decisionId;
+      }
+      setRecoveryCounters(ctx, stage, {
+        repairsUsed: counters.repairsUsed,
+        identicalSignatureCount: counters.identicalSignatureCount,
+        ...(counters.lastSignatureDigest !== undefined
+          ? { lastSignatureDigest: counters.lastSignatureDigest }
+          : {}),
+      });
+    }
+
+    ctx.attempts.push(attempt);
     ctx.intents.push({
-      schemaVersion: 1,
+      schemaVersion: ctx.v2 ? 2 : 1,
       intentId,
       runId: ctx.input.runId,
       graphRevision: ctx.input.graphRevision,
@@ -888,6 +1390,7 @@ function queueReadyStages(ctx: TickContext): void {
         attemptId,
         generation: stage.generation,
         attemptOrdinal: stage.attemptOrdinal,
+        ...(directive !== undefined ? { retryDirective: directive } : {}),
       },
       createdAt: ctx.input.now,
     });
@@ -943,9 +1446,6 @@ function computeTerminal(ctx: TickContext): ScheduleTerminal | undefined {
     anySucceeded ||
     stages.every((stage) => stage.state === "cancelled" || stage.state === "failed")
   ) {
-    // Optional failures with all selected work cancelled/failed but no required
-    // failure: if anything succeeded, the graph succeeded; if everything was
-    // unselected, treat as cancelled; otherwise succeeded (optional-only fail).
     if (!anySucceeded && stages.every((stage) => stage.state === "cancelled")) {
       return {
         schemaVersion: 1,
@@ -981,14 +1481,7 @@ function sortDecisions(decisions: SchedulerDecision[]): SchedulerDecision[] {
   });
 }
 
-/**
- * Compute one deterministic scheduler plan from canonical input.
- *
- * Duplicate calls with the same input produce byte-identical plans (same
- * decision, attempt, and intent ids). The store turns those collisions into
- * no-ops via uniqueness constraints.
- */
-export function tickScheduler(input: SchedulerInput): SchedulerPlan {
+function createTickContext(input: SchedulerInput, v2: boolean): TickContext {
   const graph = input.graph as PipelineGraph;
   const { incoming, outgoing } = buildEdgeMaps(graph);
   const stagesById = new Map(graph.stages.map((stage) => [stage.id, stage]));
@@ -996,7 +1489,6 @@ export function tickScheduler(input: SchedulerInput): SchedulerPlan {
   for (const snapshot of input.stages) {
     working.set(snapshot.stageId, cloneStage(snapshot));
   }
-  // Ensure every graph stage has a projection.
   for (const stage of graph.stages) {
     if (!working.has(stage.id)) {
       working.set(stage.id, {
@@ -1013,13 +1505,30 @@ export function tickScheduler(input: SchedulerInput): SchedulerPlan {
     }
   }
 
-  const retryingAtTickStart = new Set(
-    [...working.values()]
-      .filter((stage) => stage.state === "retrying")
-      .map((stage) => stage.stageId),
-  );
+  const recoveryByKey = new Map<string, StageRecoveryCounters & { generation: number }>();
+  for (const entry of input.recoveryState ?? []) {
+    recoveryByKey.set(recoveryKey(entry.stageId, entry.generation), {
+      generation: entry.generation,
+      repairsUsed: entry.repairsUsed,
+      identicalSignatureCount: entry.identicalSignatureCount,
+      ...(entry.lastSignatureDigest !== undefined
+        ? { lastSignatureDigest: entry.lastSignatureDigest }
+        : {}),
+      ...(entry.pendingProposalId !== undefined
+        ? { pendingProposalId: entry.pendingProposalId }
+        : {}),
+      ...(entry.pendingDirective !== undefined
+        ? { pendingDirective: entry.pendingDirective }
+        : entry.pendingProposalJson !== undefined &&
+            typeof entry.pendingProposalJson === "object" &&
+            entry.pendingProposalJson !== null &&
+            "mode" in (entry.pendingProposalJson as object)
+          ? { pendingDirective: entry.pendingProposalJson as PipelineRetryDirectivePlain }
+          : {}),
+    });
+  }
 
-  const ctx: TickContext = {
+  return {
     input,
     graph,
     stagesById,
@@ -1031,16 +1540,27 @@ export function tickScheduler(input: SchedulerInput): SchedulerPlan {
       input.evaluatorDecisions.map((entry) => [entry.edgeKey, entry.selected]),
     ),
     pendingEvaluators: new Set(input.pendingEvaluatorEdgeKeys),
+    recoveryByKey,
     transitions: [],
     decisions: [],
     intents: [],
     attempts: [],
+    recoveryDecisions: [],
     consumedObservationIds: [],
+    v2,
     cancelRequested: false,
     deadlineExceeded: input.deadlineAt !== undefined && input.now >= input.deadlineAt,
   };
+}
 
-  const observations = [...input.observations].sort((left, right) => {
+function runTick(ctx: TickContext): SchedulerPlan {
+  const retryingAtTickStart = new Set(
+    [...ctx.working.values()]
+      .filter((stage) => stage.state === "retrying")
+      .map((stage) => stage.stageId),
+  );
+
+  const observations = [...ctx.input.observations].sort((left, right) => {
     if (left.recordedAt !== right.recordedAt) {
       return left.recordedAt < right.recordedAt ? -1 : 1;
     }
@@ -1067,7 +1587,6 @@ export function tickScheduler(input: SchedulerInput): SchedulerPlan {
 
   rearmRetries(ctx, retryingAtTickStart);
 
-  // Release passes: fan-out/fan-in may unlock stages in waves within one tick.
   let progressed = true;
   while (progressed) {
     const before = ctx.transitions.length + ctx.intents.length;
@@ -1079,7 +1598,6 @@ export function tickScheduler(input: SchedulerInput): SchedulerPlan {
 
   queueReadyStages(ctx);
 
-  // If cancel landed after releases in the same tick, fold inactive cancels.
   if (ctx.cancelRequested || ctx.deadlineExceeded) {
     for (const stageId of [...ctx.working.keys()].sort()) {
       const stage = ctx.working.get(stageId)!;
@@ -1091,7 +1609,7 @@ export function tickScheduler(input: SchedulerInput): SchedulerPlan {
   const terminal = computeTerminal(ctx);
   if (terminal !== undefined) {
     recordDecision(ctx, {
-      stageId: terminal.blockedStageId ?? graph.stages[0]!.id,
+      stageId: terminal.blockedStageId ?? ctx.graph.stages[0]!.id,
       action: "terminal",
       reason:
         terminal.outcome === "blocked"
@@ -1112,12 +1630,12 @@ export function tickScheduler(input: SchedulerInput): SchedulerPlan {
     .sort((left, right) => (left.stageId < right.stageId ? -1 : 1));
 
   const plan: SchedulerPlan = {
-    schemaVersion: 1,
-    runId: input.runId,
-    graphRevision: input.graphRevision,
-    expectedScheduleRevision: input.scheduleRevision,
-    nextScheduleRevision: input.scheduleRevision + 1,
-    recordedAt: input.now,
+    schemaVersion: ctx.v2 ? 2 : 1,
+    runId: ctx.input.runId,
+    graphRevision: ctx.input.graphRevision,
+    expectedScheduleRevision: ctx.input.scheduleRevision,
+    nextScheduleRevision: ctx.input.scheduleRevision + 1,
+    recordedAt: ctx.input.now,
     transitions: ctx.transitions,
     decisions: sortDecisions(ctx.decisions),
     intents: [...ctx.intents].sort((left, right) => (left.intentId < right.intentId ? -1 : 1)),
@@ -1128,7 +1646,46 @@ export function tickScheduler(input: SchedulerInput): SchedulerPlan {
   if (terminal !== undefined) {
     (plan as { terminal?: ScheduleTerminal }).terminal = terminal;
   }
+  if (ctx.v2 || ctx.recoveryDecisions.length > 0) {
+    plan.recoveryDecisions = [...ctx.recoveryDecisions].sort((left, right) =>
+      left.decisionId < right.decisionId ? -1 : left.decisionId > right.decisionId ? 1 : 0,
+    );
+    plan.recoveryState = freezeRecoveryState(ctx);
+  }
   return plan;
+}
+
+/**
+ * Compute one deterministic scheduler plan from canonical input.
+ *
+ * Duplicate calls with the same input produce byte-identical plans (same
+ * decision, attempt, and intent ids). The store turns those collisions into
+ * no-ops via uniqueness constraints.
+ */
+export function tickScheduler(input: SchedulerInput): SchedulerPlan {
+  const v2 =
+    input.schemaVersion === 2 ||
+    input.recoveryState !== undefined ||
+    input.effectiveLimits !== undefined ||
+    input.executionMode !== undefined ||
+    input.observations.some(
+      (observation) =>
+        observation.failure !== undefined ||
+        observation.kind === "recovery_approved" ||
+        observation.kind === "recovery_rejected" ||
+        observation.kind === "recovery_proposed",
+    );
+  return runTick(createTickContext(input, v2));
+}
+
+/** V2 entry point with recovery decisions always present on the plan. */
+export function tickSchedulerV2(input: SchedulerInputV2Plain): SchedulerPlanV2Plain {
+  const plan = runTick(createTickContext({ ...input, schemaVersion: 2 }, true));
+  return {
+    ...plan,
+    schemaVersion: 2,
+    recoveryDecisions: plan.recoveryDecisions ?? [],
+  };
 }
 
 /** Initial pending projections for every stage in a graph. */

@@ -98,6 +98,11 @@ export const PERMITTED_TRANSITIONS: readonly PermittedTransition[] = Object.free
     reasons: ["cancellation_settled"],
   },
   {
+    from: "running",
+    to: "blocked",
+    reasons: ["condition_blocked"],
+  },
+  {
     from: "waiting",
     to: "running",
     reasons: ["attempt_started"],
@@ -121,6 +126,16 @@ export const PERMITTED_TRANSITIONS: readonly PermittedTransition[] = Object.free
     from: "waiting",
     to: "cancelled",
     reasons: ["cancellation_settled"],
+  },
+  {
+    from: "waiting",
+    to: "blocked",
+    reasons: ["condition_blocked"],
+  },
+  {
+    from: "waiting",
+    to: "waiting",
+    reasons: ["attempt_waiting"],
   },
   {
     from: "retrying",

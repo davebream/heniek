@@ -119,6 +119,16 @@ export interface StageRunnerAttemptSnapshot {
   resultEnvelope?: unknown;
 }
 
+/** Retry/session binding from Q028 recovery — optional on prepare. */
+export interface StageRunnerRetryDirective {
+  readonly mode: "fresh" | "resume" | "delegate";
+  readonly sessionPolicy: "fresh" | "resume";
+  readonly priorAttemptId?: string;
+  readonly priorBackendExecutionId?: string;
+  readonly delegateTo?: string;
+  readonly recoveryContextDigest?: string;
+}
+
 export interface StageRunnerPrepareInput {
   readonly attemptId: string;
   readonly runId: string;
@@ -140,6 +150,15 @@ export interface StageRunnerPrepareInput {
   readonly integrationRequest?: IntegrationRequest;
   readonly verifyRequest?: VerifyRequest;
   readonly publishRequest?: PublishRequest;
+  /**
+   * Recovery retry directive. When `mode` is `resume` and
+   * `priorBackendExecutionId` is set, the agent runner calls `backend.resume`
+   * instead of `backend.start`. Missing prior execution is a typed failure —
+   * never a silent fresh start.
+   */
+  readonly retryDirective?: StageRunnerRetryDirective;
+  /** Explicit prior backend id when not embedded in `retryDirective`. */
+  readonly priorBackendExecutionId?: string;
 }
 
 export interface StageRunnerPrepareOutcome {

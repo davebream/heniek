@@ -13,6 +13,15 @@ import { internalClock, internalHandle, type StateDatabase } from "../database/o
 import { toNullableText, toSafeInteger, toText } from "../database/pragma.js";
 import { StateStoreError } from "../errors.js";
 import { type JsonValue, parseJsonValue, stringifyCanonical } from "../json.js";
+import {
+  type InsertRetryDirectiveInput,
+  listStageRecoveryStates,
+  readCanonicalRunState,
+  type UpsertStageRecoveryStateInput,
+  writeRecoveryDecision,
+  writeRetryDirective,
+  writeStageRecoveryState,
+} from "./recovery-store.js";
 
 export type PipelineGraph = Static<typeof PipelineGraphV1>;
 
@@ -128,6 +137,8 @@ export interface PipelineSchedulerPlanLike {
     readonly attemptOrdinal: number;
     readonly stageType: string;
     readonly createdAt: string;
+    readonly recoveryDecisionId?: string;
+    readonly retryDirective?: unknown;
   }[];
   readonly stagePatches: readonly {
     readonly runId: string;
@@ -148,6 +159,31 @@ export interface PipelineSchedulerPlanLike {
     readonly reason: string;
     readonly blockedStageId?: string;
   };
+  /** Optional V2 recovery ledger — ignored by V1 callers. */
+  readonly recoveryDecisions?: ReadonlyArray<{
+    readonly decisionId: string;
+    readonly runId: string;
+    readonly stageId: string;
+    readonly graphRevision: number;
+    readonly generation: number;
+    readonly attemptOrdinal: number;
+    readonly action: string;
+    readonly outcome: string;
+    readonly recordedAt: string;
+    readonly decision?: JsonValue;
+  }>;
+  /** Alias for recoveryStatePatches used by tickSchedulerV2 plans. */
+  readonly recoveryState?: readonly {
+    readonly stageId: string;
+    readonly generation: number;
+    readonly repairsUsed: number;
+    readonly lastSignatureDigest?: string;
+    readonly identicalSignatureCount: number;
+    readonly pendingProposalId?: string;
+    readonly pendingProposalJson?: unknown;
+  }[];
+  readonly recoveryStatePatches?: readonly UpsertStageRecoveryStateInput[];
+  readonly retryDirectives?: readonly InsertRetryDirectiveInput[];
 }
 
 export type ApplyPipelineSchedulerPlanResult =
@@ -392,7 +428,7 @@ export function readPendingPipelineObservations(
 export function toSchedulerObservations(
   rows: readonly PipelineSchedulerObservationRow[],
 ): readonly {
-  readonly schemaVersion: 1;
+  readonly schemaVersion: 1 | 2;
   readonly observationId: string;
   readonly kind:
     | "attempt_started"
@@ -402,21 +438,41 @@ export function toSchedulerObservations(
     | "cancellation_settled"
     | "evaluator_decided"
     | "cancel_requested"
-    | "manual_rerun";
+    | "manual_rerun"
+    | "recovery_proposed"
+    | "recovery_approved"
+    | "recovery_rejected";
   readonly stageId?: string;
   readonly attemptId?: string;
   readonly retryable?: boolean;
   readonly edgeKey?: string;
   readonly selected?: boolean;
   readonly recordedAt: string;
+  readonly failure?: unknown;
+  readonly signature?: unknown;
+  readonly proposalId?: string;
+  readonly approved?: boolean;
+  readonly priorBackendExecutionId?: string;
+  readonly resumeAvailable?: boolean;
+  readonly classification?: string;
+  readonly phase?: string;
+  readonly code?: string;
+  readonly backendClassification?: string;
+  readonly validationFailures?: readonly string[];
 }[] {
   return rows.map((row) => {
     const payload =
       typeof row.payload === "object" && row.payload !== null && !Array.isArray(row.payload)
         ? (row.payload as Record<string, unknown>)
         : {};
+    const hasRecoveryFields =
+      payload.failure !== undefined ||
+      payload.signature !== undefined ||
+      row.kind === "recovery_approved" ||
+      row.kind === "recovery_rejected" ||
+      row.kind === "recovery_proposed";
     return {
-      schemaVersion: 1 as const,
+      schemaVersion: (hasRecoveryFields ? 2 : 1) as 1 | 2,
       observationId: row.observationId,
       kind: row.kind as
         | "attempt_started"
@@ -426,13 +482,41 @@ export function toSchedulerObservations(
         | "cancellation_settled"
         | "evaluator_decided"
         | "cancel_requested"
-        | "manual_rerun",
+        | "manual_rerun"
+        | "recovery_proposed"
+        | "recovery_approved"
+        | "recovery_rejected",
       recordedAt: row.recordedAt,
       ...(typeof payload.stageId === "string" ? { stageId: payload.stageId } : {}),
       ...(typeof payload.attemptId === "string" ? { attemptId: payload.attemptId } : {}),
       ...(typeof payload.retryable === "boolean" ? { retryable: payload.retryable } : {}),
       ...(typeof payload.edgeKey === "string" ? { edgeKey: payload.edgeKey } : {}),
       ...(typeof payload.selected === "boolean" ? { selected: payload.selected } : {}),
+      ...(payload.failure !== undefined ? { failure: payload.failure } : {}),
+      ...(payload.signature !== undefined ? { signature: payload.signature } : {}),
+      ...(typeof payload.proposalId === "string" ? { proposalId: payload.proposalId } : {}),
+      ...(typeof payload.approved === "boolean" ? { approved: payload.approved } : {}),
+      ...(typeof payload.priorBackendExecutionId === "string"
+        ? { priorBackendExecutionId: payload.priorBackendExecutionId }
+        : {}),
+      ...(typeof payload.resumeAvailable === "boolean"
+        ? { resumeAvailable: payload.resumeAvailable }
+        : {}),
+      ...(typeof payload.classification === "string"
+        ? { classification: payload.classification }
+        : {}),
+      ...(typeof payload.phase === "string" ? { phase: payload.phase } : {}),
+      ...(typeof payload.code === "string" ? { code: payload.code } : {}),
+      ...(typeof payload.backendClassification === "string"
+        ? { backendClassification: payload.backendClassification }
+        : {}),
+      ...(Array.isArray(payload.validationFailures)
+        ? {
+            validationFailures: payload.validationFailures.filter(
+              (entry): entry is string => typeof entry === "string",
+            ),
+          }
+        : {}),
     };
   });
 }
@@ -615,6 +699,63 @@ export function applyPipelineSchedulerPlan(
       }
     }
 
+    for (const decision of plan.recoveryDecisions ?? []) {
+      const decisionJson =
+        "decision" in decision && decision.decision !== undefined
+          ? decision.decision
+          : (decision as unknown as JsonValue);
+      writeRecoveryDecision(handle, {
+        decisionId: decision.decisionId,
+        runId: decision.runId,
+        stageId: decision.stageId,
+        graphRevision: decision.graphRevision,
+        generation: decision.generation,
+        attemptOrdinal: decision.attemptOrdinal,
+        action: decision.action,
+        outcome: decision.outcome,
+        decision: decisionJson,
+        recordedAt: decision.recordedAt,
+      });
+    }
+
+    const recoveryPatches: UpsertStageRecoveryStateInput[] = [...(plan.recoveryStatePatches ?? [])];
+    for (const entry of plan.recoveryState ?? []) {
+      recoveryPatches.push({
+        runId: plan.runId,
+        stageId: entry.stageId,
+        generation: entry.generation,
+        repairsUsed: entry.repairsUsed,
+        lastSignatureDigest: entry.lastSignatureDigest ?? null,
+        identicalSignatureCount: entry.identicalSignatureCount,
+        pendingProposalId: entry.pendingProposalId ?? null,
+        pendingProposal:
+          entry.pendingProposalJson === undefined ? null : (entry.pendingProposalJson as JsonValue),
+        updatedAt: plan.recordedAt,
+      });
+    }
+    for (const patch of recoveryPatches) {
+      writeStageRecoveryState(handle, patch);
+    }
+
+    const retryDirectives: InsertRetryDirectiveInput[] = [...(plan.retryDirectives ?? [])];
+    for (const attempt of plan.attempts) {
+      if (
+        attempt.retryDirective !== undefined &&
+        attempt.recoveryDecisionId !== undefined &&
+        !retryDirectives.some((entry) => entry.attemptId === attempt.attemptId)
+      ) {
+        retryDirectives.push({
+          attemptId: attempt.attemptId,
+          recoveryDecisionId: attempt.recoveryDecisionId,
+          directive: attempt.retryDirective as JsonValue,
+          createdAt: attempt.createdAt,
+        });
+      }
+    }
+    for (const directive of retryDirectives) {
+      writeRetryDirective(handle, directive);
+    }
+
     const updateStage = handle.prepare(
       `UPDATE pipeline_stage_projection
           SET graph_revision = ?, generation = ?, state = ?, attempt_ordinal = ?,
@@ -713,11 +854,14 @@ export function loadPipelineSchedulerInputParts(
     readonly recordedAt: string;
   }[];
   readonly pendingEvaluatorEdgeKeys: readonly string[];
+  readonly recoveryState: ReturnType<typeof listStageRecoveryStates>;
+  readonly canonicalState: JsonValue;
 } {
   const schedule = readPipelineSchedule(db, runId);
   if (schedule === undefined) {
     throw new StateStoreError(`pipeline schedule ${runId} does not exist`);
   }
+  const canonical = readCanonicalRunState(db, runId);
   return {
     schedule,
     graph: readPipelineGraph(db, runId, schedule.graphRevision),
@@ -725,5 +869,7 @@ export function loadPipelineSchedulerInputParts(
     observations: readPendingPipelineObservations(db, runId),
     evaluatorDecisions: readPipelineEvaluatorDecisions(db, runId),
     pendingEvaluatorEdgeKeys: readPendingEvaluatorEdgeKeys(db, runId),
+    recoveryState: listStageRecoveryStates(db, runId),
+    canonicalState: canonical?.state ?? {},
   };
 }

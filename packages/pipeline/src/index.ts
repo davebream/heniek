@@ -7,6 +7,7 @@ export * from "./graph/canonical.js";
 export * from "./graph/normalize.js";
 export * from "./graph/validate.js";
 export * from "./parse.js";
+export * from "./recovery/index.js";
 export * from "./render.js";
 export * from "./reporter.js";
 export * from "./scheduler/ids.js";

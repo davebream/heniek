@@ -33,8 +33,19 @@ export function deriveDecisionId(input: {
 export function deriveIntentId(input: {
   readonly runId: string;
   readonly graphRevision: number;
-  readonly kind: "dispatch" | "cancel" | "evaluator";
+  readonly kind: "dispatch" | "cancel" | "evaluator" | "recovery_dispatch";
   readonly key: string;
 }): string {
   return `pi:${input.runId}:${input.graphRevision}:${input.kind}:${input.key}`;
+}
+
+export function deriveRecoveryDecisionId(input: {
+  readonly runId: string;
+  readonly graphRevision: number;
+  readonly stageId: string;
+  readonly generation: number;
+  readonly attemptOrdinal: number;
+  readonly action: string;
+}): string {
+  return `prd:${input.runId}:${input.graphRevision}:${input.stageId}:${input.generation}:${input.attemptOrdinal}:${input.action}`;
 }

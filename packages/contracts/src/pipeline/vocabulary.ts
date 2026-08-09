@@ -149,3 +149,113 @@ export const PipelineSchedulerDecisionAction = Type.Union([
   Type.Literal("terminal"),
 ]);
 export type PipelineSchedulerDecisionAction = Static<typeof PipelineSchedulerDecisionAction>;
+
+/**
+ * §19.6 / §24 failure categories for recovery policy. Distinct from runner
+ * failure *classifications*: category is the policy bucket after upper-bound
+ * mapping, not the raw runner taxonomy.
+ */
+export const PipelineFailureCategory = Type.Union([
+  Type.Literal("transient"),
+  Type.Literal("provider"),
+  Type.Literal("validation"),
+  Type.Literal("conflict"),
+  Type.Literal("security"),
+  Type.Literal("terminal"),
+]);
+export type PipelineFailureCategory = Static<typeof PipelineFailureCategory>;
+
+/**
+ * Recovery vocabulary spanning policy outcomes and HITL/scheduler verbs.
+ * Decision rows narrow `action` / `outcome` further; this union is the
+ * closed set of recovery-related tokens Q028 may emit.
+ */
+export const PipelineRecoveryAction = Type.Union([
+  Type.Literal("pause"),
+  Type.Literal("fail"),
+  Type.Literal("repair"),
+  Type.Literal("repair_fresh"),
+  Type.Literal("delegate"),
+  Type.Literal("exhaust"),
+  Type.Literal("unchanged_exhaust"),
+  Type.Literal("reject"),
+  Type.Literal("propose"),
+  Type.Literal("approve"),
+  Type.Literal("dispatch"),
+  Type.Literal("block"),
+]);
+export type PipelineRecoveryAction = Static<typeof PipelineRecoveryAction>;
+
+/** How a repair/retry attempt binds to prior session and identity. */
+export const PipelineRetryMode = Type.Union([
+  Type.Literal("fresh"),
+  Type.Literal("resume"),
+  Type.Literal("delegate"),
+]);
+export type PipelineRetryMode = Static<typeof PipelineRetryMode>;
+
+/**
+ * V2 transition reasons. V1 `PipelineTransitionReason` stays frozen; recovery
+ * tokens are additive here only.
+ */
+export const PipelineTransitionReasonV2 = Type.Union([
+  Type.Literal("dependencies_satisfied"),
+  Type.Literal("root_eligible"),
+  Type.Literal("dispatch_intent"),
+  Type.Literal("attempt_started"),
+  Type.Literal("attempt_waiting"),
+  Type.Literal("attempt_succeeded"),
+  Type.Literal("attempt_failed"),
+  Type.Literal("retry_scheduled"),
+  Type.Literal("retry_exhausted"),
+  Type.Literal("condition_not_selected"),
+  Type.Literal("condition_blocked"),
+  Type.Literal("dependency_unsatisfied"),
+  Type.Literal("cancel_requested"),
+  Type.Literal("cancellation_settled"),
+  Type.Literal("deadline_exceeded"),
+  Type.Literal("manual_rerun"),
+  Type.Literal("pipeline_cancelled"),
+  Type.Literal("recovery_proposed"),
+  Type.Literal("recovery_approved"),
+  Type.Literal("recovery_rejected"),
+  Type.Literal("repair_exhausted"),
+  Type.Literal("unchanged_failure_exhausted"),
+]);
+export type PipelineTransitionReasonV2 = Static<typeof PipelineTransitionReasonV2>;
+
+/**
+ * V2 scheduler decision actions. V1 stays frozen; recovery verbs are additive.
+ */
+export const PipelineSchedulerDecisionActionV2 = Type.Union([
+  Type.Literal("release"),
+  Type.Literal("queue"),
+  Type.Literal("start"),
+  Type.Literal("wait"),
+  Type.Literal("succeed"),
+  Type.Literal("fail"),
+  Type.Literal("retry"),
+  Type.Literal("rearm"),
+  Type.Literal("cancel"),
+  Type.Literal("block"),
+  Type.Literal("select_edge"),
+  Type.Literal("reject_edge"),
+  Type.Literal("request_evaluator"),
+  Type.Literal("request_cancel"),
+  Type.Literal("rerun"),
+  Type.Literal("terminal"),
+  Type.Literal("propose_recovery"),
+  Type.Literal("approve_recovery"),
+  Type.Literal("reject_recovery"),
+  Type.Literal("dispatch_recovery"),
+]);
+export type PipelineSchedulerDecisionActionV2 = Static<typeof PipelineSchedulerDecisionActionV2>;
+
+/** V2 outbox intent kinds, including recovery-driven dispatch. */
+export const PipelineSchedulerIntentKindV2 = Type.Union([
+  Type.Literal("dispatch"),
+  Type.Literal("cancel"),
+  Type.Literal("evaluator"),
+  Type.Literal("recovery_dispatch"),
+]);
+export type PipelineSchedulerIntentKindV2 = Static<typeof PipelineSchedulerIntentKindV2>;

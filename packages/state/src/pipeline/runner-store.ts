@@ -549,6 +549,12 @@ export interface FinalizeRunnerAttemptInput {
   readonly observationId: string;
   readonly observationKind: "attempt_succeeded" | "attempt_failed" | "cancellation_settled";
   readonly retryable?: boolean;
+  /** Classified PipelineFailure/v1 JSON for attempt_failed observations. */
+  readonly classifiedFailure?: JsonValue;
+  /** PipelineFailureSignature/v1 JSON paired with classifiedFailure. */
+  readonly failureSignature?: JsonValue;
+  readonly priorBackendExecutionId?: string;
+  readonly resumeAvailable?: boolean;
   readonly result?: StageRunnerResult;
   readonly failure?: StageRunnerFailure;
   readonly outputs: readonly StageRunnerOutputBinding[];
@@ -633,6 +639,12 @@ export function finalizeRunnerAttempt(
       stageId: current.stageId,
       attemptId: current.attemptId,
       ...(input.retryable === undefined ? {} : { retryable: input.retryable }),
+      ...(input.classifiedFailure === undefined ? {} : { failure: input.classifiedFailure }),
+      ...(input.failureSignature === undefined ? {} : { signature: input.failureSignature }),
+      ...(input.priorBackendExecutionId === undefined
+        ? {}
+        : { priorBackendExecutionId: input.priorBackendExecutionId }),
+      ...(input.resumeAvailable === undefined ? {} : { resumeAvailable: input.resumeAvailable }),
     };
     handle
       .prepare(

@@ -25,7 +25,12 @@ import type {
   VerifyRequestV1,
   WorkspaceId,
 } from "@heniek/contracts";
-import { type SchedulerInput, tickScheduler } from "@heniek/pipeline";
+import {
+  buildCanonicalConditionState,
+  type SchedulerInput,
+  tickScheduler,
+  tickSchedulerV2,
+} from "@heniek/pipeline";
 import {
   type ApprovalStageRunner,
   createAgentStageRunner,
@@ -38,6 +43,7 @@ import {
   type GitIntegrationAdapter,
   type StageRunner,
   type StageRunnerPrepareInput,
+  type StageRunnerRetryDirective,
   type StageRunnerStoreCallbacks,
 } from "@heniek/runner";
 import {
@@ -56,19 +62,26 @@ import {
   readOpenRunnerAttempts,
   readPendingPipelineSchedulerIntents,
   readPipelineSchedule,
+  readRetryDirective,
   readRunnerAttempt,
   readRunnerOperationState,
   reconstructRunnerOperation,
   recordPipelineObservation,
+  recordRecoveryApproval,
   recordRunnerApprovalAnswer,
   reportRunnerCleanupHealth,
   type StateDatabase,
+  toSchedulerObservations,
   updateRunnerAttempt,
   updateRunnerOperationState,
+  upsertCanonicalRunState,
 } from "@heniek/state";
 import { validateExecutionWorkspace, type WorkspaceService } from "@heniek/workspace";
 import type { Static } from "@sinclair/typebox";
+import { buildClassifiedFailureObservation } from "./recovery-observation.js";
 import { finalizeStageArtifact } from "./stage-completion.js";
+
+const DEFAULT_MAX_REPAIR_ATTEMPTS = 3;
 
 type ProfileChain = Static<typeof ResolvedProfileChainV1>;
 type ResolvedProfile = Static<typeof ResolvedProfileSchemaV2>;
@@ -184,6 +197,12 @@ export interface PipelineRunnerService {
         readonly currentRevision: number;
       }
   >;
+  recordRecoveryApproval(input: {
+    readonly runId: string;
+    readonly stageId: string;
+    readonly proposalId: string;
+    readonly approved: boolean;
+  }): ReturnType<typeof recordRecoveryApproval>;
   stop(): void;
 }
 
@@ -199,10 +218,95 @@ function workspaceConfiguration(remote: string, branch: string) {
   };
 }
 
+function asRetryDirective(value: unknown): StageRunnerRetryDirective | undefined {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return undefined;
+  }
+  const record = value as Record<string, unknown>;
+  if (record.mode !== "fresh" && record.mode !== "resume" && record.mode !== "delegate") {
+    return undefined;
+  }
+  if (record.sessionPolicy !== "fresh" && record.sessionPolicy !== "resume") {
+    return undefined;
+  }
+  return {
+    mode: record.mode,
+    sessionPolicy: record.sessionPolicy,
+    ...(typeof record.priorAttemptId === "string" ? { priorAttemptId: record.priorAttemptId } : {}),
+    ...(typeof record.priorBackendExecutionId === "string"
+      ? { priorBackendExecutionId: record.priorBackendExecutionId }
+      : {}),
+    ...(typeof record.delegateTo === "string" ? { delegateTo: record.delegateTo } : {}),
+    ...(typeof record.recoveryContextDigest === "string"
+      ? { recoveryContextDigest: record.recoveryContextDigest }
+      : {}),
+  };
+}
+
 function toSchedulerInput(db: StateDatabase, runId: string, now: string): SchedulerInput {
   const parts = loadPipelineSchedulerInputParts(db, runId);
+  const graphLimits = parts.graph.limits ?? {};
+  const maxRepairFromGraph =
+    typeof graphLimits.maxRepairAttempts === "number" ? graphLimits.maxRepairAttempts : undefined;
+  const effectiveMaxRepair =
+    maxRepairFromGraph === undefined
+      ? DEFAULT_MAX_REPAIR_ATTEMPTS
+      : Math.min(maxRepairFromGraph, DEFAULT_MAX_REPAIR_ATTEMPTS);
+
+  const recoveryState = parts.recoveryState.map((row) => {
+    const parsedDirective =
+      row.pendingProposal === null ? undefined : asRetryDirective(row.pendingProposal);
+    const pendingDirective =
+      parsedDirective === undefined
+        ? undefined
+        : ({ schemaVersion: 1, ...parsedDirective } as const);
+    return {
+      stageId: row.stageId,
+      generation: row.generation,
+      repairsUsed: row.repairsUsed,
+      identicalSignatureCount: row.identicalSignatureCount,
+      ...(row.lastSignatureDigest === null ? {} : { lastSignatureDigest: row.lastSignatureDigest }),
+      ...(row.pendingProposalId === null ? {} : { pendingProposalId: row.pendingProposalId }),
+      ...(row.pendingProposal === null
+        ? {}
+        : {
+            pendingProposalJson: row.pendingProposal,
+            ...(pendingDirective === undefined ? {} : { pendingDirective }),
+          }),
+    };
+  });
+
+  const observations = toSchedulerObservations(parts.observations).map((observation) => {
+    const { failure, signature, ...rest } = observation;
+    return {
+      ...rest,
+      ...(failure !== undefined
+        ? {
+            failure: failure as NonNullable<SchedulerInput["observations"][number]["failure"]>,
+          }
+        : {}),
+      ...(signature !== undefined
+        ? {
+            signature: signature as NonNullable<
+              SchedulerInput["observations"][number]["signature"]
+            >,
+          }
+        : {}),
+    };
+  });
+
+  const useV2 =
+    recoveryState.length > 0 ||
+    observations.some(
+      (observation) =>
+        observation.failure !== undefined ||
+        observation.kind === "recovery_approved" ||
+        observation.kind === "recovery_rejected" ||
+        observation.kind === "recovery_proposed",
+    );
+
   return {
-    schemaVersion: 1,
+    schemaVersion: useV2 ? 2 : 1,
     runId,
     pipelineId: parts.schedule.pipelineId,
     graphRevision: parts.schedule.graphRevision,
@@ -230,26 +334,28 @@ function toSchedulerInput(db: StateDatabase, runId: string, now: string): Schedu
         : {}),
       ...(stage.blockReason ? { blockReason: stage.blockReason } : {}),
     })),
-    observations: parts.observations.map((row) => {
-      const payload =
-        typeof row.payload === "object" && row.payload !== null && !Array.isArray(row.payload)
-          ? (row.payload as Record<string, unknown>)
-          : {};
-      return {
-        schemaVersion: 1 as const,
-        observationId: row.observationId,
-        kind: row.kind as SchedulerInput["observations"][number]["kind"],
-        recordedAt: row.recordedAt,
-        ...(typeof payload.stageId === "string" ? { stageId: payload.stageId } : {}),
-        ...(typeof payload.attemptId === "string" ? { attemptId: payload.attemptId } : {}),
-        ...(typeof payload.retryable === "boolean" ? { retryable: payload.retryable } : {}),
-        ...(typeof payload.edgeKey === "string" ? { edgeKey: payload.edgeKey } : {}),
-        ...(typeof payload.selected === "boolean" ? { selected: payload.selected } : {}),
-      };
-    }),
-    canonicalState: {},
+    observations,
+    canonicalState: parts.canonicalState,
     pendingEvaluatorEdgeKeys: [...parts.pendingEvaluatorEdgeKeys],
     evaluatorDecisions: [...parts.evaluatorDecisions],
+    ...(useV2
+      ? {
+          recoveryState,
+          effectiveLimits: {
+            maxRepairAttempts: effectiveMaxRepair,
+            ...(typeof graphLimits.maxConcurrentWorkers === "number"
+              ? { maxConcurrentWorkers: graphLimits.maxConcurrentWorkers }
+              : {}),
+            ...(typeof graphLimits.maxPipelineDurationMs === "number"
+              ? { maxPipelineDurationMs: graphLimits.maxPipelineDurationMs }
+              : {}),
+            ...(typeof graphLimits.maxGraphRevisions === "number"
+              ? { maxGraphRevisions: graphLimits.maxGraphRevisions }
+              : {}),
+          },
+          executionMode: parts.graph.mode,
+        }
+      : {}),
   };
 }
 
@@ -359,6 +465,19 @@ function recoveryForMissingHandle(
   return "manual";
 }
 
+function resolveRetryDirective(
+  payload: Record<string, unknown>,
+  attemptId: string,
+  db: StateDatabase,
+): StageRunnerRetryDirective | undefined {
+  const fromPayload = asRetryDirective(payload.retryDirective);
+  if (fromPayload !== undefined) {
+    return fromPayload;
+  }
+  const stored = readRetryDirective(db, attemptId);
+  return stored === undefined ? undefined : asRetryDirective(stored.directive);
+}
+
 export function createPipelineRunnerService(
   options: PipelineRunnerServiceOptions,
 ): PipelineRunnerService {
@@ -399,7 +518,12 @@ export function createPipelineRunnerService(
   async function tick(runId: string): Promise<void> {
     for (let attempt = 0; attempt < 8; attempt += 1) {
       const input = toSchedulerInput(options.db, runId, options.clock.nowIso());
-      const plan = tickScheduler(input);
+      const plan =
+        input.schemaVersion === 2 ||
+        input.recoveryState !== undefined ||
+        input.effectiveLimits !== undefined
+          ? tickSchedulerV2({ ...input, schemaVersion: 2 })
+          : tickScheduler(input);
       const applied = applyPipelineSchedulerPlan(options.db, plan);
       if (applied.status === "conflict") continue;
       return;
@@ -739,14 +863,34 @@ export function createPipelineRunnerService(
           ? ("cancellation_settled" as const)
           : ("attempt_failed" as const);
 
+    const classified =
+      observationKind === "attempt_failed" && finalized.result.failure !== undefined
+        ? buildClassifiedFailureObservation({
+            runnerFailure: finalized.result.failure,
+            validation: finalized.validation,
+          })
+        : undefined;
+
     finalizeRunnerAttempt(options.db, {
       attemptId,
       expectedRevision: attempt.revision,
       observationId: options.ids.next("obs"),
       observationKind,
-      ...(finalized.result.failure?.retryable === undefined
+      ...(classified === undefined
+        ? finalized.result.failure?.retryable === undefined
+          ? {}
+          : { retryable: finalized.result.failure.retryable }
+        : {
+            retryable: classified.retryable,
+            classifiedFailure: classified.failure as never,
+            failureSignature: classified.signature as never,
+          }),
+      ...(attempt.backendExecutionId === undefined
         ? {}
-        : { retryable: finalized.result.failure.retryable }),
+        : {
+            priorBackendExecutionId: attempt.backendExecutionId,
+            resumeAvailable: attempt.stageType === "agent",
+          }),
       result: finalized.result as never,
       ...(finalized.result.failure === undefined
         ? {}
@@ -766,6 +910,31 @@ export function createPipelineRunnerService(
       recovery: finalized.result.failure?.recovery ?? "none",
       now: options.clock.nowIso(),
     });
+
+    if (finalized.result.outcome === "succeeded" && finalized.validation.valid) {
+      const parts = loadPipelineSchedulerInputParts(options.db, attempt.runId);
+      const graphStage = parts.graph.stages.find((candidate) => candidate.id === attempt.stageId);
+      const built = buildCanonicalConditionState({
+        baseState: parts.canonicalState,
+        finalizedOutputs: [
+          {
+            stageId: attempt.stageId,
+            writes: graphStage?.writes ?? [],
+            outputs: finalized.result.outputs.map((output) => ({
+              reference: output.reference,
+              kind: output.kind,
+              ...(output.value === undefined ? {} : { value: output.value }),
+            })),
+            validationValid: true,
+          },
+        ],
+      });
+      upsertCanonicalRunState(options.db, {
+        runId: attempt.runId,
+        state: built.state as never,
+        now: options.clock.nowIso(),
+      });
+    }
 
     activeRunners.delete(attemptId);
     approvalRunners.delete(attemptId);
@@ -996,6 +1165,17 @@ export function createPipelineRunnerService(
         : createOperationRunner(typedStage, attemptId);
     activeRunners.set(attemptId, runner);
 
+    const retryDirective = resolveRetryDirective(payload, attemptId, options.db);
+    const prepareStage =
+      typedStage === "agent" &&
+      retryDirective?.mode === "delegate" &&
+      retryDirective.delegateTo !== undefined
+        ? {
+            ...stage,
+            profile: retryDirective.delegateTo as NonNullable<typeof stage.profile>,
+          }
+        : stage;
+
     await runner.prepare({
       attemptId,
       runId: intent.runId,
@@ -1004,7 +1184,7 @@ export function createPipelineRunnerService(
       graphRevision: intent.graphRevision,
       generation,
       attemptOrdinal,
-      stage,
+      stage: prepareStage,
       runtimeDirectory,
       ...(checkoutPath === undefined ? {} : { checkoutPath }),
       ...(attempt.workspaceId === undefined ? {} : { workspaceId: attempt.workspaceId }),
@@ -1014,6 +1194,10 @@ export function createPipelineRunnerService(
       ...(integrationRequest === undefined ? {} : { integrationRequest }),
       ...(verifyRequest === undefined ? {} : { verifyRequest }),
       ...(publishRequest === undefined ? {} : { publishRequest }),
+      ...(retryDirective === undefined ? {} : { retryDirective }),
+      ...(retryDirective?.priorBackendExecutionId === undefined
+        ? {}
+        : { priorBackendExecutionId: retryDirective.priorBackendExecutionId }),
     });
     attempt = readRunnerAttempt(options.db, attemptId) ?? attempt;
 
@@ -1331,6 +1515,12 @@ export function createPipelineRunnerService(
     exportAttempt: (attemptId) => exportRunnerAttempt(options.db, attemptId),
     listApprovalInbox: () => listPipelineApprovalInbox(options.db),
     answerApproval,
+    recordRecoveryApproval: (input) =>
+      recordRecoveryApproval(options.db, {
+        ...input,
+        now: options.clock.nowIso(),
+        observationId: options.ids.next("obs"),
+      }),
     stop: () => {
       stopped = true;
       if (timer !== undefined) clearTimeout(timer);
