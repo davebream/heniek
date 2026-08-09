@@ -1,0 +1,16 @@
+{
+  "diagnostics": [
+    {
+      "code": "pipeline.unknown-stage-reference",
+      "column": 13,
+      "line": 10,
+      "message": "No stage with id \"frist\" is declared.",
+      "pointer": "/stages/1/needs/0",
+      "severity": "error",
+      "sourcePath": "packages/pipeline/test/corpus/invalid/unknown-dependency.yaml",
+      "suggestion": "Declare a stage with id \"frist\", or point this dependency at an existing stage."
+    }
+  ],
+  "schemaVersion": 1,
+  "sourcePath": "packages/pipeline/test/corpus/invalid/unknown-dependency.yaml"
+}

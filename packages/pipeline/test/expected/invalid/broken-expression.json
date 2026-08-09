@@ -1,0 +1,16 @@
+{
+  "diagnostics": [
+    {
+      "code": "pipeline.expression-invalid",
+      "column": 23,
+      "line": 10,
+      "message": "Condition expression is incomplete. (at character 33 of the condition)",
+      "pointer": "/stages/0/transitions/0/when/expression",
+      "severity": "error",
+      "sourcePath": "packages/pipeline/test/corpus/invalid/broken-expression.yaml",
+      "suggestion": "Fix the condition at the marked character:\nverify.blockingFindings.length >\n                                ^"
+    }
+  ],
+  "schemaVersion": 1,
+  "sourcePath": "packages/pipeline/test/corpus/invalid/broken-expression.yaml"
+}

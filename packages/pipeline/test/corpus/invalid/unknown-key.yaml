@@ -1,0 +1,8 @@
+schemaVersion: 1
+id: typo
+stages:
+  - id: only
+    type: agent
+    profile: opus-planner
+    reeds:
+      - task.current

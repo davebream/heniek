@@ -1,0 +1,15 @@
+schemaVersion: 1
+id: bad-condition
+stages:
+  - id: verify_step
+    type: verify
+    profile: sol-verifier
+    writes: [artifacts.verification]
+    transitions:
+      - when:
+          expression: verify.blockingFindings.length >
+        then: repair
+  - id: repair
+    type: agent
+    profile: opus-planner
+    reads: [artifacts.verification]

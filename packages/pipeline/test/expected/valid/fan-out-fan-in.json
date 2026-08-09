@@ -1,0 +1,210 @@
+{
+  "context": {},
+  "edges": [
+    {
+      "condition": {
+        "kind": "expression",
+        "nodes": [
+          {
+            "kind": "path",
+            "path": [
+              "gate",
+              "clean"
+            ]
+          },
+          {
+            "kind": "not",
+            "operand": 0
+          }
+        ],
+        "root": 1
+      },
+      "from": "gate",
+      "to": "halt"
+    },
+    {
+      "condition": {
+        "kind": "expression",
+        "nodes": [
+          {
+            "kind": "path",
+            "path": [
+              "test",
+              "failed"
+            ]
+          },
+          {
+            "kind": "literal",
+            "value": 0
+          },
+          {
+            "kind": "compare",
+            "left": 0,
+            "operator": "eq",
+            "right": 1
+          },
+          {
+            "kind": "path",
+            "path": [
+              "lint",
+              "warnings"
+            ]
+          },
+          {
+            "kind": "literal",
+            "value": 5
+          },
+          {
+            "kind": "compare",
+            "left": 3,
+            "operator": "lte",
+            "right": 4
+          },
+          {
+            "kind": "logical",
+            "left": 2,
+            "operator": "and",
+            "right": 5
+          },
+          {
+            "kind": "path",
+            "path": [
+              "gate",
+              "override"
+            ]
+          },
+          {
+            "kind": "literal",
+            "value": "forced"
+          },
+          {
+            "kind": "compare",
+            "left": 7,
+            "operator": "eq",
+            "right": 8
+          },
+          {
+            "kind": "logical",
+            "left": 6,
+            "operator": "or",
+            "right": 9
+          }
+        ],
+        "root": 10
+      },
+      "from": "gate",
+      "to": "ship"
+    },
+    {
+      "from": "lint",
+      "to": "gate"
+    },
+    {
+      "from": "plan",
+      "to": "lint"
+    },
+    {
+      "from": "plan",
+      "to": "test"
+    },
+    {
+      "from": "test",
+      "to": "gate"
+    }
+  ],
+  "limits": {},
+  "mode": "autonomous",
+  "pipelineId": "fan-out-fan-in",
+  "schemaVersion": 1,
+  "stages": [
+    {
+      "id": "gate",
+      "mode": "autonomous",
+      "optional": false,
+      "overridable": [],
+      "profile": "sol-verifier",
+      "reads": [
+        "artifacts.lint",
+        "artifacts.test"
+      ],
+      "type": "verify",
+      "writes": [
+        "artifacts.gate"
+      ]
+    },
+    {
+      "id": "halt",
+      "mode": "autonomous",
+      "optional": false,
+      "overridable": [],
+      "reads": [
+        "artifacts.gate"
+      ],
+      "type": "approval",
+      "writes": []
+    },
+    {
+      "command": {
+        "argv": [
+          "pnpm",
+          "lint"
+        ]
+      },
+      "id": "lint",
+      "mode": "autonomous",
+      "optional": true,
+      "overridable": [],
+      "reads": [
+        "artifacts.plan"
+      ],
+      "type": "command",
+      "writes": [
+        "artifacts.lint"
+      ]
+    },
+    {
+      "id": "plan",
+      "mode": "autonomous",
+      "optional": false,
+      "overridable": [],
+      "profile": "opus-planner",
+      "reads": [],
+      "type": "agent",
+      "writes": [
+        "artifacts.plan"
+      ]
+    },
+    {
+      "id": "ship",
+      "mode": "autonomous",
+      "optional": false,
+      "overridable": [],
+      "reads": [
+        "artifacts.gate"
+      ],
+      "type": "publish",
+      "writes": [
+        "artifacts.release"
+      ]
+    },
+    {
+      "command": {
+        "argv": [
+          "pnpm",
+          "test"
+        ]
+      },
+      "id": "test",
+      "mode": "autonomous",
+      "optional": false,
+      "overridable": [],
+      "reads": [
+        "artifacts.plan"
+      ],
+      "type": "command",
+      "writes": [
+        "artifacts.test"
+      ]
+    }
+  ]
+}

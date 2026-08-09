@@ -1,0 +1,10 @@
+schemaVersion: 1
+id: dangling
+stages:
+  - id: first
+    type: agent
+    profile: opus-planner
+  - id: second
+    type: verify
+    profile: sol-verifier
+    needs: [frist]

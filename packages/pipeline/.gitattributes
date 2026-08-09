@@ -1,0 +1,4 @@
+# `test/corpus.test.ts` byte-compares the parser's output against the
+# committed expectations below, so a Windows checkout with core.autocrlf=true
+# rewriting LF to CRLF must not be allowed to change these files' line endings.
+test/expected/** text eol=lf

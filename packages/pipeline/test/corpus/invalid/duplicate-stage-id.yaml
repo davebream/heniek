@@ -1,0 +1,9 @@
+schemaVersion: 1
+id: duplicated
+stages:
+  - id: twice
+    type: agent
+    profile: opus-planner
+  - id: twice
+    type: verify
+    profile: sol-verifier

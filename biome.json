@@ -10,7 +10,8 @@
       "**",
       "!docs/backlog/revision-1/issues",
       "!packages/contracts/generated",
-      "!packages/conformance/generated"
+      "!packages/conformance/generated",
+      "!packages/pipeline/test/expected"
     ]
   },
   "formatter": {

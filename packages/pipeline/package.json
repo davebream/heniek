@@ -1,0 +1,26 @@
+{
+  "name": "@heniek/pipeline",
+  "version": "0.0.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@heniek/config": "workspace:*",
+    "@heniek/contracts": "workspace:*",
+    "@heniek/secrets": "workspace:*",
+    "@sinclair/typebox": "catalog:"
+  },
+  "devDependencies": {
+    "@heniek/conformance": "workspace:*",
+    "ajv": "catalog:",
+    "ajv-formats": "catalog:",
+    "tsx": "catalog:",
+    "vitest": "catalog:"
+  }
+}

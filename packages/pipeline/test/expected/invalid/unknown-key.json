@@ -1,0 +1,16 @@
+{
+  "diagnostics": [
+    {
+      "code": "configuration.schema-violation",
+      "column": 5,
+      "line": 4,
+      "message": "/stages/0 must NOT have additional properties",
+      "pointer": "/stages/0",
+      "severity": "error",
+      "sourcePath": "packages/pipeline/test/corpus/invalid/unknown-key.yaml",
+      "suggestion": "A stage is a mapping with at least `id` and `type`."
+    }
+  ],
+  "schemaVersion": 1,
+  "sourcePath": "packages/pipeline/test/corpus/invalid/unknown-key.yaml"
+}

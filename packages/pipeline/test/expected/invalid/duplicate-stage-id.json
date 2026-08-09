@@ -1,0 +1,16 @@
+{
+  "diagnostics": [
+    {
+      "code": "pipeline.duplicate-stage-id",
+      "column": 5,
+      "line": 4,
+      "message": "Stage id \"twice\" is declared 2 times.",
+      "pointer": "/stages/0",
+      "severity": "error",
+      "sourcePath": "packages/pipeline/test/corpus/invalid/duplicate-stage-id.yaml",
+      "suggestion": "Give each stage a unique id; a later stage referring to this one cannot say which it means."
+    }
+  ],
+  "schemaVersion": 1,
+  "sourcePath": "packages/pipeline/test/corpus/invalid/duplicate-stage-id.yaml"
+}

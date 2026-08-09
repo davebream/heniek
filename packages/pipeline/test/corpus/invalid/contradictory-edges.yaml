@@ -1,0 +1,15 @@
+schemaVersion: 1
+id: contradictory
+stages:
+  - id: gate
+    type: verify
+    profile: sol-verifier
+    writes: [artifacts.gate]
+    transitions:
+      - when:
+          expression: gate.clean
+        then: ship
+  - id: ship
+    type: publish
+    needs: [gate]
+    reads: [artifacts.gate]

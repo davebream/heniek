@@ -1,0 +1,26 @@
+{
+  "diagnostics": [
+    {
+      "code": "pipeline.read-not-produced",
+      "column": 9,
+      "line": 13,
+      "message": "\"artifacts.design\" is written by \"sibling\", which \"second\" does not depend on.",
+      "pointer": "/stages/1/reads/0",
+      "severity": "error",
+      "sourcePath": "packages/pipeline/test/corpus/invalid/read-not-produced.yaml",
+      "suggestion": "Add a dependency so \"second\" runs after \"sibling\"."
+    },
+    {
+      "code": "pipeline.unknown-state-namespace",
+      "column": 9,
+      "line": 15,
+      "message": "\"session.token_budget\" starts with \"session\", which is not part of the canonical run state.",
+      "pointer": "/stages/1/reads/2",
+      "severity": "error",
+      "sourcePath": "packages/pipeline/test/corpus/invalid/read-not-produced.yaml",
+      "suggestion": "Read from `task.`, `artifacts.`, or `decisions.`."
+    }
+  ],
+  "schemaVersion": 1,
+  "sourcePath": "packages/pipeline/test/corpus/invalid/read-not-produced.yaml"
+}

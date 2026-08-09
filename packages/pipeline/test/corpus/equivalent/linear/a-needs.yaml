@@ -1,0 +1,22 @@
+schemaVersion: 1
+id: linear
+mode: autonomous
+limits:
+  max_pipeline_duration: 1h
+stages:
+  - id: design
+    type: agent
+    profile: opus-designer
+    writes: [artifacts.design]
+  - id: build
+    type: agent
+    profile: grok-builder
+    needs: [design]
+    reads: [artifacts.design]
+    writes: [artifacts.implementation]
+  - id: verify
+    type: verify
+    profile: sol-verifier
+    needs: [build]
+    reads: [artifacts.implementation]
+    writes: [artifacts.verification]

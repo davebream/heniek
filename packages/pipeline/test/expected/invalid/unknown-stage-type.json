@@ -1,0 +1,16 @@
+{
+  "diagnostics": [
+    {
+      "code": "configuration.schema-violation",
+      "column": 11,
+      "line": 5,
+      "message": "/stages/0/type does not match any of the accepted alternatives.",
+      "pointer": "/stages/0/type",
+      "severity": "error",
+      "sourcePath": "packages/pipeline/test/corpus/invalid/unknown-stage-type.yaml",
+      "suggestion": "Use one of the v1 stage types: agent, command, approval, integration, verify, publish."
+    }
+  ],
+  "schemaVersion": 1,
+  "sourcePath": "packages/pipeline/test/corpus/invalid/unknown-stage-type.yaml"
+}

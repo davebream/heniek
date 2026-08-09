@@ -1,0 +1,61 @@
+# §14.1's parallel branches and fan-in, plus an optional stage and a
+# compound condition exercising every operator class the grammar admits.
+schemaVersion: 1
+id: fan-out-fan-in
+stages:
+  - id: plan
+    type: agent
+    profile: opus-planner
+    writes:
+      - artifacts.plan
+
+  - id: lint
+    type: command
+    needs: [plan]
+    optional: true
+    command:
+      argv: [pnpm, lint]
+    reads:
+      - artifacts.plan
+    writes:
+      - artifacts.lint
+
+  - id: test
+    type: command
+    needs: [plan]
+    command:
+      argv: [pnpm, test]
+    reads:
+      - artifacts.plan
+    writes:
+      - artifacts.test
+
+  - id: gate
+    type: verify
+    profile: sol-verifier
+    needs: [lint, test]
+    reads:
+      - artifacts.lint
+      - artifacts.test
+    writes:
+      - artifacts.gate
+    transitions:
+      - when:
+          expression: >-
+            (test.failed == 0 && lint.warnings <= 5) || gate.override == "forced"
+        then: ship
+      - when:
+          expression: "!gate.clean"
+        then: halt
+
+  - id: ship
+    type: publish
+    reads:
+      - artifacts.gate
+    writes:
+      - artifacts.release
+
+  - id: halt
+    type: approval
+    reads:
+      - artifacts.gate

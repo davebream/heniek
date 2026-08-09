@@ -1,0 +1,29 @@
+# The same two conditional transitions, moved to the top-level `edges` list
+# and written with different whitespace inside the expression — whitespace is
+# insignificant to the compiled condition, so the graph bytes must not move.
+schemaVersion: 1
+id: conditional
+stages:
+  - id: ship
+    type: publish
+    reads: [artifacts.gate]
+    writes: [artifacts.release]
+  - id: repair
+    type: agent
+    profile: grok-builder
+    reads: [artifacts.gate]
+    writes: [artifacts.repair]
+  - id: gate
+    type: verify
+    profile: sol-verifier
+    writes: [artifacts.gate]
+edges:
+  - from: gate
+    to: ship
+    when:
+      question: Is the remaining risk acceptable?
+      evaluator: opus-arbiter
+  - from: gate
+    to: repair
+    when:
+      expression: "gate.blockingFindings.length>0&&!gate.skipped"

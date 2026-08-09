@@ -1,0 +1,15 @@
+schemaVersion: 1
+id: cyclic
+stages:
+  - id: a
+    type: agent
+    profile: opus-planner
+    needs: [c]
+  - id: b
+    type: agent
+    profile: opus-planner
+    needs: [a]
+  - id: c
+    type: agent
+    profile: opus-planner
+    needs: [b]

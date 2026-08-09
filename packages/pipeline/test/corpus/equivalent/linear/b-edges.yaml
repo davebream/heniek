@@ -1,0 +1,27 @@
+# Same pipeline, expressed as explicit edges instead of `needs`, with the
+# stages declared in a different order.
+schemaVersion: 1
+id: linear
+stages:
+  - id: verify
+    type: verify
+    profile: sol-verifier
+    reads: [artifacts.implementation]
+    writes: [artifacts.verification]
+  - id: build
+    type: agent
+    profile: grok-builder
+    reads: [artifacts.design]
+    writes: [artifacts.implementation]
+  - id: design
+    type: agent
+    profile: opus-designer
+    writes: [artifacts.design]
+edges:
+  - from: build
+    to: verify
+  - from: design
+    to: build
+limits:
+  max_pipeline_duration: 60m
+mode: autonomous

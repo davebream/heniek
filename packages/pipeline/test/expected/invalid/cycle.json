@@ -1,0 +1,26 @@
+{
+  "diagnostics": [
+    {
+      "code": "pipeline.cycle",
+      "column": 5,
+      "line": 4,
+      "message": "These stages depend on each other in a cycle: a → b → c → a.",
+      "pointer": "/stages/0",
+      "severity": "error",
+      "sourcePath": "packages/pipeline/test/corpus/invalid/cycle.yaml",
+      "suggestion": "Break the cycle by removing one dependency; a pipeline is a DAG, so no stage may wait for a stage that waits for it."
+    },
+    {
+      "code": "pipeline.no-entry-stage",
+      "column": 3,
+      "line": 4,
+      "message": "Every stage depends on another stage, so the pipeline has nowhere to start.",
+      "pointer": "/stages",
+      "severity": "error",
+      "sourcePath": "packages/pipeline/test/corpus/invalid/cycle.yaml",
+      "suggestion": "Leave at least one stage with no `needs` and no incoming edge."
+    }
+  ],
+  "schemaVersion": 1,
+  "sourcePath": "packages/pipeline/test/corpus/invalid/cycle.yaml"
+}

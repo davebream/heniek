@@ -1,0 +1,19 @@
+{
+  "context": {},
+  "edges": [],
+  "limits": {},
+  "mode": "autonomous",
+  "pipelineId": "minimal",
+  "schemaVersion": 1,
+  "stages": [
+    {
+      "id": "only",
+      "mode": "autonomous",
+      "optional": false,
+      "overridable": [],
+      "reads": [],
+      "type": "approval",
+      "writes": []
+    }
+  ]
+}

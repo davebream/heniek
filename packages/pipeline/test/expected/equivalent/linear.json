@@ -1,0 +1,61 @@
+{
+  "context": {},
+  "edges": [
+    {
+      "from": "build",
+      "to": "verify"
+    },
+    {
+      "from": "design",
+      "to": "build"
+    }
+  ],
+  "limits": {
+    "maxPipelineDurationMs": 3600000
+  },
+  "mode": "autonomous",
+  "pipelineId": "linear",
+  "schemaVersion": 1,
+  "stages": [
+    {
+      "id": "build",
+      "mode": "autonomous",
+      "optional": false,
+      "overridable": [],
+      "profile": "grok-builder",
+      "reads": [
+        "artifacts.design"
+      ],
+      "type": "agent",
+      "writes": [
+        "artifacts.implementation"
+      ]
+    },
+    {
+      "id": "design",
+      "mode": "autonomous",
+      "optional": false,
+      "overridable": [],
+      "profile": "opus-designer",
+      "reads": [],
+      "type": "agent",
+      "writes": [
+        "artifacts.design"
+      ]
+    },
+    {
+      "id": "verify",
+      "mode": "autonomous",
+      "optional": false,
+      "overridable": [],
+      "profile": "sol-verifier",
+      "reads": [
+        "artifacts.implementation"
+      ],
+      "type": "verify",
+      "writes": [
+        "artifacts.verification"
+      ]
+    }
+  ]
+}
