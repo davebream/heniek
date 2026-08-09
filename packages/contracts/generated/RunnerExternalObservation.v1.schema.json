@@ -1,0 +1,74 @@
+{
+  "$id": "heniek://contract/RunnerExternalObservation/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "observationId",
+    "attemptId",
+    "kind",
+    "recordedAt",
+    "payload"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "observationId": {
+      "minLength": 1,
+      "maxLength": 128,
+      "type": "string"
+    },
+    "attemptId": {
+      "minLength": 1,
+      "description": "Opaque PipelineAttemptId.",
+      "type": "string"
+    },
+    "kind": {
+      "anyOf": [
+        {
+          "const": "git_ref_read",
+          "type": "string"
+        },
+        {
+          "const": "git_merge_prepared",
+          "type": "string"
+        },
+        {
+          "const": "git_ref_updated",
+          "type": "string"
+        },
+        {
+          "const": "forge_pr_listed",
+          "type": "string"
+        },
+        {
+          "const": "forge_pr_created",
+          "type": "string"
+        },
+        {
+          "const": "forge_pr_adopted",
+          "type": "string"
+        },
+        {
+          "const": "forge_pr_ready",
+          "type": "string"
+        },
+        {
+          "const": "forge_auto_merge",
+          "type": "string"
+        },
+        {
+          "const": "forge_fault",
+          "type": "string"
+        }
+      ]
+    },
+    "recordedAt": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "payload": {}
+  }
+}

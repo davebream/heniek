@@ -1,0 +1,101 @@
+{
+  "$id": "heniek://contract/IntegrationResult/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "repositoryId",
+    "sourceRef",
+    "targetRef",
+    "expectedSourceSha",
+    "expectedTargetSha",
+    "classification",
+    "targetMoved",
+    "finishedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "repositoryId": {
+      "minLength": 1,
+      "description": "Opaque RepositoryId.",
+      "type": "string"
+    },
+    "sourceRef": {
+      "minLength": 1,
+      "maxLength": 256,
+      "type": "string"
+    },
+    "targetRef": {
+      "minLength": 1,
+      "maxLength": 256,
+      "type": "string"
+    },
+    "expectedSourceSha": {
+      "minLength": 40,
+      "maxLength": 40,
+      "pattern": "^[0-9a-f]{40}$",
+      "type": "string"
+    },
+    "expectedTargetSha": {
+      "minLength": 40,
+      "maxLength": 40,
+      "pattern": "^[0-9a-f]{40}$",
+      "type": "string"
+    },
+    "candidateSha": {
+      "minLength": 40,
+      "maxLength": 40,
+      "pattern": "^[0-9a-f]{40}$",
+      "type": "string"
+    },
+    "resultSha": {
+      "minLength": 40,
+      "maxLength": 40,
+      "pattern": "^[0-9a-f]{40}$",
+      "type": "string"
+    },
+    "classification": {
+      "anyOf": [
+        {
+          "const": "none",
+          "type": "string"
+        },
+        {
+          "const": "stale_source",
+          "type": "string"
+        },
+        {
+          "const": "stale_target",
+          "type": "string"
+        },
+        {
+          "const": "merge_conflict",
+          "type": "string"
+        },
+        {
+          "const": "already_applied",
+          "type": "string"
+        },
+        {
+          "const": "irreconcilable_external",
+          "type": "string"
+        }
+      ]
+    },
+    "targetMoved": {
+      "type": "boolean"
+    },
+    "finishedAt": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "detail": {
+      "minLength": 1,
+      "maxLength": 1024,
+      "type": "string"
+    }
+  }
+}

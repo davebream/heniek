@@ -1,0 +1,78 @@
+{
+  "$id": "heniek://contract/StageRunnerResult/v2",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "attemptId",
+    "outcome",
+    "outputs",
+    "evidence",
+    "finishedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 2,
+      "type": "number"
+    },
+    "attemptId": {
+      "minLength": 1,
+      "description": "Opaque PipelineAttemptId.",
+      "type": "string"
+    },
+    "outcome": {
+      "anyOf": [
+        {
+          "const": "succeeded",
+          "type": "string"
+        },
+        {
+          "const": "failed",
+          "type": "string"
+        },
+        {
+          "const": "cancelled",
+          "type": "string"
+        },
+        {
+          "const": "recovery_required",
+          "type": "string"
+        }
+      ]
+    },
+    "summary": {
+      "minLength": 1,
+      "maxLength": 1024,
+      "type": "string"
+    },
+    "artifactPath": {
+      "minLength": 1,
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\u0000).+$",
+      "type": "string"
+    },
+    "exitCode": {
+      "minimum": 0,
+      "maximum": 255,
+      "type": "integer"
+    },
+    "outputs": {
+      "type": "array",
+      "items": {
+        "$ref": "heniek://contract/StageRunnerOutputBinding/v1"
+      }
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "$ref": "heniek://contract/StageRunnerEvidence/v1"
+      }
+    },
+    "failure": {
+      "$ref": "heniek://contract/StageRunnerFailure/v2"
+    },
+    "finishedAt": {
+      "format": "date-time",
+      "type": "string"
+    }
+  }
+}

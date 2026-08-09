@@ -50,5 +50,9 @@
   "13": {
     "name": "pipeline-runner",
     "statementHash": "5a05528a9823adbb626c8d36a1f95680fa038b3f8651cf8d9620ebc3ca069209"
+  },
+  "14": {
+    "name": "pipeline-runner-operations",
+    "statementHash": "9f7c7a65014493a4409f93b07ea2f75af7e917a618a4f295c91f86d16225eb3d"
   }
 }

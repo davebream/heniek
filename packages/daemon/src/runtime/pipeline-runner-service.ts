@@ -1,28 +1,44 @@
 /**
- * Pipeline stage-runner coordinator (Q026, ADR 0024).
+ * Pipeline stage-runner coordinator (Q026/Q027, ADR 0024/0025).
  *
  * Ticks the deterministic scheduler, idempotently claims pending
- * dispatch/cancel intents for `agent` and `command` stages, drives the
+ * dispatch/cancel intents for all six fixed stage types, drives the
  * shared runner phases, and records observations only after validation.
- * Approval/integration/verify/publish and evaluator intents stay for Q027+.
+ * Waiting stages return control so intent draining stays non-blocking;
+ * reconcile polls live waiters and reconstructs durable fixed-stage
+ * operations after restart. Evaluator intents stay ignored.
  */
 
 import { mkdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type {
+  ApprovalDecisionV1,
+  ApprovalRequestV1,
   ArtifactId,
   ExecutionBackendV7,
   ExecutionPermissionEnvelopeV1,
+  ForgeBackendV2,
+  IntegrationRequestV1,
+  PublishRequestV1,
   ResolvedProfileChainV1,
   ResolvedProfileSchemaV2,
+  VerifyRequestV1,
   WorkspaceId,
 } from "@heniek/contracts";
 import { type SchedulerInput, tickScheduler } from "@heniek/pipeline";
 import {
+  type ApprovalStageRunner,
   createAgentStageRunner,
+  createApprovalStageRunner,
   createCommandStageRunner,
+  createIntegrationStageRunner,
+  createLocalGitIntegrationAdapter,
+  createPublishStageRunner,
+  createVerifyStageRunner,
+  type GitIntegrationAdapter,
   type StageRunner,
   type StageRunnerPrepareInput,
+  type StageRunnerStoreCallbacks,
 } from "@heniek/runner";
 import {
   applyPipelineSchedulerPlan,
@@ -32,17 +48,23 @@ import {
   exportRunnerAttempt,
   finalizeRunnerAttempt,
   type JsonValue,
+  listPipelineApprovalInbox,
   loadPipelineSchedulerInputParts,
   markPipelineSchedulerIntentDelivered,
+  persistRunnerOperationRequest,
   readIdentity,
   readOpenRunnerAttempts,
   readPendingPipelineSchedulerIntents,
   readPipelineSchedule,
   readRunnerAttempt,
+  readRunnerOperationState,
+  reconstructRunnerOperation,
   recordPipelineObservation,
+  recordRunnerApprovalAnswer,
   reportRunnerCleanupHealth,
   type StateDatabase,
   updateRunnerAttempt,
+  updateRunnerOperationState,
 } from "@heniek/state";
 import { validateExecutionWorkspace, type WorkspaceService } from "@heniek/workspace";
 import type { Static } from "@sinclair/typebox";
@@ -51,6 +73,26 @@ import { finalizeStageArtifact } from "./stage-completion.js";
 type ProfileChain = Static<typeof ResolvedProfileChainV1>;
 type ResolvedProfile = Static<typeof ResolvedProfileSchemaV2>;
 type Permissions = Static<typeof ExecutionPermissionEnvelopeV1>;
+type ApprovalRequest = Static<typeof ApprovalRequestV1>;
+type ApprovalDecision = Static<typeof ApprovalDecisionV1>;
+type IntegrationRequest = Static<typeof IntegrationRequestV1>;
+type VerifyRequest = Static<typeof VerifyRequestV1>;
+type PublishRequest = Static<typeof PublishRequestV1>;
+
+type FixedStageType = "agent" | "command" | "approval" | "integration" | "verify" | "publish";
+
+type OperationStageType = "approval" | "integration" | "verify" | "publish";
+
+const FIXED_STAGE_TYPES = new Set<string>([
+  "agent",
+  "command",
+  "approval",
+  "integration",
+  "verify",
+  "publish",
+]);
+
+const OPERATION_STAGE_TYPES = new Set<string>(["approval", "integration", "verify", "publish"]);
 
 export interface PipelineCodebaseContext {
   readonly codebaseId: string;
@@ -73,6 +115,8 @@ export interface PipelineRunnerServiceOptions {
     read(identifier: string): Promise<unknown>;
   };
   readonly resolveCodebaseContext: (runId: string) => PipelineCodebaseContext;
+  readonly forge?: ForgeBackendV2;
+  readonly git?: GitIntegrationAdapter;
   readonly resolveAgentInvocation?: (input: {
     readonly runId: string;
     readonly stageId: string;
@@ -82,6 +126,37 @@ export interface PipelineRunnerServiceOptions {
     readonly artifactPath: string;
     readonly inputArtifactRefs: readonly ArtifactId[];
   }>;
+  readonly resolveApprovalRequest?: (input: {
+    readonly runId: string;
+    readonly stageId: string;
+    readonly attemptId: string;
+    readonly intentId: string;
+    readonly stage: StageRunnerPrepareInput["stage"];
+  }) => ApprovalRequest | Promise<ApprovalRequest>;
+  readonly resolveIntegrationRequest?: (input: {
+    readonly runId: string;
+    readonly stageId: string;
+    readonly attemptId: string;
+    readonly intentId: string;
+    readonly stage: StageRunnerPrepareInput["stage"];
+    readonly payload: Record<string, unknown>;
+  }) => IntegrationRequest | Promise<IntegrationRequest>;
+  readonly resolveVerifyRequest?: (input: {
+    readonly runId: string;
+    readonly stageId: string;
+    readonly attemptId: string;
+    readonly intentId: string;
+    readonly stage: StageRunnerPrepareInput["stage"];
+    readonly payload: Record<string, unknown>;
+  }) => VerifyRequest | Promise<VerifyRequest>;
+  readonly resolvePublishRequest?: (input: {
+    readonly runId: string;
+    readonly stageId: string;
+    readonly attemptId: string;
+    readonly intentId: string;
+    readonly stage: StageRunnerPrepareInput["stage"];
+    readonly payload: Record<string, unknown>;
+  }) => PublishRequest | Promise<PublishRequest>;
   readonly pollMilliseconds?: number;
   readonly commandGracePeriodMs?: number;
 }
@@ -92,6 +167,23 @@ export interface PipelineRunnerService {
   reconcile(): Promise<void>;
   cleanupHealth(): ReturnType<typeof reportRunnerCleanupHealth>;
   exportAttempt(attemptId: string): ReturnType<typeof exportRunnerAttempt>;
+  listApprovalInbox(): ReturnType<typeof listPipelineApprovalInbox>;
+  answerApproval(input: {
+    readonly attemptId: string;
+    readonly decision: ApprovalDecision;
+  }): Promise<
+    | {
+        readonly status: "recorded";
+        readonly attemptId: string;
+        readonly operationId: string;
+        readonly interactionRevision: number;
+      }
+    | {
+        readonly status: "stale_revision";
+        readonly attemptId: string;
+        readonly currentRevision: number;
+      }
+  >;
   stop(): void;
 }
 
@@ -168,6 +260,19 @@ function payloadRecord(payload: JsonValue): Record<string, unknown> {
   return {};
 }
 
+function requiresWorkspace(stageType: FixedStageType): boolean {
+  return (
+    stageType === "agent" ||
+    stageType === "command" ||
+    stageType === "integration" ||
+    stageType === "verify"
+  );
+}
+
+function isOperationStage(stageType: string): stageType is OperationStageType {
+  return OPERATION_STAGE_TYPES.has(stageType);
+}
+
 function defaultAgentInvocation(stage: StageRunnerPrepareInput["stage"]): {
   readonly prompt: string;
   readonly artifactPath: string;
@@ -187,6 +292,73 @@ function defaultAgentInvocation(stage: StageRunnerPrepareInput["stage"]): {
   };
 }
 
+function defaultApprovalRequest(input: {
+  readonly runId: string;
+  readonly stageId: string;
+  readonly attemptId: string;
+  readonly intentId: string;
+  readonly requestedAt: string;
+}): ApprovalRequest {
+  return {
+    schemaVersion: 1,
+    prompt: `Approve pipeline stage ${input.stageId}?`,
+    options: [
+      { label: "Approve", description: "Continue the pipeline" },
+      { label: "Reject", description: "Stop the pipeline" },
+    ],
+    continuation: {
+      schemaVersion: 1,
+      runId: input.runId as ApprovalRequest["continuation"]["runId"],
+      stageId: input.stageId as ApprovalRequest["continuation"]["stageId"],
+      attemptId: input.attemptId as ApprovalRequest["continuation"]["attemptId"],
+      intentId: input.intentId as ApprovalRequest["continuation"]["intentId"],
+      interactionId: `ix:${input.attemptId}`,
+    },
+    requestedAt: input.requestedAt,
+  };
+}
+
+function defaultVerifyRequest(stage: StageRunnerPrepareInput["stage"]): VerifyRequest {
+  const checks = (stage.completion?.require ?? [])
+    .filter(
+      (requirement): requirement is Extract<typeof requirement, { kind: "command" }> =>
+        requirement.kind === "command",
+    )
+    .map((requirement, index) => ({
+      schemaVersion: 1 as const,
+      checkId: `check-${index + 1}`,
+      argv: [...requirement.argv],
+      expectedExitCode: requirement.exitCode ?? 0,
+      required: true,
+    }));
+  if (checks.length === 0) {
+    throw new Error(`verify stage ${stage.id} has no command completion requirements`);
+  }
+  return { schemaVersion: 1, checks };
+}
+
+function asOperationRequest(value: unknown): JsonValue {
+  if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+    return value as JsonValue;
+  }
+  throw new Error("operation request must be an object");
+}
+
+function recoveryForMissingHandle(
+  attempt: NonNullable<ReturnType<typeof readRunnerAttempt>>,
+): NonNullable<Parameters<typeof updateRunnerAttempt>[1]["recovery"]> {
+  if (attempt.stageType === "agent" || attempt.backendExecutionId !== undefined) {
+    return "observe_backend";
+  }
+  if (attempt.stageType === "command" || attempt.stageType === "verify") {
+    return attempt.processGroupId === undefined ? "manual" : "reap_process";
+  }
+  if (attempt.stageType === "approval") return "await_approval";
+  if (attempt.stageType === "integration") return "reconcile_git";
+  if (attempt.stageType === "publish") return "reconcile_forge";
+  return "manual";
+}
+
 export function createPipelineRunnerService(
   options: PipelineRunnerServiceOptions,
 ): PipelineRunnerService {
@@ -202,7 +374,18 @@ export function createPipelineRunnerService(
     clock: options.clock,
     ids: options.ids,
   });
+  const git = options.git ?? createLocalGitIntegrationAdapter();
   const activeRunners = new Map<string, StageRunner>();
+  const approvalRunners = new Map<string, ApprovalStageRunner>();
+  const waitingAttempts = new Set<string>();
+  const operationRequests = new Map<
+    string,
+    {
+      readonly operationId: string;
+      readonly stageType: OperationStageType;
+      readonly request: JsonValue;
+    }
+  >();
 
   function schedulePoll(): void {
     if (stopped || timer !== undefined) return;
@@ -234,6 +417,66 @@ export function createPipelineRunnerService(
       schemaVersion: 1,
       workspace: profile.permissions.workspace,
       identifiers: [...profile.permissions.identifiers],
+    };
+  }
+
+  function createStoreCallbacks(attemptId: string): StageRunnerStoreCallbacks {
+    return {
+      onAttemptUpdate: (snapshot) => {
+        const current = readRunnerAttempt(options.db, attemptId);
+        if (current === undefined) return;
+        const processGroupChanged =
+          snapshot.processGroupId !== undefined &&
+          snapshot.processGroupId !== current.processGroupId;
+        const backendChanged =
+          snapshot.backendExecutionId !== undefined &&
+          snapshot.backendExecutionId !== current.backendExecutionId;
+        const recoveryChanged = snapshot.recovery !== current.recovery;
+        if (!processGroupChanged && !backendChanged && !recoveryChanged) {
+          return;
+        }
+        try {
+          updateRunnerAttempt(options.db, {
+            attemptId,
+            expectedRevision: current.revision,
+            ...(processGroupChanged ? { processGroupId: snapshot.processGroupId } : {}),
+            ...(backendChanged ? { backendExecutionId: snapshot.backendExecutionId } : {}),
+            ...(recoveryChanged ? { recovery: snapshot.recovery } : {}),
+            now: options.clock.nowIso(),
+          });
+        } catch {
+          // Coordinator may have advanced the revision concurrently; reconcile
+          // will pick up durable fields on the next poll.
+        }
+      },
+      onCleanup: (report) => {
+        const current = readRunnerAttempt(options.db, attemptId);
+        if (current === undefined) return;
+        try {
+          updateRunnerAttempt(options.db, {
+            attemptId,
+            expectedRevision: current.revision,
+            cleanup: report,
+            now: options.clock.nowIso(),
+          });
+        } catch {
+          // Best-effort; finalize persists cleanup again.
+        }
+      },
+      onValidation: (report) => {
+        const current = readRunnerAttempt(options.db, attemptId);
+        if (current === undefined) return;
+        try {
+          updateRunnerAttempt(options.db, {
+            attemptId,
+            expectedRevision: current.revision,
+            validation: report,
+            now: options.clock.nowIso(),
+          });
+        } catch {
+          // Best-effort; finalize persists validation again.
+        }
+      },
     };
   }
 
@@ -272,14 +515,17 @@ export function createPipelineRunnerService(
     };
   }
 
-  function createRunnerForStage(
+  function createAgentOrCommandRunner(
     stageType: "agent" | "command",
     stage: StageRunnerPrepareInput["stage"],
     runId: string,
+    attemptId: string,
   ): StageRunner {
+    const store = createStoreCallbacks(attemptId);
     if (stageType === "command") {
       return createCommandStageRunner({
         clock: options.clock,
+        store,
         ...(options.commandGracePeriodMs === undefined
           ? {}
           : { gracePeriodMs: options.commandGracePeriodMs }),
@@ -288,6 +534,7 @@ export function createPipelineRunnerService(
     return createAgentStageRunner({
       backend: options.backend,
       clock: options.clock,
+      store,
       resolveProfile,
       resolvePermissions,
       identifierReader: options.createIdentifierReader([]),
@@ -300,6 +547,62 @@ export function createPipelineRunnerService(
     });
   }
 
+  function createOperationRunner(
+    stageType: OperationStageType,
+    attemptId: string,
+  ): StageRunner | ApprovalStageRunner {
+    const store = createStoreCallbacks(attemptId);
+    switch (stageType) {
+      case "approval": {
+        const runner = createApprovalStageRunner({ clock: options.clock, store });
+        approvalRunners.set(attemptId, runner);
+        return runner;
+      }
+      case "integration":
+        return createIntegrationStageRunner({ git, clock: options.clock, store });
+      case "verify":
+        return createVerifyStageRunner({
+          clock: options.clock,
+          store,
+          ...(options.commandGracePeriodMs === undefined
+            ? {}
+            : { gracePeriodMs: options.commandGracePeriodMs }),
+        });
+      case "publish": {
+        if (options.forge === undefined) {
+          throw new Error("publish stage requires a ForgeBackendV2");
+        }
+        return createPublishStageRunner({
+          forge: options.forge,
+          clock: options.clock,
+          store,
+        });
+      }
+    }
+  }
+
+  async function markWaiting(
+    attemptId: string,
+    attempt: NonNullable<ReturnType<typeof readRunnerAttempt>>,
+  ): Promise<void> {
+    waitingAttempts.add(attemptId);
+    const updated = updateRunnerAttempt(options.db, {
+      attemptId,
+      expectedRevision: attempt.revision,
+      phase: "observe",
+      transitionDetail: "waiting",
+      now: options.clock.nowIso(),
+    });
+    recordPipelineObservation(options.db, {
+      observationId: options.ids.next("obs"),
+      runId: updated.runId,
+      kind: "attempt_waiting",
+      payload: { stageId: updated.stageId, attemptId },
+      recordedAt: options.clock.nowIso(),
+    });
+    await tick(updated.runId);
+  }
+
   async function settleRunner(
     attemptId: string,
     runner: StageRunner,
@@ -309,40 +612,38 @@ export function createPipelineRunnerService(
     if (attempt === undefined) throw new Error(`missing runner attempt ${attemptId}`);
 
     let observation = await runner.observe(attemptId);
-    while (observation.status === "running" || observation.status === "waiting") {
+
+    if (observation.status === "waiting") {
+      await markWaiting(attemptId, attempt);
+      return;
+    }
+
+    while (observation.status === "running") {
       if (stopped) return;
-      if (observation.status === "waiting") {
-        attempt = updateRunnerAttempt(options.db, {
-          attemptId,
-          expectedRevision: attempt.revision,
-          phase: "observe",
-          transitionDetail: "waiting",
-          now: options.clock.nowIso(),
-        });
-        recordPipelineObservation(options.db, {
-          observationId: options.ids.next("obs"),
-          runId: attempt.runId,
-          kind: "attempt_waiting",
-          payload: { stageId: attempt.stageId, attemptId },
-          recordedAt: options.clock.nowIso(),
-        });
-        await tick(attempt.runId);
-      }
+      waitingAttempts.delete(attemptId);
       await new Promise((resolve) => setTimeout(resolve, options.pollMilliseconds ?? 50));
       observation = await runner.observe(attemptId);
       attempt = readRunnerAttempt(options.db, attemptId) ?? attempt;
+      if (observation.status === "waiting") {
+        await markWaiting(attemptId, attempt);
+        return;
+      }
     }
+
+    waitingAttempts.delete(attemptId);
 
     if (observation.status === "recovery_required") {
       updateRunnerAttempt(options.db, {
         attemptId,
         expectedRevision: attempt.revision,
         phase: "recovery_required",
-        recovery: attempt.stageType === "agent" ? "observe_backend" : "reap_process",
+        recovery: recoveryForMissingHandle(attempt),
         finishedAt: options.clock.nowIso(),
         transitionDetail: observation.reason,
         now: options.clock.nowIso(),
       });
+      activeRunners.delete(attemptId);
+      approvalRunners.delete(attemptId);
       return;
     }
 
@@ -365,6 +666,7 @@ export function createPipelineRunnerService(
       now: options.clock.nowIso(),
     });
     await runner.collect(attemptId);
+    attempt = readRunnerAttempt(options.db, attemptId) ?? attempt;
 
     attempt = updateRunnerAttempt(options.db, {
       attemptId,
@@ -373,6 +675,7 @@ export function createPipelineRunnerService(
       now: options.clock.nowIso(),
     });
     const validation = await runner.validate(attemptId);
+    attempt = readRunnerAttempt(options.db, attemptId) ?? attempt;
 
     attempt = updateRunnerAttempt(options.db, {
       attemptId,
@@ -382,6 +685,7 @@ export function createPipelineRunnerService(
       now: options.clock.nowIso(),
     });
     const finalized = await runner.finalize(attemptId);
+    attempt = readRunnerAttempt(options.db, attemptId) ?? attempt;
 
     if (
       finalized.result.outcome === "succeeded" &&
@@ -406,6 +710,28 @@ export function createPipelineRunnerService(
       }
     }
 
+    const operation = operationRequests.get(attemptId);
+    if (operation !== undefined) {
+      const state = readRunnerOperationState(options.db, operation.operationId);
+      if (state !== undefined) {
+        updateRunnerOperationState(options.db, {
+          operationId: operation.operationId,
+          expectedRevision: state.revision,
+          phase:
+            finalized.result.outcome === "succeeded"
+              ? "completed"
+              : finalized.result.outcome === "cancelled"
+                ? "cancelled"
+                : "failed",
+          result: finalized.result as never,
+          ...(finalized.result.failure === undefined
+            ? {}
+            : { failure: finalized.result.failure as never }),
+          now: options.clock.nowIso(),
+        });
+      }
+    }
+
     const observationKind =
       finalized.result.outcome === "succeeded"
         ? ("attempt_succeeded" as const)
@@ -421,8 +747,10 @@ export function createPipelineRunnerService(
       ...(finalized.result.failure?.retryable === undefined
         ? {}
         : { retryable: finalized.result.failure.retryable }),
-      ...(finalized.result === undefined ? {} : { result: finalized.result }),
-      ...(finalized.result.failure === undefined ? {} : { failure: finalized.result.failure }),
+      result: finalized.result as never,
+      ...(finalized.result.failure === undefined
+        ? {}
+        : { failure: finalized.result.failure as never }),
       outputs: finalized.result.outputs,
       evidence: finalized.result.evidence,
       validation: finalized.validation,
@@ -440,7 +768,99 @@ export function createPipelineRunnerService(
     });
 
     activeRunners.delete(attemptId);
+    approvalRunners.delete(attemptId);
+    waitingAttempts.delete(attemptId);
+    operationRequests.delete(attemptId);
     await tick(attempt.runId);
+  }
+
+  async function resolveOperationRequest(input: {
+    readonly stageType: OperationStageType;
+    readonly runId: string;
+    readonly stageId: string;
+    readonly attemptId: string;
+    readonly intentId: string;
+    readonly stage: StageRunnerPrepareInput["stage"];
+    readonly payload: Record<string, unknown>;
+  }): Promise<JsonValue> {
+    switch (input.stageType) {
+      case "approval": {
+        if (options.resolveApprovalRequest !== undefined) {
+          return asOperationRequest(
+            await options.resolveApprovalRequest({
+              runId: input.runId,
+              stageId: input.stageId,
+              attemptId: input.attemptId,
+              intentId: input.intentId,
+              stage: input.stage,
+            }),
+          );
+        }
+        return asOperationRequest(
+          defaultApprovalRequest({
+            runId: input.runId,
+            stageId: input.stageId,
+            attemptId: input.attemptId,
+            intentId: input.intentId,
+            requestedAt: options.clock.nowIso(),
+          }),
+        );
+      }
+      case "integration": {
+        if (options.resolveIntegrationRequest !== undefined) {
+          return asOperationRequest(
+            await options.resolveIntegrationRequest({
+              runId: input.runId,
+              stageId: input.stageId,
+              attemptId: input.attemptId,
+              intentId: input.intentId,
+              stage: input.stage,
+              payload: input.payload,
+            }),
+          );
+        }
+        if (input.payload.integrationRequest !== undefined) {
+          return asOperationRequest(input.payload.integrationRequest);
+        }
+        throw new Error(`integration request unresolved for ${input.attemptId}`);
+      }
+      case "verify": {
+        if (options.resolveVerifyRequest !== undefined) {
+          return asOperationRequest(
+            await options.resolveVerifyRequest({
+              runId: input.runId,
+              stageId: input.stageId,
+              attemptId: input.attemptId,
+              intentId: input.intentId,
+              stage: input.stage,
+              payload: input.payload,
+            }),
+          );
+        }
+        if (input.payload.verifyRequest !== undefined) {
+          return asOperationRequest(input.payload.verifyRequest);
+        }
+        return asOperationRequest(defaultVerifyRequest(input.stage));
+      }
+      case "publish": {
+        if (options.resolvePublishRequest !== undefined) {
+          return asOperationRequest(
+            await options.resolvePublishRequest({
+              runId: input.runId,
+              stageId: input.stageId,
+              attemptId: input.attemptId,
+              intentId: input.intentId,
+              stage: input.stage,
+              payload: input.payload,
+            }),
+          );
+        }
+        if (input.payload.publishRequest !== undefined) {
+          return asOperationRequest(input.payload.publishRequest);
+        }
+        throw new Error(`publish request unresolved for ${input.attemptId}`);
+      }
+    }
   }
 
   async function driveDispatch(intent: {
@@ -451,9 +871,10 @@ export function createPipelineRunnerService(
   }): Promise<void> {
     const payload = payloadRecord(intent.payload);
     const stageType = String(payload.stageType ?? "");
-    if (stageType !== "agent" && stageType !== "command") {
+    if (!FIXED_STAGE_TYPES.has(stageType)) {
       return;
     }
+    const typedStage = stageType as FixedStageType;
     const attemptId = String(payload.attemptId ?? "");
     const stageId = String(payload.stageId ?? "");
     const generation = Number(payload.generation);
@@ -471,7 +892,7 @@ export function createPipelineRunnerService(
       attemptId,
       runId: intent.runId,
       stageId,
-      stageType,
+      stageType: typedStage,
       intentId: intent.intentId,
       graphRevision: intent.graphRevision,
       generation,
@@ -489,7 +910,7 @@ export function createPipelineRunnerService(
     const runtimeDirectory = join(options.runtimeDirectory, "pipeline-attempts", attemptId);
     await mkdir(runtimeDirectory, { recursive: true });
 
-    if (attempt.checkoutPath === undefined) {
+    if (requiresWorkspace(typedStage) && attempt.checkoutPath === undefined) {
       const provisioned = await provisionWorkspace({
         runId: intent.runId,
         attemptId,
@@ -505,20 +926,74 @@ export function createPipelineRunnerService(
         transitionDetail: "workspace_provisioned",
         now: options.clock.nowIso(),
       });
+    } else if (attempt.runtimeDirectory === undefined) {
+      attempt = updateRunnerAttempt(options.db, {
+        attemptId,
+        expectedRevision: attempt.revision,
+        runtimeDirectory,
+        deadlineAt: schedule?.deadlineAt ?? null,
+        preparedAt: options.clock.nowIso(),
+        transitionDetail: "runtime_prepared",
+        now: options.clock.nowIso(),
+      });
     }
 
     const checkoutPath = attempt.checkoutPath;
-    if (checkoutPath === undefined) {
-      throw new Error(`runner attempt ${attemptId} missing checkout path`);
+    if (requiresWorkspace(typedStage)) {
+      if (checkoutPath === undefined) {
+        throw new Error(`runner attempt ${attemptId} missing checkout path`);
+      }
+      await validateExecutionWorkspace({
+        assignedWorktree: checkoutPath,
+        workingDirectory: checkoutPath,
+        artifactPaths: [],
+      });
     }
 
-    await validateExecutionWorkspace({
-      assignedWorktree: checkoutPath,
-      workingDirectory: checkoutPath,
-      artifactPaths: [],
-    });
+    let approvalRequest: ApprovalRequest | undefined;
+    let integrationRequest: IntegrationRequest | undefined;
+    let verifyRequest: VerifyRequest | undefined;
+    let publishRequest: PublishRequest | undefined;
 
-    const runner = createRunnerForStage(stageType, stage, intent.runId);
+    if (isOperationStage(typedStage)) {
+      const requestJson = await resolveOperationRequest({
+        stageType: typedStage,
+        runId: intent.runId,
+        stageId,
+        attemptId,
+        intentId: intent.intentId,
+        stage,
+        payload,
+      });
+      const persisted = persistRunnerOperationRequest(options.db, {
+        operationId: options.ids.next("operation"),
+        attemptId,
+        stageType: typedStage,
+        request: requestJson,
+        initialPhase: typedStage === "approval" ? "waiting" : "pending",
+        now: options.clock.nowIso(),
+      });
+      attempt = persisted.attempt;
+      operationRequests.set(attemptId, {
+        operationId: persisted.request.operationId,
+        stageType: typedStage,
+        request: requestJson,
+      });
+      if (typedStage === "approval") {
+        approvalRequest = requestJson as ApprovalRequest;
+      } else if (typedStage === "integration") {
+        integrationRequest = requestJson as IntegrationRequest;
+      } else if (typedStage === "verify") {
+        verifyRequest = requestJson as VerifyRequest;
+      } else {
+        publishRequest = requestJson as PublishRequest;
+      }
+    }
+
+    const runner =
+      typedStage === "agent" || typedStage === "command"
+        ? createAgentOrCommandRunner(typedStage, stage, intent.runId, attemptId)
+        : createOperationRunner(typedStage, attemptId);
     activeRunners.set(attemptId, runner);
 
     await runner.prepare({
@@ -530,12 +1005,32 @@ export function createPipelineRunnerService(
       generation,
       attemptOrdinal,
       stage,
-      checkoutPath,
       runtimeDirectory,
+      ...(checkoutPath === undefined ? {} : { checkoutPath }),
       ...(attempt.workspaceId === undefined ? {} : { workspaceId: attempt.workspaceId }),
       ...(attempt.leaseId === undefined ? {} : { leaseId: attempt.leaseId }),
       ...(schedule?.deadlineAt ? { deadlineAt: schedule.deadlineAt } : {}),
+      ...(approvalRequest === undefined ? {} : { approvalRequest }),
+      ...(integrationRequest === undefined ? {} : { integrationRequest }),
+      ...(verifyRequest === undefined ? {} : { verifyRequest }),
+      ...(publishRequest === undefined ? {} : { publishRequest }),
     });
+    attempt = readRunnerAttempt(options.db, attemptId) ?? attempt;
+
+    if (isOperationStage(typedStage) && typedStage !== "approval") {
+      const operation = operationRequests.get(attemptId);
+      if (operation !== undefined) {
+        const state = readRunnerOperationState(options.db, operation.operationId);
+        if (state !== undefined && state.phase === "pending") {
+          updateRunnerOperationState(options.db, {
+            operationId: operation.operationId,
+            expectedRevision: state.revision,
+            phase: "executing",
+            now: options.clock.nowIso(),
+          });
+        }
+      }
+    }
 
     attempt = updateRunnerAttempt(options.db, {
       attemptId,
@@ -546,6 +1041,7 @@ export function createPipelineRunnerService(
     });
 
     await runner.start(attemptId);
+    attempt = readRunnerAttempt(options.db, attemptId) ?? attempt;
     attempt = updateRunnerAttempt(options.db, {
       attemptId,
       expectedRevision: attempt.revision,
@@ -579,7 +1075,7 @@ export function createPipelineRunnerService(
     }
     const attempt = readRunnerAttempt(options.db, attemptId);
     if (attempt === undefined) {
-      // Cancel for a stage we never claimed (Q027+) — leave pending unless empty.
+      // Cancel for a stage we never claimed — leave pending.
       return;
     }
     const runner = activeRunners.get(attemptId);
@@ -588,7 +1084,7 @@ export function createPipelineRunnerService(
         attemptId,
         expectedRevision: attempt.revision,
         phase: "recovery_required",
-        recovery: attempt.stageType === "agent" ? "observe_backend" : "reap_process",
+        recovery: recoveryForMissingHandle(attempt),
         finishedAt: options.clock.nowIso(),
         transitionDetail: "cancel_without_live_runner",
         now: options.clock.nowIso(),
@@ -607,6 +1103,76 @@ export function createPipelineRunnerService(
     await runner.cancel(attemptId);
     await settleRunner(attemptId, runner, "cancel");
     markPipelineSchedulerIntentDelivered(options.db, intent.intentId, options.clock.nowIso());
+  }
+
+  async function reconstructLiveRunner(
+    attempt: NonNullable<ReturnType<typeof readRunnerAttempt>>,
+  ): Promise<StageRunner | undefined> {
+    if (!isOperationStage(attempt.stageType)) {
+      return undefined;
+    }
+    const reconstructed = reconstructRunnerOperation(options.db, attempt.attemptId);
+    if (reconstructed === undefined) {
+      return undefined;
+    }
+
+    const parts = loadPipelineSchedulerInputParts(options.db, attempt.runId);
+    const stage = parts.graph.stages.find((candidate) => candidate.id === attempt.stageId);
+    if (stage === undefined) {
+      return undefined;
+    }
+
+    const runtimeDirectory =
+      attempt.runtimeDirectory ??
+      join(options.runtimeDirectory, "pipeline-attempts", attempt.attemptId);
+    await mkdir(runtimeDirectory, { recursive: true });
+
+    const requestJson = reconstructed.request.request;
+    operationRequests.set(attempt.attemptId, {
+      operationId: reconstructed.request.operationId,
+      stageType: attempt.stageType,
+      request: requestJson,
+    });
+
+    const runner = createOperationRunner(attempt.stageType, attempt.attemptId);
+    activeRunners.set(attempt.attemptId, runner);
+
+    const prepareInput: StageRunnerPrepareInput = {
+      attemptId: attempt.attemptId,
+      runId: attempt.runId,
+      stageId: attempt.stageId,
+      intentId: attempt.intentId,
+      graphRevision: attempt.graphRevision,
+      generation: attempt.generation,
+      attemptOrdinal: attempt.attemptOrdinal,
+      stage,
+      runtimeDirectory,
+      ...(attempt.checkoutPath === undefined ? {} : { checkoutPath: attempt.checkoutPath }),
+      ...(attempt.workspaceId === undefined ? {} : { workspaceId: attempt.workspaceId }),
+      ...(attempt.leaseId === undefined ? {} : { leaseId: attempt.leaseId }),
+      ...(attempt.deadlineAt === undefined ? {} : { deadlineAt: attempt.deadlineAt }),
+      ...(attempt.stageType === "approval"
+        ? { approvalRequest: requestJson as ApprovalRequest }
+        : {}),
+      ...(attempt.stageType === "integration"
+        ? { integrationRequest: requestJson as IntegrationRequest }
+        : {}),
+      ...(attempt.stageType === "verify" ? { verifyRequest: requestJson as VerifyRequest } : {}),
+      ...(attempt.stageType === "publish" ? { publishRequest: requestJson as PublishRequest } : {}),
+    };
+
+    await runner.prepare(prepareInput);
+    await runner.start(attempt.attemptId);
+
+    if (attempt.stageType === "approval" && reconstructed.answer !== undefined) {
+      const approval = approvalRunners.get(attempt.attemptId);
+      const decision = reconstructed.answer.decisionJson as ApprovalDecision;
+      if (approval !== undefined) {
+        await approval.answer(attempt.attemptId, decision);
+      }
+    }
+
+    return runner;
   }
 
   async function drainIntents(runId?: string): Promise<void> {
@@ -628,27 +1194,133 @@ export function createPipelineRunnerService(
     const open = readOpenRunnerAttempts(options.db);
     for (const attempt of open) {
       if (attempt.phase === "recovery_required") continue;
-      const runner = activeRunners.get(attempt.attemptId);
+
+      let runner = activeRunners.get(attempt.attemptId);
+      if (runner === undefined && isOperationStage(attempt.stageType)) {
+        runner = await reconstructLiveRunner(attempt);
+        if (runner === undefined) {
+          updateRunnerAttempt(options.db, {
+            attemptId: attempt.attemptId,
+            expectedRevision: attempt.revision,
+            phase: "recovery_required",
+            recovery: recoveryForMissingHandle(attempt),
+            finishedAt: options.clock.nowIso(),
+            transitionDetail: "reconstruction_impossible",
+            now: options.clock.nowIso(),
+          });
+          continue;
+        }
+      }
+
       if (runner === undefined) {
         updateRunnerAttempt(options.db, {
           attemptId: attempt.attemptId,
           expectedRevision: attempt.revision,
           phase: "recovery_required",
-          recovery:
-            attempt.backendExecutionId !== undefined
-              ? "observe_backend"
-              : attempt.processGroupId === undefined
-                ? "manual"
-                : "reap_process",
+          recovery: recoveryForMissingHandle(attempt),
           finishedAt: options.clock.nowIso(),
           transitionDetail: "daemon_restart",
           now: options.clock.nowIso(),
         });
         continue;
       }
+
+      if (waitingAttempts.has(attempt.attemptId)) {
+        const observation = await runner.observe(attempt.attemptId);
+        if (observation.status === "waiting") {
+          continue;
+        }
+      }
+
       await settleRunner(attempt.attemptId, runner, "reconcile");
     }
     await drainIntents();
+  }
+
+  async function answerApproval(input: {
+    readonly attemptId: string;
+    readonly decision: ApprovalDecision;
+  }): Promise<
+    | {
+        readonly status: "recorded";
+        readonly attemptId: string;
+        readonly operationId: string;
+        readonly interactionRevision: number;
+      }
+    | {
+        readonly status: "stale_revision";
+        readonly attemptId: string;
+        readonly currentRevision: number;
+      }
+  > {
+    const attempt = readRunnerAttempt(options.db, input.attemptId);
+    if (attempt === undefined) {
+      throw new Error(`unknown runner attempt ${input.attemptId}`);
+    }
+    if (attempt.stageType !== "approval") {
+      throw new Error(`attempt ${input.attemptId} is not an approval stage`);
+    }
+
+    let operationId = attempt.operationId;
+    let reconstructed = reconstructRunnerOperation(options.db, input.attemptId);
+    if (operationId === undefined || operationId === null) {
+      operationId = reconstructed?.request.operationId;
+    }
+    if (operationId === undefined) {
+      throw new Error(`approval attempt ${input.attemptId} has no durable operation`);
+    }
+
+    const recorded = recordRunnerApprovalAnswer(options.db, {
+      answerId: options.ids.next("answer"),
+      operationId,
+      attemptId: input.attemptId,
+      interactionId: input.decision.interactionId,
+      expectedRevision: input.decision.expectedInteractionRevision,
+      decision: input.decision.decision,
+      selectedLabel: input.decision.selectedLabel,
+      answeredByKeyId: input.decision.answeredByKeyId,
+      decisionJson: input.decision as never,
+      answeredAt: input.decision.answeredAt,
+    });
+    if (recorded.status === "stale_revision") {
+      return {
+        status: "stale_revision",
+        attemptId: input.attemptId,
+        currentRevision: recorded.currentRevision,
+      };
+    }
+
+    let runner = approvalRunners.get(input.attemptId);
+    if (runner === undefined) {
+      const live = await reconstructLiveRunner(attempt);
+      runner = approvalRunners.get(input.attemptId);
+      if (live !== undefined && runner === undefined) {
+        throw new Error(`failed to reconstruct approval runner for ${input.attemptId}`);
+      }
+    }
+    if (runner !== undefined) {
+      const answered = await runner.answer(input.attemptId, input.decision);
+      if (answered.status === "stale_revision") {
+        const state = readRunnerOperationState(options.db, operationId);
+        return {
+          status: "stale_revision",
+          attemptId: input.attemptId,
+          currentRevision: state?.revision ?? input.decision.expectedInteractionRevision,
+        };
+      }
+      waitingAttempts.delete(input.attemptId);
+      await settleRunner(input.attemptId, runner, "reconcile");
+    }
+
+    reconstructed = reconstructRunnerOperation(options.db, input.attemptId);
+    const interactionRevision =
+      reconstructed?.state.revision ?? input.decision.expectedInteractionRevision + 1;
+    return {
+      status: "recorded",
+      attemptId: input.attemptId,
+      operationId,
+      interactionRevision,
+    };
   }
 
   return {
@@ -657,6 +1329,8 @@ export function createPipelineRunnerService(
     reconcile,
     cleanupHealth: () => reportRunnerCleanupHealth(options.db),
     exportAttempt: (attemptId) => exportRunnerAttempt(options.db, attemptId),
+    listApprovalInbox: () => listPipelineApprovalInbox(options.db),
+    answerApproval,
     stop: () => {
       stopped = true;
       if (timer !== undefined) clearTimeout(timer);

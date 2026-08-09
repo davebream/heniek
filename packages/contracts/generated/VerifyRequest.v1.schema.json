@@ -1,0 +1,22 @@
+{
+  "$id": "heniek://contract/VerifyRequest/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "checks"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "checks": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "$ref": "heniek://contract/VerifyCheck/v1"
+      }
+    }
+  }
+}

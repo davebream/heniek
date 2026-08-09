@@ -1,31 +1,47 @@
 /**
- * Shared stage-runner types (Q026). Both command and agent runners implement
- * the same prepare → start → observe → cancel → collect → validate → finalize
- * surface so the daemon can drain scheduler intents uniformly.
+ * Shared stage-runner types (Q026/Q027). Command, agent, approval, integration,
+ * verify, and publish runners implement the same prepare → start → observe →
+ * cancel → collect → validate → finalize surface so the daemon can drain
+ * scheduler intents uniformly.
  */
 
 import type {
+  ApprovalDecisionV1,
+  ApprovalRequestV1,
   ArtifactId,
   ExecutionBackendV7,
   ExecutionIdentifierReaderV1,
   ExecutionPermissionEnvelopeV1,
   ExecutionRequestV4,
+  ForgeBackendV2,
+  IntegrationRequestV1,
   PipelineGraphV1,
+  PublishRequestV1,
   ResolvedProfileSchemaV2,
   StageRunnerAttemptV1,
+  StageRunnerAttemptV2,
   StageRunnerCleanupReportV1,
   StageRunnerEvidenceV1,
   StageRunnerFailureV1,
+  StageRunnerFailureV2,
   StageRunnerOutputBindingV1,
   StageRunnerPhase,
   StageRunnerResultV1,
+  StageRunnerResultV2,
   StageRunnerValidationReportV1,
+  VerifyRequestV1,
 } from "@heniek/contracts";
 import type { Static } from "@sinclair/typebox";
+import type { GitIntegrationAdapter } from "./git-integration.js";
 
 export type StageRunnerAttempt = Static<typeof StageRunnerAttemptV1>;
-export type StageRunnerResult = Static<typeof StageRunnerResultV1>;
-export type StageRunnerFailure = Static<typeof StageRunnerFailureV1>;
+export type StageRunnerAttemptV2Snapshot = Static<typeof StageRunnerAttemptV2>;
+export type StageRunnerResult =
+  | Static<typeof StageRunnerResultV1>
+  | Static<typeof StageRunnerResultV2>;
+export type StageRunnerFailure =
+  | Static<typeof StageRunnerFailureV1>
+  | Static<typeof StageRunnerFailureV2>;
 export type StageRunnerEvidence = Static<typeof StageRunnerEvidenceV1>;
 export type StageRunnerOutputBinding = Static<typeof StageRunnerOutputBindingV1>;
 export type StageRunnerCleanupReport = Static<typeof StageRunnerCleanupReportV1>;
@@ -33,6 +49,13 @@ export type StageRunnerValidationReport = Static<typeof StageRunnerValidationRep
 export type ResolvedProfile = Static<typeof ResolvedProfileSchemaV2>;
 export type ExecutionPermissionEnvelope = Static<typeof ExecutionPermissionEnvelopeV1>;
 export type ExecutionRequest = Static<typeof ExecutionRequestV4>;
+export type ApprovalRequest = Static<typeof ApprovalRequestV1>;
+export type ApprovalDecision = Static<typeof ApprovalDecisionV1>;
+export type IntegrationRequest = Static<typeof IntegrationRequestV1>;
+export type VerifyRequest = Static<typeof VerifyRequestV1>;
+export type PublishRequest = Static<typeof PublishRequestV1>;
+
+export type { GitIntegrationAdapter };
 
 /** One normalized stage from `PipelineGraph/v1`. */
 export type PipelineGraphStage = Static<typeof PipelineGraphV1>["stages"][number];
@@ -40,6 +63,14 @@ export type PipelineGraphStage = Static<typeof PipelineGraphV1>["stages"][number
 export type StageCompletionRequirement = NonNullable<
   PipelineGraphStage["completion"]
 >["require"][number];
+
+export type StageRunnerStageType =
+  | "agent"
+  | "command"
+  | "approval"
+  | "integration"
+  | "verify"
+  | "publish";
 
 export interface RunnerClock {
   nowIso(): string;
@@ -57,7 +88,7 @@ export interface StageRunnerAttemptSnapshot {
   readonly attemptId: string;
   readonly runId: string;
   readonly stageId: string;
-  readonly stageType: "agent" | "command";
+  readonly stageType: StageRunnerStageType;
   readonly intentId: string;
   readonly graphRevision: number;
   readonly generation: number;
@@ -68,6 +99,7 @@ export interface StageRunnerAttemptSnapshot {
   checkoutPath?: string;
   processGroupId?: number;
   backendExecutionId?: string;
+  operationId?: string;
   deadlineAt?: string;
   runtimeDirectory?: string;
   preparedAt?: string;
@@ -77,7 +109,7 @@ export interface StageRunnerAttemptSnapshot {
   evidence: StageRunnerEvidence[];
   result?: StageRunnerResult;
   failure?: StageRunnerFailure;
-  recovery: StageRunnerAttempt["recovery"];
+  recovery: StageRunnerAttemptV2Snapshot["recovery"];
   revision: number;
   updatedAt: string;
   createdAt: string;
@@ -97,20 +129,24 @@ export interface StageRunnerPrepareInput {
   readonly attemptOrdinal: number;
   readonly stage: PipelineGraphStage;
   /** Absolute checkout path after the caller finished provisioning. */
-  readonly checkoutPath: string;
+  readonly checkoutPath?: string;
   readonly workspaceId?: string;
   readonly leaseId?: string;
   /** Hard deadline (ISO). Combined with stage/profile duration caps when present. */
   readonly deadlineAt?: string;
   /** Private runtime directory for stdout/stderr and runner-local files — never the registered repo. */
   readonly runtimeDirectory: string;
+  readonly approvalRequest?: ApprovalRequest;
+  readonly integrationRequest?: IntegrationRequest;
+  readonly verifyRequest?: VerifyRequest;
+  readonly publishRequest?: PublishRequest;
 }
 
 export interface StageRunnerPrepareOutcome {
   readonly attemptId: string;
   readonly preparedAt: string;
   readonly deadlineAt?: string;
-  readonly checkoutPath: string;
+  readonly checkoutPath?: string;
   readonly runtimeDirectory: string;
   readonly argv?: readonly string[];
   readonly cwd?: string;
@@ -180,4 +216,29 @@ export interface CommandStageRunnerDeps {
    */
   readonly spawn?: typeof import("./process.js").spawnCommand;
   readonly terminate?: typeof import("./process.js").terminateProcessGroup;
+}
+
+export interface ApprovalStageRunnerDeps {
+  readonly clock?: RunnerClock;
+  readonly store?: StageRunnerStoreCallbacks;
+}
+
+export interface IntegrationStageRunnerDeps {
+  readonly git: GitIntegrationAdapter;
+  readonly clock?: RunnerClock;
+  readonly store?: StageRunnerStoreCallbacks;
+}
+
+export interface VerifyStageRunnerDeps {
+  readonly clock?: RunnerClock;
+  readonly store?: StageRunnerStoreCallbacks;
+  readonly gracePeriodMs?: number;
+  readonly spawn?: typeof import("./process.js").spawnCommand;
+  readonly terminate?: typeof import("./process.js").terminateProcessGroup;
+}
+
+export interface PublishStageRunnerDeps {
+  readonly forge: ForgeBackendV2;
+  readonly clock?: RunnerClock;
+  readonly store?: StageRunnerStoreCallbacks;
 }

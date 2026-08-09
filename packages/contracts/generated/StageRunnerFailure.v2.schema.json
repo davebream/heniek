@@ -1,0 +1,208 @@
+{
+  "$id": "heniek://contract/StageRunnerFailure/v2",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "classification",
+    "phase",
+    "code",
+    "message",
+    "retryable",
+    "recovery"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 2,
+      "type": "number"
+    },
+    "classification": {
+      "anyOf": [
+        {
+          "const": "prepare_failed",
+          "type": "string"
+        },
+        {
+          "const": "start_failed",
+          "type": "string"
+        },
+        {
+          "const": "timeout",
+          "type": "string"
+        },
+        {
+          "const": "cancelled",
+          "type": "string"
+        },
+        {
+          "const": "process_failed",
+          "type": "string"
+        },
+        {
+          "const": "backend_failed",
+          "type": "string"
+        },
+        {
+          "const": "collection_failed",
+          "type": "string"
+        },
+        {
+          "const": "validation_failed",
+          "type": "string"
+        },
+        {
+          "const": "finalize_failed",
+          "type": "string"
+        },
+        {
+          "const": "workspace_failed",
+          "type": "string"
+        },
+        {
+          "const": "profile_failed",
+          "type": "string"
+        },
+        {
+          "const": "recovery_required",
+          "type": "string"
+        },
+        {
+          "const": "rejected",
+          "type": "string"
+        },
+        {
+          "const": "stale_revision",
+          "type": "string"
+        },
+        {
+          "const": "stale_sha",
+          "type": "string"
+        },
+        {
+          "const": "merge_conflict",
+          "type": "string"
+        },
+        {
+          "const": "reconciliation_required",
+          "type": "string"
+        },
+        {
+          "const": "forge_failed",
+          "type": "string"
+        },
+        {
+          "const": "malformed_contract",
+          "type": "string"
+        },
+        {
+          "const": "operation_failed",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "type": "string"
+        }
+      ]
+    },
+    "phase": {
+      "anyOf": [
+        {
+          "const": "prepare",
+          "type": "string"
+        },
+        {
+          "const": "start",
+          "type": "string"
+        },
+        {
+          "const": "observe",
+          "type": "string"
+        },
+        {
+          "const": "cancel",
+          "type": "string"
+        },
+        {
+          "const": "collect",
+          "type": "string"
+        },
+        {
+          "const": "validate",
+          "type": "string"
+        },
+        {
+          "const": "finalize",
+          "type": "string"
+        },
+        {
+          "const": "succeeded",
+          "type": "string"
+        },
+        {
+          "const": "failed",
+          "type": "string"
+        },
+        {
+          "const": "cancelled",
+          "type": "string"
+        },
+        {
+          "const": "recovery_required",
+          "type": "string"
+        }
+      ]
+    },
+    "code": {
+      "minLength": 1,
+      "maxLength": 128,
+      "type": "string"
+    },
+    "message": {
+      "minLength": 1,
+      "maxLength": 512,
+      "type": "string"
+    },
+    "retryable": {
+      "type": "boolean"
+    },
+    "recovery": {
+      "anyOf": [
+        {
+          "const": "none",
+          "type": "string"
+        },
+        {
+          "const": "observe_backend",
+          "type": "string"
+        },
+        {
+          "const": "reap_process",
+          "type": "string"
+        },
+        {
+          "const": "reconcile_artifacts",
+          "type": "string"
+        },
+        {
+          "const": "reconcile_git",
+          "type": "string"
+        },
+        {
+          "const": "reconcile_forge",
+          "type": "string"
+        },
+        {
+          "const": "await_approval",
+          "type": "string"
+        },
+        {
+          "const": "manual",
+          "type": "string"
+        }
+      ]
+    },
+    "backendFailure": {
+      "$ref": "heniek://contract/ExecutionFailure/v1"
+    }
+  }
+}

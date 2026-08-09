@@ -19,6 +19,7 @@ import type {
   StageRunner,
   StageRunnerAttemptSnapshot,
   StageRunnerCleanupReport,
+  StageRunnerFailure,
   StageRunnerFinalizeOutcome,
   StageRunnerObserveOutcome,
   StageRunnerPrepareInput,
@@ -86,10 +87,14 @@ export function createCommandStageRunner(deps: CommandStageRunnerDeps = {}): Sta
       if (command === undefined || command.argv.length === 0) {
         throw new Error("command stage requires a non-empty argv");
       }
+      if (input.checkoutPath === undefined) {
+        throw new Error("command stage requires a checkoutPath");
+      }
+      const checkoutPath = input.checkoutPath;
 
       let cwd: string;
       try {
-        cwd = resolveCommandCwd(input.checkoutPath, command.cwd);
+        cwd = resolveCommandCwd(checkoutPath, command.cwd);
       } catch (error) {
         if (error instanceof InvalidCommandCwdError) throw error;
         throw error;
@@ -116,7 +121,7 @@ export function createCommandStageRunner(deps: CommandStageRunnerDeps = {}): Sta
         phase: "prepare",
         ...(input.workspaceId === undefined ? {} : { workspaceId: input.workspaceId }),
         ...(input.leaseId === undefined ? {} : { leaseId: input.leaseId }),
-        checkoutPath: input.checkoutPath,
+        checkoutPath,
         ...(deadlineAt === undefined ? {} : { deadlineAt }),
         runtimeDirectory: input.runtimeDirectory,
         preparedAt: now,
@@ -146,7 +151,7 @@ export function createCommandStageRunner(deps: CommandStageRunnerDeps = {}): Sta
         attemptId: input.attemptId,
         preparedAt: now,
         ...(deadlineAt === undefined ? {} : { deadlineAt }),
-        checkoutPath: input.checkoutPath,
+        checkoutPath,
         runtimeDirectory: input.runtimeDirectory,
         argv: state.argv,
         cwd: state.cwd,
@@ -474,7 +479,7 @@ export function createCommandStageRunner(deps: CommandStageRunnerDeps = {}): Sta
         ),
         retryable: classification === "timeout",
         recovery: state.snapshot.recovery,
-      };
+      } as StageRunnerFailure;
 
       const result = {
         schemaVersion: 1 as const,

@@ -1,19 +1,21 @@
 /**
- * Durable pipeline stage-runner store (Q026, ADR 0024).
+ * Durable pipeline stage-runner store (Q026/Q027, ADR 0024/0025).
  *
  * Claims scheduler intents idempotently, persists attempt phase transitions
  * before external side effects, and atomically finalizes validated output by
  * binding artifacts, appending a scheduler observation, and settling the
- * intent in one transaction.
+ * intent in one transaction. Q027 adds the fixed-stage operation ledger.
  */
 
 import type {
-  StageRunnerAttemptV1,
+  ApprovalRequestV1,
+  InteractionV2,
+  StageRunnerAttemptV2,
   StageRunnerCleanupReportV1,
   StageRunnerEvidenceV1,
-  StageRunnerFailureV1,
+  StageRunnerFailureV2,
   StageRunnerOutputBindingV1,
-  StageRunnerResultV1,
+  StageRunnerResultV2,
   StageRunnerValidationReportV1,
 } from "@heniek/contracts";
 import type { Static } from "@sinclair/typebox";
@@ -23,13 +25,33 @@ import { StateStoreError } from "../errors.js";
 import { type JsonValue, parseJsonValue, stringifyCanonical } from "../json.js";
 import type { PipelineSchedulerIntentRow } from "./store.js";
 
-export type StageRunnerAttempt = Static<typeof StageRunnerAttemptV1>;
-export type StageRunnerResult = Static<typeof StageRunnerResultV1>;
-export type StageRunnerFailure = Static<typeof StageRunnerFailureV1>;
+export type StageRunnerAttempt = Static<typeof StageRunnerAttemptV2>;
+export type StageRunnerResult = Static<typeof StageRunnerResultV2>;
+export type StageRunnerFailure = Static<typeof StageRunnerFailureV2>;
 export type StageRunnerEvidence = Static<typeof StageRunnerEvidenceV1>;
 export type StageRunnerOutputBinding = Static<typeof StageRunnerOutputBindingV1>;
 export type StageRunnerCleanupReport = Static<typeof StageRunnerCleanupReportV1>;
 export type StageRunnerValidationReport = Static<typeof StageRunnerValidationReportV1>;
+
+export type RunnerStageType = StageRunnerAttempt["stageType"];
+export type RunnerOperationStageType = "approval" | "integration" | "verify" | "publish";
+export type RunnerOperationPhase =
+  | "pending"
+  | "waiting"
+  | "executing"
+  | "completed"
+  | "failed"
+  | "cancelled"
+  | "reconciliation_required";
+
+const SUPPORTED_STAGE_TYPES = new Set<RunnerStageType>([
+  "agent",
+  "command",
+  "approval",
+  "integration",
+  "verify",
+  "publish",
+]);
 
 const OPEN_PHASES = new Set([
   "prepare",
@@ -89,6 +111,7 @@ function mapAttemptRow(row: Record<string, unknown>): StageRunnerAttempt {
       ? undefined
       : toSafeInteger(processGroupIdRaw, "process_group_id");
   const backendExecutionId = toNullableText(row.backend_execution_id, "backend_execution_id");
+  const operationId = toNullableText(row.operation_id, "operation_id");
   const deadlineAt = toNullableText(row.deadline_at, "deadline_at");
   const runtimeDirectory = toNullableText(row.runtime_directory, "runtime_directory");
   const preparedAt = toNullableText(row.prepared_at, "prepared_at");
@@ -96,11 +119,11 @@ function mapAttemptRow(row: Record<string, unknown>): StageRunnerAttempt {
   const finishedAt = toNullableText(row.finished_at, "finished_at");
 
   const mapped = {
-    schemaVersion: 1 as const,
+    schemaVersion: 2 as const,
     attemptId: toText(row.attempt_id, "attempt_id"),
     runId: toText(row.run_id, "run_id"),
     stageId: toText(row.stage_id, "stage_id"),
-    stageType: toText(row.stage_type, "stage_type") as "agent" | "command",
+    stageType: toText(row.stage_type, "stage_type") as RunnerStageType,
     intentId: toText(row.intent_id, "intent_id"),
     graphRevision: toSafeInteger(row.graph_revision, "graph_revision"),
     generation: toSafeInteger(row.generation, "generation"),
@@ -111,6 +134,7 @@ function mapAttemptRow(row: Record<string, unknown>): StageRunnerAttempt {
     ...(checkoutPath === null ? {} : { checkoutPath }),
     ...(processGroupId === undefined ? {} : { processGroupId }),
     ...(backendExecutionId === null ? {} : { backendExecutionId }),
+    ...(operationId === null ? {} : { operationId }),
     ...(deadlineAt === null ? {} : { deadlineAt }),
     ...(runtimeDirectory === null ? {} : { runtimeDirectory }),
     ...(preparedAt === null ? {} : { preparedAt }),
@@ -187,7 +211,7 @@ export interface ClaimRunnerDispatchInput {
   readonly attemptId: string;
   readonly runId: string;
   readonly stageId: string;
-  readonly stageType: "agent" | "command";
+  readonly stageType: RunnerStageType | string;
   readonly intentId: string;
   readonly graphRevision: number;
   readonly generation: number;
@@ -210,7 +234,7 @@ export function claimRunnerDispatch(
   db: StateDatabase,
   input: ClaimRunnerDispatchInput,
 ): ClaimRunnerDispatchResult {
-  if (input.stageType !== "agent" && input.stageType !== "command") {
+  if (!SUPPORTED_STAGE_TYPES.has(input.stageType as RunnerStageType)) {
     return { status: "unsupported", stageType: input.stageType };
   }
   const existing = readRunnerAttempt(db, input.attemptId);
@@ -231,13 +255,13 @@ export function claimRunnerDispatch(
         `INSERT INTO pipeline_runner_attempt (
            attempt_id, run_id, stage_id, stage_type, intent_id, graph_revision,
            generation, attempt_ordinal, phase, workspace_id, lease_id, checkout_path,
-           process_group_id, backend_execution_id, deadline_at, runtime_directory,
-           prepared_at, started_at, finished_at, outputs_json, evidence_json,
-           result_json, failure_json, cleanup_json, validation_json, recovery,
-           revision, updated_at, created_at
+           process_group_id, backend_execution_id, operation_id, deadline_at,
+           runtime_directory, prepared_at, started_at, finished_at, outputs_json,
+           evidence_json, result_json, failure_json, cleanup_json, validation_json,
+           recovery, revision, updated_at, created_at
          ) VALUES (
            ?, ?, ?, ?, ?, ?, ?, ?, 'prepare', NULL, NULL, NULL,
-           NULL, NULL, ?, ?, NULL, NULL, NULL, '[]', '[]',
+           NULL, NULL, NULL, ?, ?, NULL, NULL, NULL, '[]', '[]',
            NULL, NULL, NULL, NULL, 'none',
            1, ?, ?
          )`,
@@ -382,6 +406,7 @@ export interface UpdateRunnerAttemptInput {
   readonly cleanup?: StageRunnerCleanupReport | null;
   readonly validation?: StageRunnerValidationReport | null;
   readonly recovery?: StageRunnerAttempt["recovery"];
+  readonly operationId?: string | null;
   readonly transitionDetail?: string;
   readonly now?: string;
 }
@@ -437,6 +462,7 @@ export function updateRunnerAttempt(
            checkout_path = ?,
            process_group_id = ?,
            backend_execution_id = ?,
+           operation_id = ?,
            deadline_at = ?,
            runtime_directory = ?,
            prepared_at = ?,
@@ -464,6 +490,7 @@ export function updateRunnerAttempt(
         input.backendExecutionId !== undefined
           ? input.backendExecutionId
           : (current.backendExecutionId ?? null),
+        input.operationId !== undefined ? input.operationId : (current.operationId ?? null),
         input.deadlineAt !== undefined ? input.deadlineAt : (current.deadlineAt ?? null),
         input.runtimeDirectory !== undefined
           ? input.runtimeDirectory
@@ -672,4 +699,672 @@ export function reportRunnerCleanupHealth(db: StateDatabase): RunnerCleanupHealt
     ).length,
     attempts,
   };
+}
+
+export interface RunnerOperationRequestRow {
+  readonly operationId: string;
+  readonly attemptId: string;
+  readonly stageType: RunnerOperationStageType;
+  readonly request: JsonValue;
+  readonly createdAt: string;
+}
+
+export interface RunnerOperationStateRow {
+  readonly operationId: string;
+  readonly attemptId: string;
+  readonly phase: RunnerOperationPhase;
+  readonly result: JsonValue | undefined;
+  readonly failure: JsonValue | undefined;
+  readonly revision: number;
+  readonly updatedAt: string;
+}
+
+export interface RunnerApprovalAnswerRow {
+  readonly answerId: string;
+  readonly operationId: string;
+  readonly attemptId: string;
+  readonly interactionId: string;
+  readonly expectedRevision: number;
+  readonly decision: "approve" | "reject";
+  readonly selectedLabel: string;
+  readonly answeredByKeyId: string;
+  readonly answeredAt: string;
+  readonly decisionJson: JsonValue;
+}
+
+export interface RunnerExternalObservationRow {
+  readonly observationId: string;
+  readonly attemptId: string;
+  readonly operationId: string | null;
+  readonly kind: string;
+  readonly recordedAt: string;
+  readonly payload: JsonValue;
+}
+
+export interface RunnerReconciliationTraceRow {
+  readonly traceId: string;
+  readonly attemptId: string;
+  readonly operationId: string | null;
+  readonly stageType: "integration" | "publish";
+  readonly classification: string;
+  readonly recordedAt: string;
+  readonly detail: string | null;
+  readonly payload: JsonValue | undefined;
+}
+
+export interface PipelineApprovalInboxItem {
+  readonly runId: string;
+  readonly stageId: string;
+  readonly attemptId: string;
+  readonly operationId: string;
+  readonly interactionRevision: number;
+  readonly interaction: Static<typeof InteractionV2>;
+}
+
+export interface PersistRunnerOperationRequestInput {
+  readonly operationId: string;
+  readonly attemptId: string;
+  readonly stageType: RunnerOperationStageType;
+  readonly request: JsonValue;
+  readonly initialPhase?: RunnerOperationPhase;
+  readonly now?: string;
+}
+
+export interface UpdateRunnerOperationStateInput {
+  readonly operationId: string;
+  readonly expectedRevision: number;
+  readonly phase?: RunnerOperationPhase;
+  readonly result?: JsonValue | null;
+  readonly failure?: JsonValue | null;
+  readonly now?: string;
+}
+
+export interface RecordRunnerApprovalAnswerInput {
+  readonly answerId: string;
+  readonly operationId: string;
+  readonly attemptId: string;
+  readonly interactionId: string;
+  readonly expectedRevision: number;
+  readonly decision: "approve" | "reject";
+  readonly selectedLabel: string;
+  readonly answeredByKeyId: string;
+  readonly decisionJson: JsonValue;
+  readonly answeredAt?: string;
+}
+
+export interface AppendRunnerExternalObservationInput {
+  readonly observationId: string;
+  readonly attemptId: string;
+  readonly operationId?: string;
+  readonly kind: string;
+  readonly payload: JsonValue;
+  readonly recordedAt?: string;
+}
+
+export interface AppendRunnerReconciliationTraceInput {
+  readonly traceId: string;
+  readonly attemptId: string;
+  readonly operationId?: string;
+  readonly stageType: "integration" | "publish";
+  readonly classification: string;
+  readonly detail?: string;
+  readonly payload?: JsonValue;
+  readonly recordedAt?: string;
+}
+
+function mapOperationRequestRow(row: Record<string, unknown>): RunnerOperationRequestRow {
+  return {
+    operationId: toText(row.operation_id, "operation_id"),
+    attemptId: toText(row.attempt_id, "attempt_id"),
+    stageType: toText(row.stage_type, "stage_type") as RunnerOperationStageType,
+    request: parseJsonValue(toText(row.request_json, "request_json"), "request_json"),
+    createdAt: toText(row.created_at, "created_at"),
+  };
+}
+
+function mapOperationStateRow(row: Record<string, unknown>): RunnerOperationStateRow {
+  return {
+    operationId: toText(row.operation_id, "operation_id"),
+    attemptId: toText(row.attempt_id, "attempt_id"),
+    phase: toText(row.phase, "phase") as RunnerOperationPhase,
+    result: parseOptionalObject<JsonValue>(
+      toNullableText(row.result_json, "result_json"),
+      "result_json",
+    ),
+    failure: parseOptionalObject<JsonValue>(
+      toNullableText(row.failure_json, "failure_json"),
+      "failure_json",
+    ),
+    revision: toSafeInteger(row.revision, "revision"),
+    updatedAt: toText(row.updated_at, "updated_at"),
+  };
+}
+
+/**
+ * Persist an immutable operation request and its initial revisioned state
+ * before any Git/Forge/approval side effect. Links the attempt via operation_id.
+ */
+export function persistRunnerOperationRequest(
+  db: StateDatabase,
+  input: PersistRunnerOperationRequestInput,
+): {
+  readonly request: RunnerOperationRequestRow;
+  readonly state: RunnerOperationStateRow;
+  readonly attempt: StageRunnerAttempt;
+} {
+  const attempt = readRunnerAttempt(db, input.attemptId);
+  if (attempt === undefined) {
+    throw new StateStoreError(`unknown runner attempt: ${input.attemptId}`);
+  }
+  const existing = readRunnerOperationRequest(db, input.operationId);
+  if (existing !== undefined) {
+    const state = readRunnerOperationState(db, input.operationId);
+    if (state === undefined) {
+      throw new StateStoreError(`operation state missing for ${input.operationId}`);
+    }
+    return { request: existing, state, attempt };
+  }
+  const byAttempt = readRunnerOperationRequestByAttempt(db, input.attemptId);
+  if (byAttempt !== undefined) {
+    if (byAttempt.operationId !== input.operationId) {
+      throw new StateStoreError(
+        `runner attempt ${input.attemptId} already has operation ${byAttempt.operationId}`,
+      );
+    }
+    const state = readRunnerOperationState(db, input.operationId);
+    if (state === undefined) {
+      throw new StateStoreError(`operation state missing for ${input.operationId}`);
+    }
+    return { request: byAttempt, state, attempt };
+  }
+
+  const now = input.now ?? internalClock(db).nowIso();
+  const initialPhase = input.initialPhase ?? "pending";
+  const handle = internalHandle(db);
+  handle.exec("BEGIN IMMEDIATE");
+  try {
+    handle
+      .prepare(
+        `INSERT INTO pipeline_runner_operation_request
+           (operation_id, attempt_id, stage_type, request_json, created_at)
+         VALUES (?, ?, ?, ?, ?)`,
+      )
+      .run(
+        input.operationId,
+        input.attemptId,
+        input.stageType,
+        stringifyCanonical(input.request),
+        now,
+      );
+    handle
+      .prepare(
+        `INSERT INTO pipeline_runner_operation_state
+           (operation_id, attempt_id, phase, result_json, failure_json, revision, updated_at)
+         VALUES (?, ?, ?, NULL, NULL, 1, ?)`,
+      )
+      .run(input.operationId, input.attemptId, initialPhase, now);
+    const linked = handle
+      .prepare(
+        `UPDATE pipeline_runner_attempt
+            SET operation_id = ?, revision = revision + 1, updated_at = ?
+          WHERE attempt_id = ? AND revision = ?`,
+      )
+      .run(input.operationId, now, input.attemptId, attempt.revision);
+    if (linked.changes !== 1) {
+      throw new StateStoreError(`failed to link operation ${input.operationId} to attempt`);
+    }
+    handle.exec("COMMIT");
+  } catch (error) {
+    handle.exec("ROLLBACK");
+    const duplicate = readRunnerOperationRequest(db, input.operationId);
+    if (duplicate !== undefined) {
+      const state = readRunnerOperationState(db, input.operationId);
+      if (state === undefined) {
+        throw new StateStoreError(`operation state missing for ${input.operationId}`);
+      }
+      const linkedAttempt = readRunnerAttempt(db, input.attemptId);
+      if (linkedAttempt === undefined) {
+        throw new StateStoreError(`unknown runner attempt: ${input.attemptId}`);
+      }
+      return { request: duplicate, state, attempt: linkedAttempt };
+    }
+    throw error;
+  }
+  const request = readRunnerOperationRequest(db, input.operationId);
+  const state = readRunnerOperationState(db, input.operationId);
+  const linkedAttempt = readRunnerAttempt(db, input.attemptId);
+  if (request === undefined || state === undefined || linkedAttempt === undefined) {
+    throw new StateStoreError("operation request missing after persist");
+  }
+  return { request, state, attempt: linkedAttempt };
+}
+
+export function updateRunnerOperationState(
+  db: StateDatabase,
+  input: UpdateRunnerOperationStateInput,
+): RunnerOperationStateRow {
+  const current = readRunnerOperationState(db, input.operationId);
+  if (current === undefined) {
+    throw new StateStoreError(`unknown runner operation: ${input.operationId}`);
+  }
+  if (current.revision !== input.expectedRevision) {
+    throw new StateStoreError(
+      `runner operation revision conflict: expected ${input.expectedRevision}, have ${current.revision}`,
+    );
+  }
+  const now = input.now ?? internalClock(db).nowIso();
+  const resultJson =
+    input.result === undefined
+      ? current.result === undefined
+        ? null
+        : stringifyCanonical(current.result)
+      : input.result === null
+        ? null
+        : stringifyCanonical(input.result);
+  const failureJson =
+    input.failure === undefined
+      ? current.failure === undefined
+        ? null
+        : stringifyCanonical(current.failure)
+      : input.failure === null
+        ? null
+        : stringifyCanonical(input.failure);
+  const result = internalHandle(db)
+    .prepare(
+      `UPDATE pipeline_runner_operation_state
+          SET phase = ?, result_json = ?, failure_json = ?, revision = ?, updated_at = ?
+        WHERE operation_id = ? AND revision = ?`,
+    )
+    .run(
+      input.phase ?? current.phase,
+      resultJson,
+      failureJson,
+      current.revision + 1,
+      now,
+      input.operationId,
+      input.expectedRevision,
+    );
+  if (result.changes !== 1) {
+    throw new StateStoreError(`runner operation update failed for ${input.operationId}`);
+  }
+  const updated = readRunnerOperationState(db, input.operationId);
+  if (updated === undefined) throw new StateStoreError("operation state missing after update");
+  return updated;
+}
+
+export type RecordRunnerApprovalAnswerResult =
+  | { readonly status: "recorded"; readonly answer: RunnerApprovalAnswerRow }
+  | { readonly status: "duplicate"; readonly answer: RunnerApprovalAnswerRow }
+  | { readonly status: "stale_revision"; readonly currentRevision: number };
+
+export function recordRunnerApprovalAnswer(
+  db: StateDatabase,
+  input: RecordRunnerApprovalAnswerInput,
+): RecordRunnerApprovalAnswerResult {
+  const existing = readRunnerApprovalAnswer(db, input.operationId);
+  if (existing !== undefined) {
+    return { status: "duplicate", answer: existing };
+  }
+  const state = readRunnerOperationState(db, input.operationId);
+  if (state === undefined) {
+    throw new StateStoreError(`unknown runner operation: ${input.operationId}`);
+  }
+  if (state.revision !== input.expectedRevision) {
+    return { status: "stale_revision", currentRevision: state.revision };
+  }
+  const answeredAt = input.answeredAt ?? internalClock(db).nowIso();
+  const handle = internalHandle(db);
+  handle.exec("BEGIN IMMEDIATE");
+  try {
+    const insert = handle
+      .prepare(
+        `INSERT INTO pipeline_runner_approval_answer (
+           answer_id, operation_id, attempt_id, interaction_id, expected_revision,
+           decision, selected_label, answered_by_key_id, answered_at, decision_json
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        input.answerId,
+        input.operationId,
+        input.attemptId,
+        input.interactionId,
+        input.expectedRevision,
+        input.decision,
+        input.selectedLabel,
+        input.answeredByKeyId,
+        answeredAt,
+        stringifyCanonical(input.decisionJson),
+      );
+    if (insert.changes !== 1) {
+      throw new StateStoreError(`failed to record approval answer ${input.answerId}`);
+    }
+    const advanced = handle
+      .prepare(
+        `UPDATE pipeline_runner_operation_state
+            SET revision = ?, updated_at = ?
+          WHERE operation_id = ? AND revision = ?`,
+      )
+      .run(state.revision + 1, answeredAt, input.operationId, input.expectedRevision);
+    if (advanced.changes !== 1) {
+      throw new StateStoreError(`approval answer CAS failed for ${input.operationId}`);
+    }
+    handle.exec("COMMIT");
+  } catch (error) {
+    handle.exec("ROLLBACK");
+    const duplicate = readRunnerApprovalAnswer(db, input.operationId);
+    if (duplicate !== undefined) return { status: "duplicate", answer: duplicate };
+    const current = readRunnerOperationState(db, input.operationId);
+    if (current !== undefined && current.revision !== input.expectedRevision) {
+      return { status: "stale_revision", currentRevision: current.revision };
+    }
+    throw error;
+  }
+  const answer = readRunnerApprovalAnswer(db, input.operationId);
+  if (answer === undefined) throw new StateStoreError("approval answer missing after record");
+  return { status: "recorded", answer };
+}
+
+export function appendRunnerExternalObservation(
+  db: StateDatabase,
+  input: AppendRunnerExternalObservationInput,
+): RunnerExternalObservationRow {
+  const recordedAt = input.recordedAt ?? internalClock(db).nowIso();
+  try {
+    internalHandle(db)
+      .prepare(
+        `INSERT INTO pipeline_runner_external_observation
+           (observation_id, attempt_id, operation_id, kind, recorded_at, payload_json)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        input.observationId,
+        input.attemptId,
+        input.operationId ?? null,
+        input.kind,
+        recordedAt,
+        stringifyCanonical(input.payload),
+      );
+  } catch (error) {
+    const existing = readRunnerExternalObservation(db, input.observationId);
+    if (existing !== undefined) return existing;
+    throw error;
+  }
+  const row = readRunnerExternalObservation(db, input.observationId);
+  if (row === undefined) throw new StateStoreError("external observation missing after append");
+  return row;
+}
+
+export function appendRunnerReconciliationTrace(
+  db: StateDatabase,
+  input: AppendRunnerReconciliationTraceInput,
+): RunnerReconciliationTraceRow {
+  const recordedAt = input.recordedAt ?? internalClock(db).nowIso();
+  try {
+    internalHandle(db)
+      .prepare(
+        `INSERT INTO pipeline_runner_reconciliation_trace
+           (trace_id, attempt_id, operation_id, stage_type, classification,
+            recorded_at, detail, payload_json)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        input.traceId,
+        input.attemptId,
+        input.operationId ?? null,
+        input.stageType,
+        input.classification,
+        recordedAt,
+        input.detail ?? null,
+        input.payload === undefined ? null : stringifyCanonical(input.payload),
+      );
+  } catch (error) {
+    const existing = readRunnerReconciliationTrace(db, input.traceId);
+    if (existing !== undefined) return existing;
+    throw error;
+  }
+  const row = readRunnerReconciliationTrace(db, input.traceId);
+  if (row === undefined) throw new StateStoreError("reconciliation trace missing after append");
+  return row;
+}
+
+export function readRunnerOperationRequest(
+  db: StateDatabase,
+  operationId: string,
+): RunnerOperationRequestRow | undefined {
+  const row = internalHandle(db)
+    .prepare(`SELECT * FROM pipeline_runner_operation_request WHERE operation_id = ?`)
+    .get(operationId);
+  if (row === undefined) return undefined;
+  return mapOperationRequestRow(row as Record<string, unknown>);
+}
+
+export function readRunnerOperationRequestByAttempt(
+  db: StateDatabase,
+  attemptId: string,
+): RunnerOperationRequestRow | undefined {
+  const row = internalHandle(db)
+    .prepare(`SELECT * FROM pipeline_runner_operation_request WHERE attempt_id = ?`)
+    .get(attemptId);
+  if (row === undefined) return undefined;
+  return mapOperationRequestRow(row as Record<string, unknown>);
+}
+
+export function readRunnerOperationState(
+  db: StateDatabase,
+  operationId: string,
+): RunnerOperationStateRow | undefined {
+  const row = internalHandle(db)
+    .prepare(`SELECT * FROM pipeline_runner_operation_state WHERE operation_id = ?`)
+    .get(operationId);
+  if (row === undefined) return undefined;
+  return mapOperationStateRow(row as Record<string, unknown>);
+}
+
+export function readRunnerApprovalAnswer(
+  db: StateDatabase,
+  operationId: string,
+): RunnerApprovalAnswerRow | undefined {
+  const row = internalHandle(db)
+    .prepare(`SELECT * FROM pipeline_runner_approval_answer WHERE operation_id = ?`)
+    .get(operationId);
+  if (row === undefined) return undefined;
+  return {
+    answerId: toText(row.answer_id, "answer_id"),
+    operationId: toText(row.operation_id, "operation_id"),
+    attemptId: toText(row.attempt_id, "attempt_id"),
+    interactionId: toText(row.interaction_id, "interaction_id"),
+    expectedRevision: toSafeInteger(row.expected_revision, "expected_revision"),
+    decision: toText(row.decision, "decision") as "approve" | "reject",
+    selectedLabel: toText(row.selected_label, "selected_label"),
+    answeredByKeyId: toText(row.answered_by_key_id, "answered_by_key_id"),
+    answeredAt: toText(row.answered_at, "answered_at"),
+    decisionJson: parseJsonValue(toText(row.decision_json, "decision_json"), "decision_json"),
+  };
+}
+
+export function readRunnerExternalObservation(
+  db: StateDatabase,
+  observationId: string,
+): RunnerExternalObservationRow | undefined {
+  const row = internalHandle(db)
+    .prepare(`SELECT * FROM pipeline_runner_external_observation WHERE observation_id = ?`)
+    .get(observationId);
+  if (row === undefined) return undefined;
+  return {
+    observationId: toText(row.observation_id, "observation_id"),
+    attemptId: toText(row.attempt_id, "attempt_id"),
+    operationId: toNullableText(row.operation_id, "operation_id"),
+    kind: toText(row.kind, "kind"),
+    recordedAt: toText(row.recorded_at, "recorded_at"),
+    payload: parseJsonValue(toText(row.payload_json, "payload_json"), "payload_json"),
+  };
+}
+
+export function readRunnerReconciliationTrace(
+  db: StateDatabase,
+  traceId: string,
+): RunnerReconciliationTraceRow | undefined {
+  const row = internalHandle(db)
+    .prepare(`SELECT * FROM pipeline_runner_reconciliation_trace WHERE trace_id = ?`)
+    .get(traceId);
+  if (row === undefined) return undefined;
+  return {
+    traceId: toText(row.trace_id, "trace_id"),
+    attemptId: toText(row.attempt_id, "attempt_id"),
+    operationId: toNullableText(row.operation_id, "operation_id"),
+    stageType: toText(row.stage_type, "stage_type") as "integration" | "publish",
+    classification: toText(row.classification, "classification"),
+    recordedAt: toText(row.recorded_at, "recorded_at"),
+    detail: toNullableText(row.detail, "detail"),
+    payload: parseOptionalObject<JsonValue>(
+      toNullableText(row.payload_json, "payload_json"),
+      "payload_json",
+    ),
+  };
+}
+
+export function listRunnerExternalObservations(
+  db: StateDatabase,
+  attemptId: string,
+): readonly RunnerExternalObservationRow[] {
+  return internalHandle(db)
+    .prepare(
+      `SELECT * FROM pipeline_runner_external_observation
+        WHERE attempt_id = ?
+        ORDER BY recorded_at, observation_id`,
+    )
+    .all(attemptId)
+    .map((row) => ({
+      observationId: toText(row.observation_id, "observation_id"),
+      attemptId: toText(row.attempt_id, "attempt_id"),
+      operationId: toNullableText(row.operation_id, "operation_id"),
+      kind: toText(row.kind, "kind"),
+      recordedAt: toText(row.recorded_at, "recorded_at"),
+      payload: parseJsonValue(toText(row.payload_json, "payload_json"), "payload_json"),
+    }));
+}
+
+export function listRunnerReconciliationTraces(
+  db: StateDatabase,
+  attemptId: string,
+): readonly RunnerReconciliationTraceRow[] {
+  return internalHandle(db)
+    .prepare(
+      `SELECT * FROM pipeline_runner_reconciliation_trace
+        WHERE attempt_id = ?
+        ORDER BY recorded_at, trace_id`,
+    )
+    .all(attemptId)
+    .map((row) => ({
+      traceId: toText(row.trace_id, "trace_id"),
+      attemptId: toText(row.attempt_id, "attempt_id"),
+      operationId: toNullableText(row.operation_id, "operation_id"),
+      stageType: toText(row.stage_type, "stage_type") as "integration" | "publish",
+      classification: toText(row.classification, "classification"),
+      recordedAt: toText(row.recorded_at, "recorded_at"),
+      detail: toNullableText(row.detail, "detail"),
+      payload: parseOptionalObject<JsonValue>(
+        toNullableText(row.payload_json, "payload_json"),
+        "payload_json",
+      ),
+    }));
+}
+
+/**
+ * Reconstruct the durable operation bundle for a restarting runner.
+ */
+export function reconstructRunnerOperation(
+  db: StateDatabase,
+  attemptId: string,
+):
+  | {
+      readonly attempt: StageRunnerAttempt;
+      readonly request: RunnerOperationRequestRow;
+      readonly state: RunnerOperationStateRow;
+      readonly answer: RunnerApprovalAnswerRow | undefined;
+      readonly observations: readonly RunnerExternalObservationRow[];
+      readonly traces: readonly RunnerReconciliationTraceRow[];
+    }
+  | undefined {
+  const attempt = readRunnerAttempt(db, attemptId);
+  if (attempt === undefined) return undefined;
+  const request = readRunnerOperationRequestByAttempt(db, attemptId);
+  if (request === undefined) return undefined;
+  const state = readRunnerOperationState(db, request.operationId);
+  if (state === undefined) {
+    throw new StateStoreError(`operation state missing for ${request.operationId}`);
+  }
+  return {
+    attempt,
+    request,
+    state,
+    answer: readRunnerApprovalAnswer(db, request.operationId),
+    observations: listRunnerExternalObservations(db, attemptId),
+    traces: listRunnerReconciliationTraces(db, attemptId),
+  };
+}
+
+function approvalRequestFromJson(value: JsonValue): Static<typeof ApprovalRequestV1> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new StateStoreError("approval operation request_json must be an object");
+  }
+  return value as Static<typeof ApprovalRequestV1>;
+}
+
+/**
+ * Pending approval operations waiting for an answer, shaped as InteractionV2
+ * inbox items so the daemon can reuse the existing inbox surface.
+ */
+export function listPipelineApprovalInbox(db: StateDatabase): readonly PipelineApprovalInboxItem[] {
+  const rows = internalHandle(db)
+    .prepare(
+      `SELECT r.operation_id, r.attempt_id, r.request_json, r.created_at,
+              s.revision AS interaction_revision, s.updated_at,
+              a.run_id, a.stage_id
+         FROM pipeline_runner_operation_request r
+         JOIN pipeline_runner_operation_state s ON s.operation_id = r.operation_id
+         JOIN pipeline_runner_attempt a ON a.attempt_id = r.attempt_id
+         LEFT JOIN pipeline_runner_approval_answer ans ON ans.operation_id = r.operation_id
+        WHERE r.stage_type = 'approval'
+          AND s.phase = 'waiting'
+          AND ans.answer_id IS NULL
+        ORDER BY r.created_at, r.operation_id`,
+    )
+    .all();
+  return rows.map((row) => {
+    const request = approvalRequestFromJson(
+      parseJsonValue(toText(row.request_json, "request_json"), "request_json"),
+    );
+    const interactionId = request.continuation.interactionId;
+    const interaction = {
+      schemaVersion: 2 as const,
+      interactionId,
+      purpose: "approval" as const,
+      status: "pending" as const,
+      revision: toSafeInteger(row.interaction_revision, "interaction_revision"),
+      questions: [
+        {
+          questionId: `${interactionId}:decision`,
+          kind: "single_choice" as const,
+          prompt: request.prompt,
+          ...(request.header === undefined ? {} : { header: request.header }),
+          options: request.options.map((option) => ({
+            label: option.label,
+            ...(option.description === undefined ? {} : { description: option.description }),
+          })),
+        },
+      ],
+      requestedAt: request.requestedAt,
+      ...(request.timeoutAt === undefined ? {} : { timeoutAt: request.timeoutAt }),
+      deliveryState: "pending" as const,
+    } as Static<typeof InteractionV2>;
+    return {
+      runId: toText(row.run_id, "run_id"),
+      stageId: toText(row.stage_id, "stage_id"),
+      attemptId: toText(row.attempt_id, "attempt_id"),
+      operationId: toText(row.operation_id, "operation_id"),
+      interactionRevision: toSafeInteger(row.interaction_revision, "interaction_revision"),
+      interaction,
+    };
+  });
 }

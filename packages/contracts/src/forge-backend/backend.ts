@@ -1,4 +1,5 @@
 import type { Static } from "@sinclair/typebox";
+import type { RepositoryId } from "../run/ids.js";
 import type { PullRequestId } from "./ids.js";
 import type {
   CheckFailureV1,
@@ -16,4 +17,17 @@ export interface ForgeBackend {
   getChecks(id: PullRequestId): Promise<Static<typeof CheckStatusV1>[]>;
   getFailedCheckLogs(id: PullRequestId): Promise<Static<typeof CheckFailureV1>[]>;
   enableAutoMerge(id: PullRequestId): Promise<void>;
+}
+
+/**
+ * Q027 publication discovery (ADR 0025). Extends the provider-neutral forge
+ * surface so publish can adopt a unique existing PR after an acknowledgement-
+ * boundary crash without inventing GitHub-shaped DTOs on the base interface.
+ */
+export interface ForgeBackendV2 extends ForgeBackend {
+  findPullRequests(
+    repositoryId: RepositoryId,
+    sourceBranch: string,
+    targetBranch: string,
+  ): Promise<Static<typeof PullRequestV1>[]>;
 }
