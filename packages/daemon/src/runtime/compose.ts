@@ -54,6 +54,7 @@ import {
   type ExecutionBackendV7,
   ExecutionFailureV1,
   ExternalStageResultV1,
+  type ForgeBackendV2,
   InteractionAnswerSetV1,
   NativeStagePollRequestV1,
   NativeStageQuestionRequestV1,
@@ -348,9 +349,10 @@ export interface StartDaemonDeps {
     ) => Promise<Static<typeof ResolvedProfileChainV1>> | Static<typeof ResolvedProfileChainV1>;
   };
   /**
-   * Q026 pipeline stage runners (agent/command). Reuses the V7 backend and
-   * profile resolver; requires an explicit codebase-context callback because
-   * pipeline schedules are not bound to a single `currentDirectory` start.
+   * Q026/Q027 pipeline stage runners. Reuses the V7 backend and profile
+   * resolver; requires an explicit codebase-context callback because pipeline
+   * schedules are not bound to a single `currentDirectory` start. Optional
+   * `forge` enables publish stages.
    */
   readonly pipelineRunner?: {
     readonly backend: ExecutionBackendV7;
@@ -363,6 +365,7 @@ export interface StartDaemonDeps {
       readonly defaultRemote: string;
       readonly defaultBranch: string;
     };
+    readonly forge?: ForgeBackendV2;
   };
   /**
    * Q023 native Claude bridge. A dedicated resolver rather than reusing
@@ -620,7 +623,87 @@ export async function startDaemon(deps: StartDaemonDeps): Promise<StartDaemonOut
           resolveCodebaseContext: deps.pipelineRunner.resolveCodebaseContext,
           createIdentifierReader: (identifiers) =>
             createScopedSecretReader(secretStore, identifiers),
+          ...(deps.pipelineRunner.forge === undefined ? {} : { forge: deps.pipelineRunner.forge }),
         });
+
+  async function tryAnswerPipelineApproval(
+    input: Static<typeof RunAnswerRequestV2>,
+    authenticatedKeyId: string,
+  ): Promise<
+    | {
+        readonly schemaVersion: 2;
+        readonly runId: string;
+        readonly status: string;
+        readonly runRevision: number;
+        readonly interactionId: string;
+        readonly interactionRevision: number;
+        readonly accepted: true;
+        readonly operationId: string;
+        readonly deliveryState: "delivered";
+      }
+    | undefined
+  > {
+    if (pipelineRunnerService === undefined) return undefined;
+    const pending = pipelineRunnerService
+      .listApprovalInbox()
+      .find(
+        (item) =>
+          item.runId === input.runId &&
+          item.interaction.interactionId === input.answer.interactionId,
+      );
+    if (pending === undefined) return undefined;
+
+    const choice = input.answer.answers.find(
+      (answer) =>
+        answer.kind === "single_choice" &&
+        answer.questionId === `${input.answer.interactionId}:decision`,
+    );
+    if (
+      choice === undefined ||
+      choice.kind !== "single_choice" ||
+      choice.selectedLabels.length !== 1
+    ) {
+      throw new Error("pipeline approval answer must select exactly one option");
+    }
+    const selectedLabel = choice.selectedLabels[0];
+    if (selectedLabel === undefined) {
+      throw new Error("pipeline approval answer must select exactly one option");
+    }
+    const normalized = selectedLabel.trim().toLowerCase();
+    const decision =
+      normalized === "approve" || normalized === "approved"
+        ? ("approve" as const)
+        : ("reject" as const);
+    const answered = await pipelineRunnerService.answerApproval({
+      attemptId: pending.attemptId,
+      decision: {
+        schemaVersion: 1,
+        interactionId: input.answer.interactionId,
+        expectedInteractionRevision: input.answer.expectedInteractionRevision,
+        decision,
+        answeredByKeyId: authenticatedKeyId,
+        answeredAt: clock.nowIso(),
+        selectedLabel,
+      },
+    });
+    if (answered.status === "stale_revision") {
+      throw new Error(
+        `pipeline approval revision conflict: expected ${input.answer.expectedInteractionRevision}, have ${answered.currentRevision}`,
+      );
+    }
+    const projection = readRunProjection(workspaceDatabase, input.runId);
+    return {
+      schemaVersion: 2,
+      runId: input.runId,
+      status: projection?.status ?? "waiting_on_user",
+      runRevision: projection?.revision ?? 1,
+      interactionId: input.answer.interactionId,
+      interactionRevision: answered.interactionRevision,
+      accepted: true,
+      operationId: answered.operationId,
+      deliveryState: "delivered",
+    };
+  }
   const nativeBridgeService: NativeBridgeService | undefined =
     deps.nativeBridge === undefined
       ? undefined
@@ -1102,6 +1185,8 @@ export async function startDaemon(deps: StartDaemonDeps): Promise<StartDaemonOut
           if (!Value.Check(RunAnswerRequestV2, input)) throw new Error("invalid answer request");
           if (context.authenticatedKeyId === undefined)
             throw new Error("authenticated key missing");
+          const pipelineAnswer = await tryAnswerPipelineApproval(input, context.authenticatedKeyId);
+          if (pipelineAnswer !== undefined) return pipelineAnswer;
           if (nativeBridgeService?.hasNativeStage(input.runId) === true) {
             const accepted = nativeBridgeService.answer({
               runId: input.runId,
@@ -1141,6 +1226,32 @@ export async function startDaemon(deps: StartDaemonDeps): Promise<StartDaemonOut
         },
       ],
     );
+  }
+  if (
+    executionService !== undefined ||
+    nativeBridgeService !== undefined ||
+    pipelineRunnerService !== undefined
+  ) {
+    entries.push([
+      INBOX_LIST_V1_METHOD,
+      async () => ({
+        schemaVersion: 1,
+        items: [
+          ...(executionService === undefined ? [] : listInteractionInbox(workspaceDatabase)),
+          ...(nativeBridgeService === undefined ? [] : listNativeQuestionInbox(workspaceDatabase)),
+          ...(pipelineRunnerService === undefined
+            ? []
+            : pipelineRunnerService.listApprovalInbox().map((item) => ({
+                runId: item.runId,
+                stageId: item.stageId,
+                runRevision:
+                  readRunProjection(workspaceDatabase, item.runId)?.revision ??
+                  item.interactionRevision,
+                interaction: item.interaction,
+              }))),
+        ],
+      }),
+    ]);
   }
   if (schedulingService !== undefined || nativeBridgeService !== undefined) {
     entries.push([
@@ -1195,18 +1306,6 @@ export async function startDaemon(deps: StartDaemonDeps): Promise<StartDaemonOut
           schedulingRevision: started.schedulingRevision,
         };
       },
-    ]);
-  }
-  if (executionService !== undefined || nativeBridgeService !== undefined) {
-    entries.push([
-      INBOX_LIST_V1_METHOD,
-      async () => ({
-        schemaVersion: 1,
-        items: [
-          ...(executionService === undefined ? [] : listInteractionInbox(workspaceDatabase)),
-          ...(nativeBridgeService === undefined ? [] : listNativeQuestionInbox(workspaceDatabase)),
-        ],
-      }),
     ]);
   }
   if (executionService !== undefined) {
@@ -1285,6 +1384,8 @@ export async function startDaemon(deps: StartDaemonDeps): Promise<StartDaemonOut
           if (!Value.Check(RunAnswerRequestV2, input)) throw new Error("invalid answer request");
           if (context.authenticatedKeyId === undefined)
             throw new Error("authenticated key missing");
+          const pipelineAnswer = await tryAnswerPipelineApproval(input, context.authenticatedKeyId);
+          if (pipelineAnswer !== undefined) return pipelineAnswer;
           if (nativeBridgeService?.hasNativeStage(input.runId) === true) {
             const accepted = nativeBridgeService.answer({
               runId: input.runId,
@@ -1791,6 +1892,8 @@ export async function startDaemon(deps: StartDaemonDeps): Promise<StartDaemonOut
           if (!Value.Check(RunAnswerRequestV2, input)) throw new Error("invalid answer request");
           if (context.authenticatedKeyId === undefined)
             throw new Error("authenticated key missing");
+          const pipelineAnswer = await tryAnswerPipelineApproval(input, context.authenticatedKeyId);
+          if (pipelineAnswer !== undefined) return pipelineAnswer;
           const accepted = nativeBridge.answer({
             runId: input.runId,
             submission: input.answer,
@@ -1823,6 +1926,26 @@ export async function startDaemon(deps: StartDaemonDeps): Promise<StartDaemonOut
         },
       ],
     );
+  }
+  if (
+    pipelineRunnerService !== undefined &&
+    schedulingService === undefined &&
+    executionService === undefined &&
+    nativeBridgeService === undefined
+  ) {
+    entries.push([
+      RUN_ANSWER_V2_METHOD,
+      async (params, context) => {
+        const input = withoutAuth(recordParams(params));
+        if (!Value.Check(RunAnswerRequestV2, input)) throw new Error("invalid answer request");
+        if (context.authenticatedKeyId === undefined) throw new Error("authenticated key missing");
+        const pipelineAnswer = await tryAnswerPipelineApproval(input, context.authenticatedKeyId);
+        if (pipelineAnswer === undefined) {
+          throw new Error("no pending pipeline approval for this run");
+        }
+        return pipelineAnswer;
+      },
+    ]);
   }
   const registry: MethodRegistry = createMethodRegistry(entries);
 

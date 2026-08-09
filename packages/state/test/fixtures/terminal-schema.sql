@@ -1087,6 +1087,7 @@ CREATE TABLE pipeline_runner_attempt (
     checkout_path TEXT,
     process_group_id INTEGER,
     backend_execution_id TEXT,
+    operation_id TEXT,
     deadline_at TEXT,
     runtime_directory TEXT,
     prepared_at TEXT,
@@ -1102,7 +1103,9 @@ CREATE TABLE pipeline_runner_attempt (
     revision INTEGER NOT NULL,
     updated_at TEXT NOT NULL,
     created_at TEXT NOT NULL,
-    CHECK (stage_type IN ('agent','command')),
+    CHECK (stage_type IN (
+      'agent','command','approval','integration','verify','publish'
+    )),
     CHECK (graph_revision >= 1),
     CHECK (generation >= 1),
     CHECK (attempt_ordinal >= 1),
@@ -1113,7 +1116,8 @@ CREATE TABLE pipeline_runner_attempt (
       'succeeded','failed','cancelled','recovery_required'
     )),
     CHECK (recovery IN (
-      'none','observe_backend','reap_process','reconcile_artifacts','manual'
+      'none','observe_backend','reap_process','reconcile_artifacts',
+      'reconcile_git','reconcile_forge','await_approval','manual'
     )),
     CHECK ((phase IN ('succeeded','failed','cancelled','recovery_required')) =
       (finished_at IS NOT NULL))
@@ -1184,4 +1188,141 @@ BEGIN
     SELECT RAISE(ABORT, 'pipeline runner phase transitions are immutable');
 END;
 
-PRAGMA user_version = 13;
+CREATE TABLE pipeline_runner_operation_request (
+    operation_id TEXT NOT NULL PRIMARY KEY,
+    attempt_id TEXT NOT NULL UNIQUE
+      REFERENCES pipeline_runner_attempt (attempt_id),
+    stage_type TEXT NOT NULL,
+    request_json TEXT NOT NULL CHECK (json_valid(request_json)),
+    created_at TEXT NOT NULL,
+    CHECK (stage_type IN ('approval','integration','verify','publish'))
+) STRICT;
+
+CREATE TRIGGER pipeline_runner_operation_request_immutable_update
+BEFORE UPDATE ON pipeline_runner_operation_request
+BEGIN
+    SELECT RAISE(ABORT, 'pipeline runner operation requests are immutable');
+END;
+
+CREATE TRIGGER pipeline_runner_operation_request_immutable_delete
+BEFORE DELETE ON pipeline_runner_operation_request
+BEGIN
+    SELECT RAISE(ABORT, 'pipeline runner operation requests are immutable');
+END;
+
+CREATE TABLE pipeline_runner_operation_state (
+    operation_id TEXT NOT NULL PRIMARY KEY
+      REFERENCES pipeline_runner_operation_request (operation_id),
+    attempt_id TEXT NOT NULL,
+    phase TEXT NOT NULL,
+    result_json TEXT CHECK (result_json IS NULL OR json_valid(result_json)),
+    failure_json TEXT CHECK (failure_json IS NULL OR json_valid(failure_json)),
+    revision INTEGER NOT NULL,
+    updated_at TEXT NOT NULL,
+    CHECK (phase IN (
+      'pending','waiting','executing','completed','failed',
+      'cancelled','reconciliation_required'
+    )),
+    CHECK (revision >= 1)
+) STRICT;
+
+CREATE TRIGGER pipeline_runner_operation_state_first_revision
+BEFORE INSERT ON pipeline_runner_operation_state
+WHEN NEW.revision <> 1
+BEGIN
+    SELECT RAISE(ABORT, 'first pipeline runner operation state revision must be 1');
+END;
+
+CREATE TRIGGER pipeline_runner_operation_state_revision_advances
+BEFORE UPDATE ON pipeline_runner_operation_state
+WHEN NEW.revision <> OLD.revision + 1
+BEGIN
+    SELECT RAISE(ABORT, 'pipeline runner operation state update must advance revision by 1');
+END;
+
+CREATE TABLE pipeline_runner_approval_answer (
+    answer_id TEXT NOT NULL PRIMARY KEY,
+    operation_id TEXT NOT NULL UNIQUE
+      REFERENCES pipeline_runner_operation_request (operation_id),
+    attempt_id TEXT NOT NULL,
+    interaction_id TEXT NOT NULL,
+    expected_revision INTEGER NOT NULL,
+    decision TEXT NOT NULL,
+    selected_label TEXT NOT NULL,
+    answered_by_key_id TEXT NOT NULL,
+    answered_at TEXT NOT NULL,
+    decision_json TEXT NOT NULL CHECK (json_valid(decision_json)),
+    CHECK (decision IN ('approve','reject')),
+    CHECK (expected_revision >= 1)
+) STRICT;
+
+CREATE TRIGGER pipeline_runner_approval_answer_immutable_update
+BEFORE UPDATE ON pipeline_runner_approval_answer
+BEGIN
+    SELECT RAISE(ABORT, 'pipeline runner approval answers are immutable');
+END;
+
+CREATE TRIGGER pipeline_runner_approval_answer_immutable_delete
+BEFORE DELETE ON pipeline_runner_approval_answer
+BEGIN
+    SELECT RAISE(ABORT, 'pipeline runner approval answers are immutable');
+END;
+
+CREATE TABLE pipeline_runner_external_observation (
+    observation_id TEXT NOT NULL PRIMARY KEY,
+    attempt_id TEXT NOT NULL
+      REFERENCES pipeline_runner_attempt (attempt_id),
+    operation_id TEXT,
+    kind TEXT NOT NULL,
+    recorded_at TEXT NOT NULL,
+    payload_json TEXT NOT NULL CHECK (json_valid(payload_json))
+) STRICT;
+
+CREATE INDEX pipeline_runner_external_observation_attempt
+ON pipeline_runner_external_observation (attempt_id, recorded_at, observation_id);
+
+CREATE TRIGGER pipeline_runner_external_observation_immutable_update
+BEFORE UPDATE ON pipeline_runner_external_observation
+BEGIN
+    SELECT RAISE(ABORT, 'pipeline runner external observations are immutable');
+END;
+
+CREATE TRIGGER pipeline_runner_external_observation_immutable_delete
+BEFORE DELETE ON pipeline_runner_external_observation
+BEGIN
+    SELECT RAISE(ABORT, 'pipeline runner external observations are immutable');
+END;
+
+CREATE TABLE pipeline_runner_reconciliation_trace (
+    trace_id TEXT NOT NULL PRIMARY KEY,
+    attempt_id TEXT NOT NULL
+      REFERENCES pipeline_runner_attempt (attempt_id),
+    operation_id TEXT,
+    stage_type TEXT NOT NULL,
+    classification TEXT NOT NULL,
+    recorded_at TEXT NOT NULL,
+    detail TEXT,
+    payload_json TEXT CHECK (payload_json IS NULL OR json_valid(payload_json)),
+    CHECK (stage_type IN ('integration','publish'))
+) STRICT;
+
+CREATE INDEX pipeline_runner_reconciliation_trace_attempt
+ON pipeline_runner_reconciliation_trace (attempt_id, recorded_at, trace_id);
+
+CREATE TRIGGER pipeline_runner_reconciliation_trace_immutable_update
+BEFORE UPDATE ON pipeline_runner_reconciliation_trace
+BEGIN
+    SELECT RAISE(ABORT, 'pipeline runner reconciliation traces are immutable');
+END;
+
+CREATE TRIGGER pipeline_runner_reconciliation_trace_immutable_delete
+BEFORE DELETE ON pipeline_runner_reconciliation_trace
+BEGIN
+    SELECT RAISE(ABORT, 'pipeline runner reconciliation traces are immutable');
+END;
+
+CREATE INDEX pipeline_runner_approval_inbox
+ON pipeline_runner_operation_state (phase, updated_at, operation_id)
+WHERE phase = 'waiting';
+
+PRAGMA user_version = 14;

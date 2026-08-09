@@ -37,8 +37,8 @@ afterEach(async () => {
 describe("migration 13 — pipeline runner", () => {
   it("creates the pipeline runner tables on a fresh database", () => {
     runMigrations(db);
-    expect(readUserVersion(internalHandle(db))).toBe(13);
-    expect(currentSchemaVersion()).toBe(13);
+    expect(readUserVersion(internalHandle(db))).toBe(currentSchemaVersion());
+    expect(currentSchemaVersion()).toBeGreaterThanOrEqual(13);
     const names = new Set(
       internalHandle(db)
         .prepare("SELECT name FROM sqlite_schema WHERE type = 'table'")
@@ -50,10 +50,10 @@ describe("migration 13 — pipeline runner", () => {
     }
   });
 
-  it("upgrades from migration 12 without touching existing rows", () => {
+  it("upgrades from migration 12 to 13 without touching existing rows", () => {
     runMigrationList(db, MIGRATIONS, 12);
     expect(readUserVersion(internalHandle(db))).toBe(12);
-    expect(runMigrations(db)).toMatchObject({ fromVersion: 12, toVersion: 13 });
+    expect(runMigrationList(db, MIGRATIONS, 13)).toMatchObject({ fromVersion: 12, toVersion: 13 });
     expect(readUserVersion(internalHandle(db))).toBe(13);
     for (const table of RUNNER_TABLES) {
       const count = Number(

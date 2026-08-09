@@ -1,0 +1,52 @@
+{
+  "$id": "heniek://contract/VerifyResult/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "verdict",
+    "checks",
+    "finishedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "verdict": {
+      "anyOf": [
+        {
+          "const": "passed",
+          "type": "string"
+        },
+        {
+          "const": "failed",
+          "type": "string"
+        },
+        {
+          "const": "cancelled",
+          "type": "string"
+        },
+        {
+          "const": "malformed",
+          "type": "string"
+        }
+      ]
+    },
+    "checks": {
+      "type": "array",
+      "items": {
+        "$ref": "heniek://contract/VerifyCheckEvidence/v1"
+      }
+    },
+    "finishedAt": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "detail": {
+      "minLength": 1,
+      "maxLength": 1024,
+      "type": "string"
+    }
+  }
+}

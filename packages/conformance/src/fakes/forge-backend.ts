@@ -1,9 +1,10 @@
 import type {
   CheckFailureV1,
   CheckStatusV1,
-  ForgeBackend,
+  ForgeBackendV2,
   PullRequestId,
   PullRequestV1,
+  RepositoryId,
 } from "@heniek/contracts";
 import { CreatePullRequestInputV1 } from "@heniek/contracts";
 import type { Static } from "@sinclair/typebox";
@@ -26,6 +27,8 @@ function isRetryable(fault: string): boolean {
 interface ForgePullRequestRecord {
   readonly pullRequestId: PullRequestId;
   readonly repositoryId: CreatePullRequestInput["repositoryId"];
+  readonly sourceBranch: string;
+  readonly targetBranch: string;
   readonly number: number;
   readonly url: string;
   draft: boolean;
@@ -37,7 +40,7 @@ interface ForgePullRequestRecord {
 }
 
 export interface FakeForgeBackend {
-  readonly backend: ForgeBackend;
+  readonly backend: ForgeBackendV2;
   /** Arranges the behaviour of the next PR to be created. */
   arrange(arrangement: ForgeArrangement): void;
 }
@@ -62,7 +65,7 @@ export function createFakeForgeBackend(context: ConformanceContext): FakeForgeBa
     return pr;
   }
 
-  const backend: ForgeBackend = {
+  const backend: ForgeBackendV2 = {
     async createPullRequest(input: CreatePullRequestInput): Promise<PullRequest> {
       assertValid(CreatePullRequestInputV1, input, "CreatePullRequestInputV1");
       const arrangement = pendingArrangement;
@@ -85,6 +88,8 @@ export function createFakeForgeBackend(context: ConformanceContext): FakeForgeBa
       const record: ForgePullRequestRecord = {
         pullRequestId: id,
         repositoryId: input.repositoryId,
+        sourceBranch: input.sourceBranch,
+        targetBranch: input.targetBranch,
         number,
         url: `https://forge.invalid/${input.repositoryId}/pull/${number}`,
         draft: input.draft,
@@ -118,6 +123,36 @@ export function createFakeForgeBackend(context: ConformanceContext): FakeForgeBa
         draft: record.draft,
         headSha: record.headSha,
       };
+    },
+
+    async findPullRequests(
+      repositoryId: RepositoryId,
+      sourceBranch: string,
+      targetBranch: string,
+    ): Promise<PullRequest[]> {
+      const matches = [...pullRequests.values()].filter(
+        (pr) =>
+          pr.repositoryId === repositoryId &&
+          pr.sourceBranch === sourceBranch &&
+          pr.targetBranch === targetBranch,
+      );
+      context.trace.record({
+        atMs: context.clock.nowMs(),
+        actor: "forge-backend",
+        action: "findPullRequests",
+        outcome: "ok",
+        detail: { repositoryId, sourceBranch, targetBranch, count: matches.length },
+      });
+      return matches.map((record) => ({
+        schemaVersion: 1 as const,
+        pullRequestId: record.pullRequestId,
+        repositoryId: record.repositoryId,
+        number: record.number,
+        url: record.url,
+        state: "open" as const,
+        draft: record.draft,
+        headSha: record.headSha,
+      }));
     },
 
     async markReady(id: PullRequestId): Promise<void> {

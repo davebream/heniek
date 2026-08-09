@@ -210,3 +210,125 @@ export type StageRunnerValidationReportV1 = Static<typeof StageRunnerValidationR
 
 /** Narrow stage-type union Q026 actually runs. */
 export type StageRunnerStageType = Extract<PipelineStageType, "agent" | "command">;
+
+/**
+ * Extended failure classifications for fixed-stage operations. V1 stays
+ * frozen; new runners emit V2 classifications.
+ */
+export const StageRunnerFailureClassV2 = Type.Union([
+  Type.Literal("prepare_failed"),
+  Type.Literal("start_failed"),
+  Type.Literal("timeout"),
+  Type.Literal("cancelled"),
+  Type.Literal("process_failed"),
+  Type.Literal("backend_failed"),
+  Type.Literal("collection_failed"),
+  Type.Literal("validation_failed"),
+  Type.Literal("finalize_failed"),
+  Type.Literal("workspace_failed"),
+  Type.Literal("profile_failed"),
+  Type.Literal("recovery_required"),
+  Type.Literal("rejected"),
+  Type.Literal("stale_revision"),
+  Type.Literal("stale_sha"),
+  Type.Literal("merge_conflict"),
+  Type.Literal("reconciliation_required"),
+  Type.Literal("forge_failed"),
+  Type.Literal("malformed_contract"),
+  Type.Literal("operation_failed"),
+  Type.Literal("unknown"),
+]);
+export type StageRunnerFailureClassV2 = Static<typeof StageRunnerFailureClassV2>;
+
+export const StageRunnerRecoveryClassV2 = Type.Union([
+  Type.Literal("none"),
+  Type.Literal("observe_backend"),
+  Type.Literal("reap_process"),
+  Type.Literal("reconcile_artifacts"),
+  Type.Literal("reconcile_git"),
+  Type.Literal("reconcile_forge"),
+  Type.Literal("await_approval"),
+  Type.Literal("manual"),
+]);
+export type StageRunnerRecoveryClassV2 = Static<typeof StageRunnerRecoveryClassV2>;
+
+export const StageRunnerFailureV2 = versioned("StageRunnerFailure", 2, {
+  classification: StageRunnerFailureClassV2,
+  phase: StageRunnerPhase.schema,
+  code: Type.String({ minLength: 1, maxLength: 128 }),
+  message: Type.String({ minLength: 1, maxLength: 512 }),
+  retryable: Type.Boolean(),
+  recovery: StageRunnerRecoveryClassV2,
+  backendFailure: Type.Optional(Type.Ref(ExecutionFailureV1)),
+});
+
+export const StageRunnerResultV2 = versioned("StageRunnerResult", 2, {
+  attemptId: PipelineAttemptId,
+  outcome: Type.Union([
+    Type.Literal("succeeded"),
+    Type.Literal("failed"),
+    Type.Literal("cancelled"),
+    Type.Literal("recovery_required"),
+  ]),
+  summary: Type.Optional(Type.String({ minLength: 1, maxLength: 1024 })),
+  artifactPath: Type.Optional(
+    Type.String({
+      minLength: 1,
+      pattern: "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\u0000).+$",
+    }),
+  ),
+  exitCode: Type.Optional(Type.Integer({ minimum: 0, maximum: 255 })),
+  outputs: Type.Array(Type.Ref(StageRunnerOutputBindingV1)),
+  evidence: Type.Array(Type.Ref(StageRunnerEvidenceV1)),
+  failure: Type.Optional(Type.Ref(StageRunnerFailureV2)),
+  finishedAt: Type.String({ format: "date-time" }),
+});
+
+/**
+ * Q027 widens the attempt ledger to every fixed stage type while keeping
+ * `StageRunnerAttempt/v1` byte-identical for Q026 consumers.
+ */
+export const StageRunnerAttemptV2 = versioned("StageRunnerAttempt", 2, {
+  attemptId: PipelineAttemptId,
+  runId: RunId,
+  stageId: PipelineStageId,
+  stageType: Type.Union([
+    Type.Literal("agent"),
+    Type.Literal("command"),
+    Type.Literal("approval"),
+    Type.Literal("integration"),
+    Type.Literal("verify"),
+    Type.Literal("publish"),
+  ]),
+  intentId: PipelineSchedulerIntentId,
+  graphRevision: Type.Integer({ minimum: 1 }),
+  generation: Type.Integer({ minimum: 1 }),
+  attemptOrdinal: Type.Integer({ minimum: 1 }),
+  phase: StageRunnerPhase.schema,
+  workspaceId: Type.Optional(WorkspaceId),
+  leaseId: Type.Optional(Type.String({ minLength: 1 })),
+  checkoutPath: Type.Optional(Type.String({ minLength: 1 })),
+  processGroupId: Type.Optional(Type.Integer({ minimum: 1 })),
+  backendExecutionId: Type.Optional(Type.String({ minLength: 1 })),
+  operationId: Type.Optional(Type.String({ minLength: 1 })),
+  deadlineAt: Type.Optional(Type.String({ format: "date-time" })),
+  runtimeDirectory: Type.Optional(Type.String({ minLength: 1 })),
+  preparedAt: Type.Optional(Type.String({ format: "date-time" })),
+  startedAt: Type.Optional(Type.String({ format: "date-time" })),
+  finishedAt: Type.Optional(Type.String({ format: "date-time" })),
+  outputs: Type.Array(Type.Ref(StageRunnerOutputBindingV1)),
+  evidence: Type.Array(Type.Ref(StageRunnerEvidenceV1)),
+  result: Type.Optional(Type.Ref(StageRunnerResultV2)),
+  failure: Type.Optional(Type.Ref(StageRunnerFailureV2)),
+  recovery: StageRunnerRecoveryClassV2,
+  revision: Type.Integer({ minimum: 1 }),
+  updatedAt: Type.String({ format: "date-time" }),
+  createdAt: Type.String({ format: "date-time" }),
+});
+
+export type StageRunnerAttemptV2 = Static<typeof StageRunnerAttemptV2>;
+export type StageRunnerFailureV2 = Static<typeof StageRunnerFailureV2>;
+export type StageRunnerResultV2 = Static<typeof StageRunnerResultV2>;
+
+/** All six fixed stage types Q027 runs. */
+export type StageRunnerStageTypeV2 = PipelineStageType;

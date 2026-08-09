@@ -1,0 +1,82 @@
+{
+  "$id": "heniek://contract/PublishResult/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "publicationKey",
+    "outcome",
+    "finishedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "publicationKey": {
+      "minLength": 1,
+      "maxLength": 256,
+      "type": "string"
+    },
+    "outcome": {
+      "anyOf": [
+        {
+          "const": "created",
+          "type": "string"
+        },
+        {
+          "const": "adopted",
+          "type": "string"
+        },
+        {
+          "const": "mismatched_head",
+          "type": "string"
+        },
+        {
+          "const": "ambiguous",
+          "type": "string"
+        },
+        {
+          "const": "forge_failed",
+          "type": "string"
+        },
+        {
+          "const": "cancelled",
+          "type": "string"
+        }
+      ]
+    },
+    "pullRequestId": {
+      "minLength": 1,
+      "description": "Opaque PullRequestId.",
+      "type": "string"
+    },
+    "number": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "url": {
+      "format": "uri",
+      "type": "string"
+    },
+    "headSha": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "draft": {
+      "type": "boolean"
+    },
+    "autoMergeEnabled": {
+      "type": "boolean"
+    },
+    "finishedAt": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "detail": {
+      "minLength": 1,
+      "maxLength": 1024,
+      "type": "string"
+    }
+  }
+}

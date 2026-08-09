@@ -157,7 +157,7 @@ describe("pipeline runner store", () => {
       recordedAt: NOW,
     };
     const result = {
-      schemaVersion: 1 as const,
+      schemaVersion: 2 as const,
       attemptId: attempt.attemptId,
       outcome: "succeeded" as const,
       summary: "ok",

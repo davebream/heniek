@@ -1,0 +1,52 @@
+{
+  "$id": "heniek://contract/VerifyCheck/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "checkId",
+    "argv",
+    "expectedExitCode",
+    "required"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "checkId": {
+      "minLength": 1,
+      "maxLength": 128,
+      "type": "string"
+    },
+    "argv": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      }
+    },
+    "cwd": {
+      "minLength": 1,
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\u0000).+$",
+      "type": "string"
+    },
+    "env": {
+      "type": "object",
+      "patternProperties": {
+        "^(.*)$": {
+          "type": "string"
+        }
+      }
+    },
+    "expectedExitCode": {
+      "minimum": 0,
+      "maximum": 255,
+      "type": "integer"
+    },
+    "required": {
+      "type": "boolean"
+    }
+  }
+}

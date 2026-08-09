@@ -1,0 +1,24 @@
+{
+  "$id": "heniek://contract/PublishRequest/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "publicationKey",
+    "pullRequest"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "publicationKey": {
+      "minLength": 1,
+      "maxLength": 256,
+      "type": "string"
+    },
+    "pullRequest": {
+      "$ref": "heniek://contract/PublishPullRequestSpec/v1"
+    }
+  }
+}

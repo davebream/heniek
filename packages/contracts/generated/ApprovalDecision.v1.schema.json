@@ -1,0 +1,55 @@
+{
+  "$id": "heniek://contract/ApprovalDecision/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "interactionId",
+    "expectedInteractionRevision",
+    "decision",
+    "answeredByKeyId",
+    "answeredAt",
+    "selectedLabel"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "interactionId": {
+      "minLength": 1,
+      "maxLength": 128,
+      "type": "string"
+    },
+    "expectedInteractionRevision": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "decision": {
+      "anyOf": [
+        {
+          "const": "approve",
+          "type": "string"
+        },
+        {
+          "const": "reject",
+          "type": "string"
+        }
+      ]
+    },
+    "answeredByKeyId": {
+      "minLength": 1,
+      "maxLength": 256,
+      "type": "string"
+    },
+    "answeredAt": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "selectedLabel": {
+      "minLength": 1,
+      "maxLength": 128,
+      "type": "string"
+    }
+  }
+}

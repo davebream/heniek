@@ -1,0 +1,44 @@
+{
+  "$id": "heniek://contract/ApprovalContinuation/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "runId",
+    "stageId",
+    "attemptId",
+    "intentId",
+    "interactionId"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "runId": {
+      "minLength": 1,
+      "description": "Opaque RunId.",
+      "type": "string"
+    },
+    "stageId": {
+      "minLength": 1,
+      "description": "Opaque PipelineStageId.",
+      "type": "string"
+    },
+    "attemptId": {
+      "minLength": 1,
+      "description": "Opaque PipelineAttemptId.",
+      "type": "string"
+    },
+    "intentId": {
+      "minLength": 1,
+      "description": "Opaque PipelineSchedulerIntentId.",
+      "type": "string"
+    },
+    "interactionId": {
+      "minLength": 1,
+      "maxLength": 128,
+      "type": "string"
+    }
+  }
+}

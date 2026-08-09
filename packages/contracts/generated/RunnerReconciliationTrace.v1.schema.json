@@ -1,0 +1,56 @@
+{
+  "$id": "heniek://contract/RunnerReconciliationTrace/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "traceId",
+    "attemptId",
+    "stageType",
+    "classification",
+    "recordedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "traceId": {
+      "minLength": 1,
+      "maxLength": 128,
+      "type": "string"
+    },
+    "attemptId": {
+      "minLength": 1,
+      "description": "Opaque PipelineAttemptId.",
+      "type": "string"
+    },
+    "stageType": {
+      "anyOf": [
+        {
+          "const": "integration",
+          "type": "string"
+        },
+        {
+          "const": "publish",
+          "type": "string"
+        }
+      ]
+    },
+    "classification": {
+      "minLength": 1,
+      "maxLength": 128,
+      "type": "string"
+    },
+    "recordedAt": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "detail": {
+      "minLength": 1,
+      "maxLength": 1024,
+      "type": "string"
+    },
+    "payload": {}
+  }
+}

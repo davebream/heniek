@@ -1,0 +1,64 @@
+{
+  "$id": "heniek://contract/VerifyCheckEvidence/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "checkId",
+    "argv",
+    "exitCode",
+    "expectedExitCode",
+    "satisfied",
+    "required",
+    "startedAt",
+    "finishedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "checkId": {
+      "minLength": 1,
+      "maxLength": 128,
+      "type": "string"
+    },
+    "argv": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      }
+    },
+    "exitCode": {
+      "minimum": 0,
+      "maximum": 255,
+      "type": "integer"
+    },
+    "expectedExitCode": {
+      "minimum": 0,
+      "maximum": 255,
+      "type": "integer"
+    },
+    "satisfied": {
+      "type": "boolean"
+    },
+    "required": {
+      "type": "boolean"
+    },
+    "startedAt": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "finishedAt": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "detail": {
+      "minLength": 1,
+      "maxLength": 1024,
+      "type": "string"
+    }
+  }
+}

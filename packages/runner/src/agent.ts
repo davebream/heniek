@@ -17,6 +17,7 @@ import type {
   StageRunner,
   StageRunnerAttemptSnapshot,
   StageRunnerCleanupReport,
+  StageRunnerFailure,
   StageRunnerFinalizeOutcome,
   StageRunnerObserveOutcome,
   StageRunnerPrepareInput,
@@ -127,6 +128,10 @@ export function createAgentStageRunner(deps: AgentStageRunnerDeps): StageRunner 
       if (profileId === undefined || profileId.length === 0) {
         throw new Error("agent stage requires exactly one profile id");
       }
+      if (input.checkoutPath === undefined) {
+        throw new Error("agent stage requires a checkoutPath");
+      }
+      const checkoutPath = input.checkoutPath;
 
       const profile = await deps.resolveProfile(profileId);
       if (profile.profileId !== profileId) {
@@ -135,8 +140,8 @@ export function createAgentStageRunner(deps: AgentStageRunnerDeps): StageRunner 
       const permissions = await deps.resolvePermissions(profile);
       const invocation = await deps.resolveAgentInvocation();
       await validateExecutionWorkspace({
-        assignedWorktree: input.checkoutPath,
-        workingDirectory: input.checkoutPath,
+        assignedWorktree: checkoutPath,
+        workingDirectory: checkoutPath,
         artifactPaths: [invocation.artifactPath],
       });
       const now = clock.nowIso();
@@ -164,7 +169,7 @@ export function createAgentStageRunner(deps: AgentStageRunnerDeps): StageRunner 
         runId: input.runId,
         stageId: asStageId(input.stageId),
         workspaceId: asWorkspaceId(input.workspaceId),
-        workingDirectory: input.checkoutPath,
+        workingDirectory: checkoutPath,
         prompt: invocation.prompt,
         artifactPath: invocation.artifactPath,
         inputArtifactRefs: [...invocation.inputArtifactRefs],
@@ -185,7 +190,7 @@ export function createAgentStageRunner(deps: AgentStageRunnerDeps): StageRunner 
         phase: "prepare",
         workspaceId: input.workspaceId,
         ...(input.leaseId === undefined ? {} : { leaseId: input.leaseId }),
-        checkoutPath: input.checkoutPath,
+        checkoutPath,
         ...(deadlineAt === undefined ? {} : { deadlineAt }),
         runtimeDirectory: input.runtimeDirectory,
         preparedAt: now,
@@ -214,7 +219,7 @@ export function createAgentStageRunner(deps: AgentStageRunnerDeps): StageRunner 
         attemptId: input.attemptId,
         preparedAt: now,
         ...(deadlineAt === undefined ? {} : { deadlineAt }),
-        checkoutPath: input.checkoutPath,
+        checkoutPath,
         runtimeDirectory: input.runtimeDirectory,
         executionRequest,
         profileId,
@@ -451,7 +456,7 @@ export function createAgentStageRunner(deps: AgentStageRunnerDeps): StageRunner 
           retryable: result.failure.fallbackEligible,
           recovery: state.snapshot.recovery,
           backendFailure: result.failure,
-        };
+        } as StageRunnerFailure;
       }
 
       state.snapshot.outputs = outputs;
@@ -537,7 +542,7 @@ export function createAgentStageRunner(deps: AgentStageRunnerDeps): StageRunner 
           ? ("recovery_required" as const)
           : ("failed" as const);
 
-      const failure = state.snapshot.failure ?? {
+      const failure = (state.snapshot.failure ?? {
         schemaVersion: 1 as const,
         classification,
         phase: "finalize" as const,
@@ -545,7 +550,7 @@ export function createAgentStageRunner(deps: AgentStageRunnerDeps): StageRunner 
         message: redactFailureMessage(validation.detail ?? "agent stage failed"),
         retryable: classification === "timeout",
         recovery: state.snapshot.recovery,
-      };
+      }) as StageRunnerFailure;
 
       const result = {
         schemaVersion: 1 as const,

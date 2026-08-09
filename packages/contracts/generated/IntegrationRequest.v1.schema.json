@@ -1,0 +1,51 @@
+{
+  "$id": "heniek://contract/IntegrationRequest/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "repositoryId",
+    "sourceRef",
+    "targetRef",
+    "expectedSourceSha",
+    "expectedTargetSha"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "repositoryId": {
+      "minLength": 1,
+      "description": "Opaque RepositoryId.",
+      "type": "string"
+    },
+    "sourceRef": {
+      "minLength": 1,
+      "maxLength": 256,
+      "type": "string"
+    },
+    "targetRef": {
+      "minLength": 1,
+      "maxLength": 256,
+      "type": "string"
+    },
+    "expectedSourceSha": {
+      "minLength": 40,
+      "maxLength": 40,
+      "pattern": "^[0-9a-f]{40}$",
+      "type": "string"
+    },
+    "expectedTargetSha": {
+      "minLength": 40,
+      "maxLength": 40,
+      "pattern": "^[0-9a-f]{40}$",
+      "type": "string"
+    },
+    "message": {
+      "minLength": 1,
+      "maxLength": 1024,
+      "type": "string"
+    }
+  }
+}

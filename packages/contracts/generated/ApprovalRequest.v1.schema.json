@@ -1,0 +1,63 @@
+{
+  "$id": "heniek://contract/ApprovalRequest/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "prompt",
+    "options",
+    "continuation",
+    "requestedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "prompt": {
+      "minLength": 1,
+      "maxLength": 4096,
+      "type": "string"
+    },
+    "header": {
+      "minLength": 1,
+      "maxLength": 256,
+      "type": "string"
+    },
+    "options": {
+      "minItems": 2,
+      "maxItems": 8,
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "label"
+        ],
+        "properties": {
+          "label": {
+            "minLength": 1,
+            "maxLength": 128,
+            "type": "string"
+          },
+          "description": {
+            "minLength": 1,
+            "maxLength": 512,
+            "type": "string"
+          }
+        }
+      }
+    },
+    "continuation": {
+      "$ref": "heniek://contract/ApprovalContinuation/v1"
+    },
+    "requestedAt": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "timeoutAt": {
+      "format": "date-time",
+      "type": "string"
+    }
+  }
+}
