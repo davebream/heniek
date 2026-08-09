@@ -30,6 +30,7 @@ import {
   ensureApplicationHomeDirectories,
   resolveApplicationHome,
 } from "@heniek/config";
+import { checkStageLifecycleTrace, type StageLifecycleEvent } from "@heniek/conformance";
 import type { ResolvedProfileChainV1 } from "@heniek/contracts";
 import {
   ARTIFACT_GET_SCHEMA_ID,
@@ -276,6 +277,13 @@ describe("Q023 native bridge — plugin-to-daemon canary over a real socket", ()
       if (credential === undefined) throw new Error("expected a parseable daemon credential");
 
       const session = await NativeBridgeRpcSession.open(home.paths.daemonSocketFile, credential);
+      // Q023's stage lifecycle conformance check (ADR 0021): a typed record
+      // of every RunStatus transition this canary actually observes over
+      // the wire, checked against `@heniek/conformance`'s declarative
+      // STAGE_LIFECYCLE_TRANSITIONS table at the end of this test — "runs
+      // the canary's real transition log" from the plan, not a re-derivation
+      // of it.
+      const lifecycleTrace: StageLifecycleEvent[] = [];
       try {
         const negotiation = (await session.call(DAEMON_NEGOTIATE_METHOD, {
           schemaVersion: 1,
@@ -388,6 +396,11 @@ describe("Q023 native bridge — plugin-to-daemon canary over a real socket", ()
         })) as { runId: string; stageId: string; status: string; executionMode: string };
         expect(started.executionMode).toBe("native");
         expect(started.status).toBe("waiting_for_parent_session");
+        lifecycleTrace.push({
+          trigger: "stage_start_admitted_waiting",
+          from: null,
+          to: "waiting_for_parent_session",
+        });
 
         const statusBeforeAttach = (await session.call(NATIVE_STAGE_STATUS_V1_METHOD, {
           runId: started.runId,
@@ -421,6 +434,16 @@ describe("Q023 native bridge — plugin-to-daemon canary over a real socket", ()
         const dispatch = polled.dispatches[0];
         if (dispatch === undefined) throw new Error("expected a claimed dispatch");
 
+        const statusAfterFirstClaim = (await session.call(NATIVE_STAGE_STATUS_V1_METHOD, {
+          runId: dispatch.runId,
+        })) as { status: string };
+        expect(statusAfterFirstClaim.status).toBe("running");
+        lifecycleTrace.push({
+          trigger: "poll_claim",
+          from: "waiting_for_parent_session",
+          to: "running",
+        });
+
         await mkdir(join(dispatch.workingDirectory, "out"), { recursive: true });
         await writeFile(join(dispatch.workingDirectory, "out", "result.md"), "# Done\n");
 
@@ -446,8 +469,15 @@ describe("Q023 native bridge — plugin-to-daemon canary over a real socket", ()
             ],
             requestedAt: new Date().toISOString(),
           },
-        })) as { accepted: boolean; interactionId: string; interactionRevision: number };
+        })) as {
+          accepted: boolean;
+          interactionId: string;
+          interactionRevision: number;
+          status: string;
+        };
         expect(questioned.accepted).toBe(true);
+        expect(questioned.status).toBe("waiting_on_user");
+        lifecycleTrace.push({ trigger: "raise_question", from: "running", to: "waiting_on_user" });
 
         const inbox = (await session.call(INBOX_LIST_V1_METHOD)) as {
           items: readonly { runId: string; interaction: { id: string } }[];
@@ -465,6 +495,7 @@ describe("Q023 native bridge — plugin-to-daemon canary over a real socket", ()
           },
         })) as { status: string };
         expect(answered.status).toBe("running");
+        lifecycleTrace.push({ trigger: "answer_question", from: "waiting_on_user", to: "running" });
 
         const secondPoll = (await session.call(NATIVE_STAGE_POLL_V1_METHOD, {
           schemaVersion: 1,
@@ -494,6 +525,7 @@ describe("Q023 native bridge — plugin-to-daemon canary over a real socket", ()
           result: { schemaVersion: 1, summary: "Done.", artifactPath: "out/result.md" },
         })) as { accepted: boolean; status: string };
         expect(submitted).toMatchObject({ accepted: true, status: "succeeded" });
+        lifecycleTrace.push({ trigger: "submit_succeeded", from: "running", to: "succeeded" });
 
         const finalStatus = (await session.call(NATIVE_STAGE_STATUS_V1_METHOD, {
           runId: dispatch.runId,
@@ -539,7 +571,13 @@ describe("Q023 native bridge — plugin-to-daemon canary over a real socket", ()
           priority: 0,
           requestedIdentifiers: [],
           limits: {},
-        })) as { runId: string };
+        })) as { runId: string; status: string };
+        expect(secondStarted.status).toBe("waiting_for_parent_session");
+        lifecycleTrace.push({
+          trigger: "stage_start_admitted_waiting",
+          from: null,
+          to: "waiting_for_parent_session",
+        });
 
         const secondSessionAttach = (await session.call(PARENT_SESSION_ATTACH_V1_METHOD, {
           schemaVersion: 1,
@@ -556,6 +594,11 @@ describe("Q023 native bridge — plugin-to-daemon canary over a real socket", ()
         };
         const secondDispatch = secondSessionPoll.dispatches[0];
         if (secondDispatch === undefined) throw new Error("expected a second claimed dispatch");
+        lifecycleTrace.push({
+          trigger: "poll_claim",
+          from: "waiting_for_parent_session",
+          to: "running",
+        });
 
         const detached = (await session.call(PARENT_SESSION_DETACH_V1_METHOD, {
           schemaVersion: 1,
@@ -566,6 +609,15 @@ describe("Q023 native bridge — plugin-to-daemon canary over a real socket", ()
         expect(detached).toMatchObject({
           accepted: true,
           released: [{ disposition: "redispatchable" }],
+        });
+        const statusAfterDetach = (await session.call(NATIVE_STAGE_STATUS_V1_METHOD, {
+          runId: secondStarted.runId,
+        })) as { status: string };
+        expect(statusAfterDetach.status).toBe("waiting_for_parent_session");
+        lifecycleTrace.push({
+          trigger: "graceful_detach_corroborated",
+          from: "running",
+          to: "waiting_for_parent_session",
         });
 
         const reattached = (await session.call(PARENT_SESSION_ATTACH_V1_METHOD, {
@@ -581,11 +633,20 @@ describe("Q023 native bridge — plugin-to-daemon canary over a real socket", ()
         expect(reclaimedPoll.dispatches.some((claim) => claim.runId === secondStarted.runId)).toBe(
           true,
         );
+        lifecycleTrace.push({
+          trigger: "poll_claim",
+          from: "waiting_for_parent_session",
+          to: "running",
+        });
 
         const cancelled = (await session.call(RUN_CANCEL_V1_METHOD, {
           runId: secondStarted.runId,
         })) as { status: string; accepted: boolean };
         expect(cancelled).toMatchObject({ status: "cancelled", accepted: true });
+        lifecycleTrace.push({ trigger: "cancel", from: "running", to: "cancelled" });
+
+        const lifecycleCheck = checkStageLifecycleTrace(lifecycleTrace);
+        expect(lifecycleCheck).toEqual({ ok: true, violations: [] });
 
         process.stdout.write(
           `\n--- Q023 native bridge canary sequence trace ---\n${session.trace.join("\n")}\n--- end trace ---\n`,

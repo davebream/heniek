@@ -250,6 +250,9 @@ importers:
       '@heniek/client':
         specifier: workspace:*
         version: link:../client
+      '@heniek/conformance':
+        specifier: workspace:*
+        version: link:../conformance
       '@heniek/execution-claudexor':
         specifier: workspace:*
         version: link:../execution-claudexor

@@ -6,3 +6,4 @@ export * from "./matrix.js";
 export * from "./replay.js";
 export * from "./runner/index.js";
 export * from "./smoke/index.js";
+export * from "./stage-lifecycle/index.js";

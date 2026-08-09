@@ -23,6 +23,7 @@
   },
   "devDependencies": {
     "@heniek/client": "workspace:*",
+    "@heniek/conformance": "workspace:*",
     "@heniek/execution-claudexor": "workspace:*",
     "tsx": "catalog:",
     "vitest": "catalog:"
