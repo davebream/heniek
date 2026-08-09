@@ -58,5 +58,9 @@
   "15": {
     "name": "pipeline-recovery",
     "statementHash": "36db3c63c99e2d258b5cdff647f23eeeb1a8eb9c0185a0c0b190f7664cedd484"
+  },
+  "16": {
+    "name": "pipeline-fusion",
+    "statementHash": "de10a9b91120922bde5f23bf569cd4ddb15c718993ba20015aadcff1560851cc"
   }
 }

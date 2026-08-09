@@ -12,6 +12,7 @@ import type {
   ExecutionResultV4,
   ExecutionResultV5,
   ExecutionResumeRequestV1,
+  ExecutionResumeRequestV2,
   ExecutionStatus,
   ExecutionTelemetryV1,
   InteractionAnswerSetV1,
@@ -49,7 +50,9 @@ export interface ClaudexorBackendOptions {
 }
 
 export interface ClaudexorExecutionBackend extends Omit<ExecutionBackendV2, "resume"> {
-  resume(request: Static<typeof ExecutionResumeRequestV1>): Promise<void>;
+  resume(
+    request: Static<typeof ExecutionResumeRequestV1> | Static<typeof ExecutionResumeRequestV2>,
+  ): Promise<void>;
   /** Internal primitive used by the subscription-only profile adapter. */
   startProfile(
     request: Static<typeof ExecutionRequestV3>,
@@ -59,7 +62,9 @@ export interface ClaudexorExecutionBackend extends Omit<ExecutionBackendV2, "res
     request: Static<typeof ExecutionRequestV4>,
   ): Promise<Static<typeof import("@heniek/contracts").BackendExecutionHandleV1>>;
   /** Internal primitive used by the subscription-only profile adapter. */
-  resumeProfile(request: Static<typeof ExecutionResumeRequestV1>): Promise<void>;
+  resumeProfile(
+    request: Static<typeof ExecutionResumeRequestV1> | Static<typeof ExecutionResumeRequestV2>,
+  ): Promise<void>;
   /** Normalized, replayable lifecycle facts; raw SSE payloads never escape. */
   events(executionId: string, after?: string): AsyncIterable<Static<typeof ExecutionEventV3>>;
   /** Internal structured result used by the Q019 profile adapter. */
@@ -778,17 +783,21 @@ export function createClaudexorExecutionBackend(
       }
     },
 
-    async resume(request: Static<typeof ExecutionResumeRequestV1>) {
-      await createTurn(
-        request.executionId,
-        request.inputArtifactRefs.length === 0
-          ? "Continue the stage from the current workspace state."
-          : `Continue the stage using these Heniek input artifact references: ${request.inputArtifactRefs.join(", ")}.`,
-        request.operationId,
-      );
+    async resume(
+      request: Static<typeof ExecutionResumeRequestV1> | Static<typeof ExecutionResumeRequestV2>,
+    ) {
+      const prompt =
+        request.schemaVersion === 2
+          ? request.instruction
+          : request.inputArtifactRefs.length === 0
+            ? "Continue the stage from the current workspace state."
+            : `Continue the stage using these Heniek input artifact references: ${request.inputArtifactRefs.join(", ")}.`;
+      await createTurn(request.executionId, prompt, request.operationId);
     },
 
-    async resumeProfile(request: Static<typeof ExecutionResumeRequestV1>) {
+    async resumeProfile(
+      request: Static<typeof ExecutionResumeRequestV1> | Static<typeof ExecutionResumeRequestV2>,
+    ) {
       const profile = profiles.get(request.executionId);
       if (profile === undefined) {
         throw new ClaudexorControlError(409, "profile_context_unavailable", "resume");
@@ -797,15 +806,13 @@ export function createClaudexorExecutionBackend(
       // between the original turn and the follow-up one.
       const resumeRoute = subscriptionProfileRoute(profile, "resume");
       await requireSubscriptionRoute(resumeRoute.harness);
-      await createTurn(
-        request.executionId,
-        request.inputArtifactRefs.length === 0
-          ? "Continue the stage from the current workspace state."
-          : `Continue the stage using these Heniek input artifact references: ${request.inputArtifactRefs.join(", ")}.`,
-        request.operationId,
-        undefined,
-        profile,
-      );
+      const prompt =
+        request.schemaVersion === 2
+          ? request.instruction
+          : request.inputArtifactRefs.length === 0
+            ? "Continue the stage from the current workspace state."
+            : `Continue the stage using these Heniek input artifact references: ${request.inputArtifactRefs.join(", ")}.`;
+      await createTurn(request.executionId, prompt, request.operationId, undefined, profile);
     },
 
     async resultProfile(executionId: string): Promise<Static<typeof ExecutionResultV4>> {

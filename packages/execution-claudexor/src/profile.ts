@@ -2,13 +2,14 @@ import type {
   BackendArtifactV1,
   BackendExecutionHandleV1,
   ExecutionBackendV6,
-  ExecutionBackendV7,
+  ExecutionBackendV8,
   ExecutionEventV3,
   ExecutionRequestV3,
   ExecutionRequestV4,
   ExecutionResultV4,
   ExecutionResultV5,
   ExecutionResumeRequestV1,
+  ExecutionResumeRequestV2,
   ExecutionStatus,
   InteractionAnswerSetV1,
   PendingInteractionV2,
@@ -40,7 +41,7 @@ export interface CursorProfileExecutionAdapter extends ProfileExecutionAdapter {
 
 type ProfileEngine = "claude" | "codex" | "cursor";
 
-export interface ScheduledProfileExecutionAdapter extends ExecutionBackendV7 {
+export interface ScheduledProfileExecutionAdapter extends ExecutionBackendV8 {
   diagnoseCompatibility(): ReturnType<ClaudexorExecutionBackend["diagnoseCompatibility"]>;
   diagnoseRuntime(): ReturnType<ClaudexorExecutionBackend["diagnoseRuntime"]>;
   diagnoseAuthRoute(): ReturnType<ClaudexorExecutionBackend["diagnoseAuthRoute"]>;
@@ -111,8 +112,9 @@ export function createScheduledProfileExecutionAdapter(
       backend.interactions(executionId),
     answer: (executionId: string, answer: Static<typeof InteractionAnswerSetV1>): Promise<void> =>
       backend.answer(executionId, answer),
-    resume: (request: Static<typeof ExecutionResumeRequestV1>): Promise<void> =>
-      backend.resumeProfile(request),
+    resume: (
+      request: Static<typeof ExecutionResumeRequestV1> | Static<typeof ExecutionResumeRequestV2>,
+    ): Promise<void> => backend.resumeProfile(request),
     result: (executionId: string): Promise<Static<typeof ExecutionResultV5>> =>
       backend.resultScheduled(executionId),
     cancel: (executionId: string): Promise<void> => backend.cancel(executionId),

@@ -3,9 +3,15 @@
  */
 
 import { createHash } from "node:crypto";
-import type { ExecutionStatus } from "@heniek/contracts";
+import type {
+  ExecutionBackendV7,
+  ExecutionBackendV8,
+  ExecutionResumeRequestV2,
+  ExecutionStatus,
+} from "@heniek/contracts";
 import { ExternalStageResultV1 } from "@heniek/contracts";
 import { validateExecutionWorkspace } from "@heniek/workspace";
+import type { Static } from "@sinclair/typebox";
 import { Value } from "@sinclair/typebox/value";
 import { bump, notifyStore, systemClock } from "./attempt.js";
 import { asAttemptId, asBackendExecutionId, asStageId, asWorkspaceId } from "./brands.js";
@@ -24,9 +30,33 @@ import type {
   StageRunnerPrepareOutcome,
   StageRunnerResult,
   StageRunnerRetryDirective,
+  StageRunnerSegmentDirective,
   StageRunnerValidationReport,
 } from "./types.js";
 import { validateStageCompletion } from "./validate.js";
+
+/** Lift a V7 backend to V8 by projecting resume requests down to v1. */
+export function asExecutionBackendV8(backend: ExecutionBackendV7): ExecutionBackendV8 {
+  return {
+    start: (request, context) => backend.start(request, context),
+    status: (executionId) => backend.status(executionId),
+    interactions: (executionId) => backend.interactions(executionId),
+    answer: (executionId, answer) => backend.answer(executionId, answer),
+    resume: async (request: Static<typeof ExecutionResumeRequestV2>) => {
+      await backend.resume({
+        schemaVersion: 1,
+        executionId: request.executionId,
+        operationId: request.operationId,
+        inputArtifactRefs: request.inputArtifactRefs,
+      });
+    },
+    result: (executionId) => backend.result(executionId),
+    cancel: (executionId) => backend.cancel(executionId),
+    artifacts: (executionId) => backend.artifacts(executionId),
+    readArtifact: (executionId, artifactId) => backend.readArtifact(executionId, artifactId),
+    events: (executionId, after) => backend.events(executionId, after),
+  };
+}
 
 interface AgentAttemptState {
   readonly snapshot: StageRunnerAttemptSnapshot;
@@ -35,6 +65,7 @@ interface AgentAttemptState {
   readonly writes: readonly string[];
   readonly requirements: NonNullable<StageRunnerPrepareInput["stage"]["completion"]>["require"];
   readonly retryDirective?: StageRunnerRetryDirective;
+  readonly segmentDirective?: StageRunnerSegmentDirective;
   readonly priorBackendExecutionId?: string;
   started: boolean;
   /** Resume was requested but prior execution was missing or resume failed. */
@@ -220,7 +251,9 @@ export function createAgentStageRunner(deps: AgentStageRunnerDeps): StageRunner 
       };
 
       const priorBackendExecutionId =
-        input.priorBackendExecutionId ?? input.retryDirective?.priorBackendExecutionId;
+        input.priorBackendExecutionId ??
+        input.segmentDirective?.priorBackendExecutionId ??
+        input.retryDirective?.priorBackendExecutionId;
 
       attempts.set(input.attemptId, {
         snapshot,
@@ -229,6 +262,9 @@ export function createAgentStageRunner(deps: AgentStageRunnerDeps): StageRunner 
         writes: [...input.stage.writes],
         requirements: input.stage.completion?.require ?? [],
         ...(input.retryDirective === undefined ? {} : { retryDirective: input.retryDirective }),
+        ...(input.segmentDirective === undefined
+          ? {}
+          : { segmentDirective: input.segmentDirective }),
         ...(priorBackendExecutionId === undefined ? {} : { priorBackendExecutionId }),
         started: false,
         timedOut: false,
@@ -254,10 +290,13 @@ export function createAgentStageRunner(deps: AgentStageRunnerDeps): StageRunner 
         throw new Error("agent backend.start must be called exactly once");
       }
 
-      const mode = state.retryDirective?.mode ?? "fresh";
+      const segmentMode = state.segmentDirective?.mode;
+      const recoveryMode = state.retryDirective?.mode ?? "fresh";
+      const shouldResume =
+        segmentMode === "fuse_resume" || (segmentMode === undefined && recoveryMode === "resume");
       const priorId = state.priorBackendExecutionId;
 
-      if (mode === "resume") {
+      if (shouldResume) {
         if (priorId === undefined || priorId.length === 0) {
           state.resumeFailed = resumeFailure(
             "resume requested without priorBackendExecutionId",
@@ -294,11 +333,25 @@ export function createAgentStageRunner(deps: AgentStageRunnerDeps): StageRunner 
           return;
         }
 
-        await deps.backend.resume({
-          schemaVersion: 1,
+        const instruction =
+          state.segmentDirective?.instruction ??
+          (state.executionRequest.inputArtifactRefs.length === 0
+            ? "Continue the stage from the current workspace state."
+            : `Continue the stage using these Heniek input artifact references: ${state.executionRequest.inputArtifactRefs.join(", ")}.`);
+
+        await (deps.backend as ExecutionBackendV8).resume({
+          schemaVersion: 2,
           executionId: asBackendExecutionId(priorId),
-          operationId: `resume:${attemptId}`,
+          operationId:
+            segmentMode === "fuse_resume" ? `fuse-resume:${attemptId}` : `resume:${attemptId}`,
           inputArtifactRefs: [...state.executionRequest.inputArtifactRefs],
+          instruction,
+          stageId: asStageId(state.snapshot.stageId),
+          ...(state.segmentDirective?.capsuleRef === undefined
+            ? {}
+            : {
+                capsuleRef: state.segmentDirective.capsuleRef as never,
+              }),
         });
         state.started = true;
         // Resume continues the prior backend identity — do not mint a new id.
@@ -313,8 +366,8 @@ export function createAgentStageRunner(deps: AgentStageRunnerDeps): StageRunner 
         return;
       }
 
-      // fresh and delegate both start a new backend execution; daemon resolves
-      // delegated profiles onto stage.profile before prepare.
+      // fresh, delegate, and continue_fresh all start a new backend execution;
+      // daemon resolves delegated profiles onto stage.profile before prepare.
       const handle = await deps.backend.start(state.executionRequest, {
         identifierReader: deps.identifierReader,
       });

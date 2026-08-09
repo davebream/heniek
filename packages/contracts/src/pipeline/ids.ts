@@ -56,3 +56,31 @@ export type PipelineSchedulerIntentId = Static<typeof PipelineSchedulerIntentId>
  */
 export const PipelineRecoveryDecisionId = defineIdNamespace("PipelineRecoveryDecisionId");
 export type PipelineRecoveryDecisionId = Static<typeof PipelineRecoveryDecisionId>;
+
+/**
+ * One live provider session (execution segment). Multiple adjacent logical
+ * stages may share a segment; one stage may span several segments after a
+ * smart-continuation handoff (§15.1).
+ */
+export const PipelineSegmentId = defineIdNamespace("PipelineSegmentId");
+export type PipelineSegmentId = Static<typeof PipelineSegmentId>;
+
+/**
+ * One auditable fuse-or-split decision between adjacent stages or between
+ * successive segments of the same stage.
+ */
+export const PipelineFusionDecisionId = defineIdNamespace("PipelineFusionDecisionId");
+export type PipelineFusionDecisionId = Static<typeof PipelineFusionDecisionId>;
+
+/**
+ * One continuation capsule identity. Digests and artifact refs live on the
+ * capsule payload; this id is the durable handle.
+ */
+export const PipelineContinuationCapsuleId = defineIdNamespace("PipelineContinuationCapsuleId");
+export type PipelineContinuationCapsuleId = Static<typeof PipelineContinuationCapsuleId>;
+
+/**
+ * One incoming-verification verdict recorded before a capsule-backed start.
+ */
+export const PipelineIncomingVerificationId = defineIdNamespace("PipelineIncomingVerificationId");
+export type PipelineIncomingVerificationId = Static<typeof PipelineIncomingVerificationId>;

@@ -17,6 +17,7 @@ import type {
   ExecutionResultV4,
   ExecutionResultV5,
   ExecutionResumeRequestV1,
+  ExecutionResumeRequestV2,
   InteractionAnswerSetV1,
   PendingInteractionV1,
   PendingInteractionV2,
@@ -148,6 +149,27 @@ export interface ExecutionBackendV7 {
   interactions(executionId: string): Promise<Static<typeof PendingInteractionV2>[]>;
   answer(executionId: string, answer: Static<typeof InteractionAnswerSetV1>): Promise<void>;
   resume(request: Static<typeof ExecutionResumeRequestV1>): Promise<void>;
+  result(executionId: string): Promise<Static<typeof ExecutionResultV5>>;
+  cancel(executionId: string): Promise<void>;
+  artifacts(executionId: string): Promise<Static<typeof BackendArtifactV1>[]>;
+  readArtifact(executionId: string, artifactId: string): Promise<Uint8Array>;
+  events(executionId: string, after?: string): AsyncIterable<Static<typeof ExecutionEventV3>>;
+}
+
+/**
+ * Q029's segment-fusion backend boundary. V1–V7 remain frozen; V8 accepts
+ * `ExecutionResumeRequest/v2` so fused successors and smart continuations can
+ * carry a bounded next-stage instruction without leaking provider DTOs.
+ */
+export interface ExecutionBackendV8 {
+  start(
+    request: Static<typeof ExecutionRequestV4>,
+    context: { readonly identifierReader: ExecutionIdentifierReaderV1 },
+  ): Promise<Static<typeof BackendExecutionHandleV1>>;
+  status(executionId: string): Promise<ExecutionStatus>;
+  interactions(executionId: string): Promise<Static<typeof PendingInteractionV2>[]>;
+  answer(executionId: string, answer: Static<typeof InteractionAnswerSetV1>): Promise<void>;
+  resume(request: Static<typeof ExecutionResumeRequestV2>): Promise<void>;
   result(executionId: string): Promise<Static<typeof ExecutionResultV5>>;
   cancel(executionId: string): Promise<void>;
   artifacts(executionId: string): Promise<Static<typeof BackendArtifactV1>[]>;

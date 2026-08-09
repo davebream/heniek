@@ -10,6 +10,7 @@ import type {
   ApprovalRequestV1,
   ArtifactId,
   ExecutionBackendV7,
+  ExecutionBackendV8,
   ExecutionIdentifierReaderV1,
   ExecutionPermissionEnvelopeV1,
   ExecutionRequestV4,
@@ -129,6 +130,22 @@ export interface StageRunnerRetryDirective {
   readonly recoveryContextDigest?: string;
 }
 
+/**
+ * Q029 segment fusion / smart-continuation binding. Distinct from recovery
+ * retry: fused successors and pressure-driven continuations reuse a segment's
+ * backend identity with an explicit next-stage instruction.
+ */
+export interface StageRunnerSegmentDirective {
+  readonly mode: "fuse_resume" | "continue_fresh";
+  readonly segmentId: string;
+  readonly priorBackendExecutionId?: string;
+  readonly instruction: string;
+  readonly capsuleRef?: string;
+  readonly workspaceId?: string;
+  readonly leaseId?: string;
+  readonly checkoutPath?: string;
+}
+
 export interface StageRunnerPrepareInput {
   readonly attemptId: string;
   readonly runId: string;
@@ -159,6 +176,8 @@ export interface StageRunnerPrepareInput {
   readonly retryDirective?: StageRunnerRetryDirective;
   /** Explicit prior backend id when not embedded in `retryDirective`. */
   readonly priorBackendExecutionId?: string;
+  /** Segment fusion / smart-continuation directive (Q029). */
+  readonly segmentDirective?: StageRunnerSegmentDirective;
 }
 
 export interface StageRunnerPrepareOutcome {
@@ -212,7 +231,7 @@ export type ResolveAgentInvocation = () => Promise<{
 }>;
 
 export interface AgentStageRunnerDeps {
-  readonly backend: ExecutionBackendV7;
+  readonly backend: ExecutionBackendV7 | ExecutionBackendV8;
   readonly resolveProfile: (profileId: string) => Promise<ResolvedProfile>;
   readonly resolvePermissions: (profile: ResolvedProfile) => Promise<ExecutionPermissionEnvelope>;
   readonly resolveAgentInvocation: ResolveAgentInvocation;

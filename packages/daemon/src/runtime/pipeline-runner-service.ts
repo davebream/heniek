@@ -16,6 +16,7 @@ import type {
   ApprovalRequestV1,
   ArtifactId,
   ExecutionBackendV7,
+  ExecutionBackendV8,
   ExecutionPermissionEnvelopeV1,
   ForgeBackendV2,
   IntegrationRequestV1,
@@ -44,6 +45,7 @@ import {
   type StageRunner,
   type StageRunnerPrepareInput,
   type StageRunnerRetryDirective,
+  type StageRunnerSegmentDirective,
   type StageRunnerStoreCallbacks,
 } from "@heniek/runner";
 import {
@@ -79,6 +81,7 @@ import {
 import { validateExecutionWorkspace, type WorkspaceService } from "@heniek/workspace";
 import type { Static } from "@sinclair/typebox";
 import { buildClassifiedFailureObservation } from "./recovery-observation.js";
+import { bindSegmentBackendExecution, planFusionDispatch } from "./segment-fusion.js";
 import { finalizeStageArtifact } from "./stage-completion.js";
 
 const DEFAULT_MAX_REPAIR_ATTEMPTS = 3;
@@ -117,7 +120,7 @@ export interface PipelineCodebaseContext {
 export interface PipelineRunnerServiceOptions {
   readonly db: StateDatabase;
   readonly workspaceService: WorkspaceService;
-  readonly backend: ExecutionBackendV7;
+  readonly backend: ExecutionBackendV7 | ExecutionBackendV8;
   readonly instanceId: string;
   readonly artifactsDirectory: string;
   readonly runtimeDirectory: string;
@@ -1166,6 +1169,119 @@ export function createPipelineRunnerService(
     activeRunners.set(attemptId, runner);
 
     const retryDirective = resolveRetryDirective(payload, attemptId, options.db);
+    let segmentDirective: StageRunnerSegmentDirective | undefined;
+
+    if (typedStage === "agent" && retryDirective === undefined) {
+      const predecessors = parts.graph.edges
+        .filter((edge) => edge.to === stageId)
+        .map((edge) => edge.from);
+      const adjacent = predecessors.length === 1;
+      const predecessorId = adjacent ? predecessors[0] : undefined;
+      const predecessorStage =
+        predecessorId === undefined
+          ? undefined
+          : parts.graph.stages.find((candidate) => candidate.id === predecessorId);
+
+      // Prior succeeded agent attempt identity may be supplied on the dispatch
+      // payload when the scheduler/daemon attaches fusion hints.
+      const priorBackendExecutionId =
+        typeof payload.priorBackendExecutionId === "string"
+          ? payload.priorBackendExecutionId
+          : typeof payload.fusedBackendExecutionId === "string"
+            ? payload.fusedBackendExecutionId
+            : undefined;
+      const priorWorkspaceId =
+        typeof payload.fusedWorkspaceId === "string"
+          ? payload.fusedWorkspaceId
+          : attempt.workspaceId;
+      const priorLeaseId =
+        typeof payload.fusedLeaseId === "string" ? payload.fusedLeaseId : attempt.leaseId;
+      const priorCheckout =
+        typeof payload.fusedCheckoutPath === "string" ? payload.fusedCheckoutPath : checkoutPath;
+
+      const soft = parts.graph.context.handoffSoftThreshold;
+      const hard = parts.graph.context.handoffHardThreshold;
+      const successors = parts.graph.edges.filter(
+        (edge) => edge.from === (predecessorId ?? ""),
+      ).length;
+
+      const plan = planFusionDispatch(options.db, {
+        runId: intent.runId,
+        ...(predecessorStage === undefined
+          ? {}
+          : {
+              fromStage: {
+                stageId: predecessorStage.id,
+                stageType: predecessorStage.type,
+                ...(predecessorStage.profile === undefined
+                  ? {}
+                  : { profileId: predecessorStage.profile }),
+                ...(predecessorStage.session?.policy === undefined
+                  ? {}
+                  : { sessionPolicy: predecessorStage.session.policy }),
+              },
+            }),
+        toStage: {
+          stageId: stage.id,
+          stageType: stage.type,
+          ...(stage.profile === undefined ? {} : { profileId: stage.profile }),
+          ...(stage.session?.policy === undefined ? {} : { sessionPolicy: stage.session.policy }),
+        },
+        fromWorkspace: {
+          ...(priorWorkspaceId === undefined ? {} : { workspaceId: priorWorkspaceId }),
+          ...(priorLeaseId === undefined ? {} : { leaseId: priorLeaseId }),
+        },
+        toWorkspace: {
+          ...(attempt.workspaceId === undefined ? {} : { workspaceId: attempt.workspaceId }),
+          ...(attempt.leaseId === undefined ? {} : { leaseId: attempt.leaseId }),
+        },
+        adjacent,
+        successorCount: adjacent ? Math.max(1, successors) : predecessors.length,
+        backendSupportsContinuation: true,
+        ...(priorBackendExecutionId === undefined ? {} : { priorBackendExecutionId }),
+        ...(priorCheckout === undefined ? {} : { checkoutPath: priorCheckout }),
+        ...(soft === undefined ? {} : { softThreshold: soft }),
+        ...(hard === undefined ? {} : { hardThreshold: hard }),
+        instruction: `Continue with logical stage ${stageId}.`,
+        // Prefer available measured pressure from payload when present; else
+        // unavailable forces a conservative split (ADR 0018).
+        pressure:
+          typeof payload.contextPressureRatio === "number"
+            ? {
+                state: "measured" as const,
+                ratio: payload.contextPressureRatio,
+                confidence:
+                  payload.contextPressureConfidence === "estimated"
+                    ? ("estimated" as const)
+                    : ("exact" as const),
+                ...(soft === undefined ? {} : { softThreshold: soft }),
+                ...(hard === undefined ? {} : { hardThreshold: hard }),
+              }
+            : {
+                state: "unavailable" as const,
+                confidence: "unavailable" as const,
+                ...(soft === undefined ? {} : { softThreshold: soft }),
+                ...(hard === undefined ? {} : { hardThreshold: hard }),
+              },
+        now: options.clock.nowIso(),
+      });
+      segmentDirective = plan.segmentDirective;
+      if (plan.reuseWorkspace?.checkoutPath !== undefined && checkoutPath === undefined) {
+        // Reuse fused workspace without provisioning a second worktree.
+        attempt = updateRunnerAttempt(options.db, {
+          attemptId,
+          expectedRevision: attempt.revision,
+          workspaceId: plan.reuseWorkspace.workspaceId,
+          checkoutPath: plan.reuseWorkspace.checkoutPath,
+          ...(plan.reuseWorkspace.leaseId === undefined
+            ? {}
+            : { leaseId: plan.reuseWorkspace.leaseId }),
+          transitionDetail: "segment_workspace_reused",
+          now: options.clock.nowIso(),
+        });
+      }
+    }
+
     const prepareStage =
       typedStage === "agent" &&
       retryDirective?.mode === "delegate" &&
@@ -1186,7 +1302,9 @@ export function createPipelineRunnerService(
       attemptOrdinal,
       stage: prepareStage,
       runtimeDirectory,
-      ...(checkoutPath === undefined ? {} : { checkoutPath }),
+      ...(checkoutPath === undefined && attempt.checkoutPath === undefined
+        ? {}
+        : { checkoutPath: checkoutPath ?? attempt.checkoutPath }),
       ...(attempt.workspaceId === undefined ? {} : { workspaceId: attempt.workspaceId }),
       ...(attempt.leaseId === undefined ? {} : { leaseId: attempt.leaseId }),
       ...(schedule?.deadlineAt ? { deadlineAt: schedule.deadlineAt } : {}),
@@ -1198,6 +1316,10 @@ export function createPipelineRunnerService(
       ...(retryDirective?.priorBackendExecutionId === undefined
         ? {}
         : { priorBackendExecutionId: retryDirective.priorBackendExecutionId }),
+      ...(segmentDirective === undefined ? {} : { segmentDirective }),
+      ...(segmentDirective?.priorBackendExecutionId === undefined
+        ? {}
+        : { priorBackendExecutionId: segmentDirective.priorBackendExecutionId }),
     });
     attempt = readRunnerAttempt(options.db, attemptId) ?? attempt;
 
@@ -1226,6 +1348,9 @@ export function createPipelineRunnerService(
 
     await runner.start(attemptId);
     attempt = readRunnerAttempt(options.db, attemptId) ?? attempt;
+    if (typedStage === "agent" && attempt.backendExecutionId !== undefined) {
+      bindSegmentBackendExecution(options.db, intent.runId, attempt.backendExecutionId);
+    }
     attempt = updateRunnerAttempt(options.db, {
       attemptId,
       expectedRevision: attempt.revision,

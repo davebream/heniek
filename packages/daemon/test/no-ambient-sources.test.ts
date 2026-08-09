@@ -113,6 +113,13 @@ const EXPECTED_EXEMPTIONS: readonly string[] = [
    */
   "runtime/recovery-observation.ts",
   "runtime/scheduling-service.ts",
+  /*
+   * Segment fusion planning for Q029. Pure eligibility lives in
+   * `@heniek/pipeline`; this adapter applies decisions against durable
+   * segment state and produces runner directives. Listed for directory
+   * membership; no ambient I/O of its own.
+   */
+  "runtime/segment-fusion.ts",
   "runtime/signals.ts",
   "runtime/socket-probe.ts",
   "runtime/socket-server.ts",
