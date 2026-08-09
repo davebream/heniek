@@ -1,0 +1,712 @@
+{
+  "$id": "heniek://contract/PipelineGraph/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "pipelineId",
+    "mode",
+    "limits",
+    "context",
+    "stages",
+    "edges"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "pipelineId": {
+      "minLength": 1,
+      "description": "Opaque PipelineId.",
+      "type": "string"
+    },
+    "name": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "description": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "mode": {
+      "anyOf": [
+        {
+          "const": "autonomous",
+          "type": "string"
+        },
+        {
+          "const": "hitl",
+          "type": "string"
+        }
+      ]
+    },
+    "limits": {
+      "additionalProperties": false,
+      "type": "object",
+      "properties": {
+        "maxPipelineDurationMs": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "maxConcurrentWorkers": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "maxRepairAttempts": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "maxGraphRevisions": {
+          "minimum": 1,
+          "type": "integer"
+        }
+      }
+    },
+    "context": {
+      "additionalProperties": false,
+      "type": "object",
+      "properties": {
+        "handoffSoftThreshold": {
+          "minimum": 0,
+          "maximum": 1,
+          "type": "number"
+        },
+        "handoffHardThreshold": {
+          "minimum": 0,
+          "maximum": 1,
+          "type": "number"
+        }
+      }
+    },
+    "stages": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "mode",
+          "optional",
+          "reads",
+          "writes",
+          "overridable"
+        ],
+        "properties": {
+          "id": {
+            "minLength": 1,
+            "description": "Opaque PipelineStageId.",
+            "type": "string"
+          },
+          "type": {
+            "anyOf": [
+              {
+                "const": "agent",
+                "type": "string"
+              },
+              {
+                "const": "command",
+                "type": "string"
+              },
+              {
+                "const": "approval",
+                "type": "string"
+              },
+              {
+                "const": "integration",
+                "type": "string"
+              },
+              {
+                "const": "verify",
+                "type": "string"
+              },
+              {
+                "const": "publish",
+                "type": "string"
+              }
+            ]
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "const": "autonomous",
+                "type": "string"
+              },
+              {
+                "const": "hitl",
+                "type": "string"
+              }
+            ]
+          },
+          "optional": {
+            "type": "boolean"
+          },
+          "profile": {
+            "minLength": 1,
+            "description": "Opaque ProfileId.",
+            "type": "string"
+          },
+          "session": {
+            "additionalProperties": false,
+            "type": "object",
+            "required": [
+              "policy"
+            ],
+            "properties": {
+              "policy": {
+                "anyOf": [
+                  {
+                    "const": "fresh",
+                    "type": "string"
+                  },
+                  {
+                    "const": "resume",
+                    "type": "string"
+                  }
+                ]
+              }
+            }
+          },
+          "limits": {
+            "additionalProperties": false,
+            "type": "object",
+            "properties": {
+              "maxDurationMs": {
+                "minimum": 1,
+                "type": "integer"
+              },
+              "maxRepairAttempts": {
+                "minimum": 0,
+                "type": "integer"
+              }
+            }
+          },
+          "command": {
+            "additionalProperties": false,
+            "type": "object",
+            "required": [
+              "argv"
+            ],
+            "properties": {
+              "argv": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "cwd": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "env": {
+                "type": "object",
+                "patternProperties": {
+                  "^(.*)$": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "completion": {
+            "additionalProperties": false,
+            "type": "object",
+            "required": [
+              "require"
+            ],
+            "properties": {
+              "require": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "type": "object",
+                      "required": [
+                        "kind"
+                      ],
+                      "properties": {
+                        "kind": {
+                          "const": "result_envelope",
+                          "type": "string"
+                        }
+                      }
+                    },
+                    {
+                      "additionalProperties": false,
+                      "type": "object",
+                      "required": [
+                        "kind"
+                      ],
+                      "properties": {
+                        "kind": {
+                          "const": "non_empty_diff",
+                          "type": "string"
+                        }
+                      }
+                    },
+                    {
+                      "additionalProperties": false,
+                      "type": "object",
+                      "required": [
+                        "kind",
+                        "name"
+                      ],
+                      "properties": {
+                        "kind": {
+                          "const": "artifact",
+                          "type": "string"
+                        },
+                        "name": {
+                          "minLength": 1,
+                          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+                          "type": "string"
+                        }
+                      }
+                    },
+                    {
+                      "additionalProperties": false,
+                      "type": "object",
+                      "required": [
+                        "kind",
+                        "name"
+                      ],
+                      "properties": {
+                        "kind": {
+                          "const": "schema_check",
+                          "type": "string"
+                        },
+                        "name": {
+                          "minLength": 1,
+                          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+                          "type": "string"
+                        }
+                      }
+                    },
+                    {
+                      "additionalProperties": false,
+                      "type": "object",
+                      "required": [
+                        "kind",
+                        "names"
+                      ],
+                      "properties": {
+                        "kind": {
+                          "const": "sections",
+                          "type": "string"
+                        },
+                        "names": {
+                          "minItems": 1,
+                          "type": "array",
+                          "items": {
+                            "minLength": 1,
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "additionalProperties": false,
+                      "type": "object",
+                      "required": [
+                        "kind",
+                        "argv"
+                      ],
+                      "properties": {
+                        "kind": {
+                          "const": "command",
+                          "type": "string"
+                        },
+                        "argv": {
+                          "minItems": 1,
+                          "type": "array",
+                          "items": {
+                            "minLength": 1,
+                            "type": "string"
+                          }
+                        },
+                        "exitCode": {
+                          "minimum": 0,
+                          "maximum": 255,
+                          "type": "integer"
+                        }
+                      }
+                    },
+                    {
+                      "additionalProperties": false,
+                      "type": "object",
+                      "required": [
+                        "kind",
+                        "state"
+                      ],
+                      "properties": {
+                        "kind": {
+                          "const": "repository_state",
+                          "type": "string"
+                        },
+                        "state": {
+                          "anyOf": [
+                            {
+                              "const": "clean",
+                              "type": "string"
+                            },
+                            {
+                              "const": "no_untracked_files",
+                              "type": "string"
+                            },
+                            {
+                              "const": "no_staged_changes",
+                              "type": "string"
+                            }
+                          ]
+                        }
+                      }
+                    },
+                    {
+                      "additionalProperties": false,
+                      "type": "object",
+                      "required": [
+                        "kind",
+                        "profile"
+                      ],
+                      "properties": {
+                        "kind": {
+                          "const": "verdict",
+                          "type": "string"
+                        },
+                        "profile": {
+                          "minLength": 1,
+                          "description": "Opaque ProfileId.",
+                          "type": "string"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "onValidationFailure": {
+            "additionalProperties": false,
+            "type": "object",
+            "required": [
+              "strategy"
+            ],
+            "properties": {
+              "strategy": {
+                "anyOf": [
+                  {
+                    "const": "pause",
+                    "type": "string"
+                  },
+                  {
+                    "const": "fail",
+                    "type": "string"
+                  },
+                  {
+                    "const": "repair",
+                    "type": "string"
+                  },
+                  {
+                    "const": "repair_fresh",
+                    "type": "string"
+                  },
+                  {
+                    "const": "delegate",
+                    "type": "string"
+                  }
+                ]
+              },
+              "session": {
+                "anyOf": [
+                  {
+                    "const": "fresh",
+                    "type": "string"
+                  },
+                  {
+                    "const": "resume",
+                    "type": "string"
+                  }
+                ]
+              },
+              "maxAttempts": {
+                "minimum": 1,
+                "type": "integer"
+              },
+              "delegateTo": {
+                "minLength": 1,
+                "description": "Opaque ProfileId.",
+                "type": "string"
+              }
+            }
+          },
+          "reads": {
+            "type": "array",
+            "items": {
+              "minLength": 1,
+              "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-zA-Z0-9][a-zA-Z0-9._-]*)+$",
+              "type": "string"
+            }
+          },
+          "writes": {
+            "type": "array",
+            "items": {
+              "minLength": 1,
+              "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-zA-Z0-9][a-zA-Z0-9._-]*)+$",
+              "type": "string"
+            }
+          },
+          "overridable": {
+            "type": "array",
+            "items": {
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "edges": {
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "from",
+          "to"
+        ],
+        "properties": {
+          "from": {
+            "minLength": 1,
+            "description": "Opaque PipelineStageId.",
+            "type": "string"
+          },
+          "to": {
+            "minLength": 1,
+            "description": "Opaque PipelineStageId.",
+            "type": "string"
+          },
+          "condition": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                  "kind",
+                  "nodes",
+                  "root"
+                ],
+                "properties": {
+                  "kind": {
+                    "const": "expression",
+                    "type": "string"
+                  },
+                  "nodes": {
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "type": "object",
+                          "required": [
+                            "kind",
+                            "path"
+                          ],
+                          "properties": {
+                            "kind": {
+                              "const": "path",
+                              "type": "string"
+                            },
+                            "path": {
+                              "minItems": 1,
+                              "type": "array",
+                              "items": {
+                                "minLength": 1,
+                                "type": "string"
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "additionalProperties": false,
+                          "type": "object",
+                          "required": [
+                            "kind",
+                            "value"
+                          ],
+                          "properties": {
+                            "kind": {
+                              "const": "literal",
+                              "type": "string"
+                            },
+                            "value": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                },
+                                {
+                                  "type": "boolean"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          }
+                        },
+                        {
+                          "additionalProperties": false,
+                          "type": "object",
+                          "required": [
+                            "kind",
+                            "operand"
+                          ],
+                          "properties": {
+                            "kind": {
+                              "const": "not",
+                              "type": "string"
+                            },
+                            "operand": {
+                              "minimum": 0,
+                              "type": "integer"
+                            }
+                          }
+                        },
+                        {
+                          "additionalProperties": false,
+                          "type": "object",
+                          "required": [
+                            "kind",
+                            "operator",
+                            "left",
+                            "right"
+                          ],
+                          "properties": {
+                            "kind": {
+                              "const": "compare",
+                              "type": "string"
+                            },
+                            "operator": {
+                              "anyOf": [
+                                {
+                                  "const": "eq",
+                                  "type": "string"
+                                },
+                                {
+                                  "const": "ne",
+                                  "type": "string"
+                                },
+                                {
+                                  "const": "lt",
+                                  "type": "string"
+                                },
+                                {
+                                  "const": "lte",
+                                  "type": "string"
+                                },
+                                {
+                                  "const": "gt",
+                                  "type": "string"
+                                },
+                                {
+                                  "const": "gte",
+                                  "type": "string"
+                                }
+                              ]
+                            },
+                            "left": {
+                              "minimum": 0,
+                              "type": "integer"
+                            },
+                            "right": {
+                              "minimum": 0,
+                              "type": "integer"
+                            }
+                          }
+                        },
+                        {
+                          "additionalProperties": false,
+                          "type": "object",
+                          "required": [
+                            "kind",
+                            "operator",
+                            "left",
+                            "right"
+                          ],
+                          "properties": {
+                            "kind": {
+                              "const": "logical",
+                              "type": "string"
+                            },
+                            "operator": {
+                              "anyOf": [
+                                {
+                                  "const": "and",
+                                  "type": "string"
+                                },
+                                {
+                                  "const": "or",
+                                  "type": "string"
+                                }
+                              ]
+                            },
+                            "left": {
+                              "minimum": 0,
+                              "type": "integer"
+                            },
+                            "right": {
+                              "minimum": 0,
+                              "type": "integer"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "root": {
+                    "minimum": 0,
+                    "type": "integer"
+                  }
+                }
+              },
+              {
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                  "kind",
+                  "profile",
+                  "question"
+                ],
+                "properties": {
+                  "kind": {
+                    "const": "evaluator",
+                    "type": "string"
+                  },
+                  "profile": {
+                    "minLength": 1,
+                    "description": "Opaque ProfileId.",
+                    "type": "string"
+                  },
+                  "question": {
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

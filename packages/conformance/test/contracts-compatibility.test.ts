@@ -138,6 +138,21 @@ const manifestPath = resolve(packageRoot, "../contracts/generated/manifest.json"
  * The durable fix is not this schema — it is that `recordDecision` now takes
  * `SchedulingDecisionKind` instead of `string`, so the next omission is a
  * compile error rather than a wire-format lie.
+ *
+ * Q024 raises the count 106 → 109 by pure addition again: `PipelineDefinition/v1`
+ * (the authored YAML document), `PipelineGraph/v1` (its normalized form), and
+ * `PipelineValidationResult/v1` (graph plus diagnostics). All 106 prior hashes
+ * are byte-identical — 18 manifest insertions, zero deletions, no existing
+ * `*.schema.json` rewritten.
+ *
+ * One choice there is worth the same kind of note as the three above. A
+ * pipeline diagnostic carries a `suggestion` the configuration family's
+ * diagnostic does not. Adding the field to the inlined `Diagnostic` in
+ * `contracts/src/configuration/schemas.ts` would have been the smaller diff
+ * and was rejected: that object is embedded in `ApplicationHome/v1`,
+ * `ResolvedConfiguration/v1`, `ResolvedProfile/v1` and `/v2`, so one new
+ * optional field would move four published digests to serve one new consumer.
+ * The pipeline family inlines its own copy instead.
  */
 const EXPECTED_SCHEMAS: readonly {
   readonly schemaId: string;
@@ -542,6 +557,24 @@ const EXPECTED_SCHEMAS: readonly {
     path: "generated/PendingInteraction.v2.schema.json",
   },
   {
+    schemaId: "heniek://contract/PipelineDefinition/v1",
+    schemaVersion: 1,
+    sha256: "8f13880f0509468a85ed5b7e8701e8bdddf00fae640e8c7b3fc4f24b5dec14a1",
+    path: "generated/PipelineDefinition.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/PipelineGraph/v1",
+    schemaVersion: 1,
+    sha256: "16307f658328ededa1998ef22706004b4bce06247d6775df0361616dd7dfa3b1",
+    path: "generated/PipelineGraph.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/PipelineValidationResult/v1",
+    schemaVersion: 1,
+    sha256: "19a3183a732618aa3db2cb37aabe40fd923fef52f487c20b3901a6131cf5d1d4",
+    path: "generated/PipelineValidationResult.v1.schema.json",
+  },
+  {
     schemaId: "heniek://contract/ProfileConfiguration/v1",
     schemaVersion: 1,
     sha256: "dce7d5cd0d6eba0941613e3727dc086b8c7cdbf0cc7268e609c9ac3ac0ae0ac4",
@@ -784,7 +817,7 @@ const EXPECTED_SCHEMAS: readonly {
 ];
 
 describe("packages/contracts generated manifest is unchanged (AC4)", () => {
-  it("manifest.json lists exactly the 106 known schemas with their recorded sha256", async () => {
+  it("manifest.json lists exactly the 109 known schemas with their recorded sha256", async () => {
     const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
     expect(manifest).toEqual({
       schemaVersion: "heniek.contracts-manifest.v1",
