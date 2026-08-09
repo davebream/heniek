@@ -1,36 +1,30 @@
 version: 2
 
 updates:
-  # Repository-level security updates are already enabled; this adds the
-  # scheduled version updates that would otherwise never be proposed.
+  # Version updates are handled by Renovate, which supports the repository's
+  # pnpm 11 catalogs. Keeping this ecosystem entry lets Dependabot continue to
+  # open immediate security updates while the zero limit suppresses routine
+  # version-update pull requests.
   - package-ecosystem: npm
     directory: /
     schedule:
-      interval: weekly
-    open-pull-requests-limit: 5
+      interval: monthly
+    open-pull-requests-limit: 0
     groups:
-      # A solo maintainer should review one batched pull request per week, not
-      # one per package. Production and development updates stay separate so a
-      # runtime bump is never buried in tooling churn.
-      production-dependencies:
-        dependency-type: production
-        update-types:
-          - minor
-          - patch
-      development-dependencies:
-        dependency-type: development
-        update-types:
-          - minor
-          - patch
+      npm-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
 
-  # Keeps the SHA-pinned workflow steps current once the pins stop being
-  # human-readable tags.
+  # Security fixes for workflow actions remain immediate. Renovate owns all
+  # routine version updates, including updates to SHA-pinned actions.
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
-    open-pull-requests-limit: 5
+      interval: monthly
+    open-pull-requests-limit: 0
     groups:
-      github-actions:
+      github-actions-security:
+        applies-to: security-updates
         patterns:
           - "*"
