@@ -42,5 +42,9 @@
   "11": {
     "name": "native-bridge",
     "statementHash": "4421d1d75b4d0c834c1fe9238b67bac1994b7de9c80576dcc04f0573de42937a"
+  },
+  "12": {
+    "name": "pipeline-scheduler",
+    "statementHash": "f2a0d82cbdde805d772af552463e72eb9b25768ac63fa082d7f864e30b815a98"
   }
 }

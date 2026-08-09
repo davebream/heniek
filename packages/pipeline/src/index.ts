@@ -1,5 +1,6 @@
 export * from "./diagnostics.js";
 export * from "./document.js";
+export * from "./expression/evaluate.js";
 export * from "./expression/lex.js";
 export * from "./expression/parse.js";
 export * from "./graph/canonical.js";
@@ -8,4 +9,7 @@ export * from "./graph/validate.js";
 export * from "./parse.js";
 export * from "./render.js";
 export * from "./reporter.js";
+export * from "./scheduler/ids.js";
+export * from "./scheduler/tick.js";
+export * from "./scheduler/transitions.js";
 export * from "./suggestions.js";

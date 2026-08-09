@@ -1,0 +1,86 @@
+{
+  "$id": "heniek://contract/PipelineSchedulerPlan/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "runId",
+    "graphRevision",
+    "expectedScheduleRevision",
+    "nextScheduleRevision",
+    "recordedAt",
+    "transitions",
+    "decisions",
+    "intents",
+    "attempts",
+    "stagePatches",
+    "consumedObservationIds"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "runId": {
+      "minLength": 1,
+      "description": "Opaque RunId.",
+      "type": "string"
+    },
+    "graphRevision": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "expectedScheduleRevision": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "nextScheduleRevision": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "recordedAt": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "transitions": {
+      "type": "array",
+      "items": {
+        "$ref": "heniek://contract/PipelineStageTransition/v1"
+      }
+    },
+    "decisions": {
+      "type": "array",
+      "items": {
+        "$ref": "heniek://contract/PipelineSchedulerDecision/v1"
+      }
+    },
+    "intents": {
+      "type": "array",
+      "items": {
+        "$ref": "heniek://contract/PipelineSchedulerIntent/v1"
+      }
+    },
+    "attempts": {
+      "type": "array",
+      "items": {
+        "$ref": "heniek://contract/PipelineStageAttempt/v1"
+      }
+    },
+    "stagePatches": {
+      "type": "array",
+      "items": {
+        "$ref": "heniek://contract/PipelineStageSnapshot/v1"
+      }
+    },
+    "consumedObservationIds": {
+      "type": "array",
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      }
+    },
+    "terminal": {
+      "$ref": "heniek://contract/PipelineScheduleTerminal/v1"
+    }
+  }
+}

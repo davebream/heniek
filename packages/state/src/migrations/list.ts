@@ -14,8 +14,10 @@
  */
 
 import { assertAppendOnly, type Migration } from "./migration.js";
+import { MIGRATION_0012_PIPELINE_SCHEDULER } from "./pipeline-scheduler.js";
 
 export type { Migration } from "./migration.js";
+export { MIGRATION_0012_PIPELINE_SCHEDULER } from "./pipeline-scheduler.js";
 
 /**
  * `PRAGMA application_id = 1213090609` (0x484E4B31, `"HNK1"`) is the first
@@ -1112,5 +1114,6 @@ export const MIGRATIONS: readonly Migration[] = Object.freeze([
   MIGRATION_0009_DURABLE_INTERACTIONS,
   MIGRATION_0010_ACCOUNT_SCHEDULING,
   MIGRATION_0011_NATIVE_BRIDGE,
+  MIGRATION_0012_PIPELINE_SCHEDULER,
 ]);
 assertAppendOnly(MIGRATIONS);

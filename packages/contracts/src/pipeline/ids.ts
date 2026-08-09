@@ -24,3 +24,27 @@ export type PipelineId = Static<typeof PipelineId>;
  */
 export const PipelineStageId = defineIdNamespace("PipelineStageId");
 export type PipelineStageId = Static<typeof PipelineStageId>;
+
+/**
+ * One immutable stage attempt identity. Derived deterministically from
+ * `(runId, graphRevision, stageId, generation, attemptOrdinal)` so a
+ * duplicate tick or a restart reload cannot mint a second attempt for the
+ * same logical try.
+ */
+export const PipelineAttemptId = defineIdNamespace("PipelineAttemptId");
+export type PipelineAttemptId = Static<typeof PipelineAttemptId>;
+
+/**
+ * One append-only scheduler decision. Derived from the same coordinates as
+ * the attempt plus the decision action, so uniqueness constraints turn
+ * duplicate ticks into no-ops.
+ */
+export const PipelineSchedulerDecisionId = defineIdNamespace("PipelineSchedulerDecisionId");
+export type PipelineSchedulerDecisionId = Static<typeof PipelineSchedulerDecisionId>;
+
+/**
+ * One uniquely keyed outbox intent (dispatch, cancellation, or evaluator).
+ * Q026 and later consumers drain these; Q025 only persists them.
+ */
+export const PipelineSchedulerIntentId = defineIdNamespace("PipelineSchedulerIntentId");
+export type PipelineSchedulerIntentId = Static<typeof PipelineSchedulerIntentId>;

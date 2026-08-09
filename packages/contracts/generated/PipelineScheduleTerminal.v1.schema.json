@@ -1,0 +1,46 @@
+{
+  "$id": "heniek://contract/PipelineScheduleTerminal/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "outcome",
+    "reason"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "outcome": {
+      "anyOf": [
+        {
+          "const": "succeeded",
+          "type": "string"
+        },
+        {
+          "const": "failed",
+          "type": "string"
+        },
+        {
+          "const": "cancelled",
+          "type": "string"
+        },
+        {
+          "const": "blocked",
+          "type": "string"
+        }
+      ]
+    },
+    "reason": {
+      "minLength": 1,
+      "maxLength": 256,
+      "type": "string"
+    },
+    "blockedStageId": {
+      "minLength": 1,
+      "description": "Opaque PipelineStageId.",
+      "type": "string"
+    }
+  }
+}

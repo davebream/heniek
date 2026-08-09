@@ -33,7 +33,7 @@ const FORBIDDEN_PATTERN =
  * lowered. A scan whose `srcRoot` were wrong would list zero files and
  * otherwise pass in silence.
  */
-const MINIMUM_SCANNED_FILES = 11;
+const MINIMUM_SCANNED_FILES = 16;
 
 async function listTypeScriptFiles(root: string): Promise<string[]> {
   const entries = await readdir(root, { recursive: true, withFileTypes: true });

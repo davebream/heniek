@@ -17,6 +17,7 @@
     "ajv-formats": "catalog:"
   },
   "devDependencies": {
+    "@heniek/pipeline": "workspace:*",
     "@sinclair/typebox": "catalog:",
     "tsx": "catalog:",
     "vitest": "catalog:"
