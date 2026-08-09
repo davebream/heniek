@@ -1,0 +1,198 @@
+{
+  "$id": "heniek://contract/PipelineSchedulerIntent/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "intentId",
+    "runId",
+    "graphRevision",
+    "kind",
+    "payload",
+    "createdAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "intentId": {
+      "minLength": 1,
+      "description": "Opaque PipelineSchedulerIntentId.",
+      "type": "string"
+    },
+    "runId": {
+      "minLength": 1,
+      "description": "Opaque RunId.",
+      "type": "string"
+    },
+    "graphRevision": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "kind": {
+      "anyOf": [
+        {
+          "const": "dispatch",
+          "type": "string"
+        },
+        {
+          "const": "cancel",
+          "type": "string"
+        },
+        {
+          "const": "evaluator",
+          "type": "string"
+        }
+      ]
+    },
+    "payload": {
+      "anyOf": [
+        {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "kind",
+            "stageId",
+            "stageType",
+            "attemptId",
+            "generation",
+            "attemptOrdinal"
+          ],
+          "properties": {
+            "kind": {
+              "const": "dispatch",
+              "type": "string"
+            },
+            "stageId": {
+              "minLength": 1,
+              "description": "Opaque PipelineStageId.",
+              "type": "string"
+            },
+            "stageType": {
+              "anyOf": [
+                {
+                  "const": "agent",
+                  "type": "string"
+                },
+                {
+                  "const": "command",
+                  "type": "string"
+                },
+                {
+                  "const": "approval",
+                  "type": "string"
+                },
+                {
+                  "const": "integration",
+                  "type": "string"
+                },
+                {
+                  "const": "verify",
+                  "type": "string"
+                },
+                {
+                  "const": "publish",
+                  "type": "string"
+                }
+              ]
+            },
+            "attemptId": {
+              "minLength": 1,
+              "description": "Opaque PipelineAttemptId.",
+              "type": "string"
+            },
+            "generation": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "attemptOrdinal": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        },
+        {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "kind",
+            "stageId",
+            "attemptId",
+            "generation",
+            "attemptOrdinal"
+          ],
+          "properties": {
+            "kind": {
+              "const": "cancel",
+              "type": "string"
+            },
+            "stageId": {
+              "minLength": 1,
+              "description": "Opaque PipelineStageId.",
+              "type": "string"
+            },
+            "attemptId": {
+              "minLength": 1,
+              "description": "Opaque PipelineAttemptId.",
+              "type": "string"
+            },
+            "generation": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "attemptOrdinal": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        },
+        {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "kind",
+            "fromStageId",
+            "toStageId",
+            "profile",
+            "question",
+            "edgeKey"
+          ],
+          "properties": {
+            "kind": {
+              "const": "evaluator",
+              "type": "string"
+            },
+            "fromStageId": {
+              "minLength": 1,
+              "description": "Opaque PipelineStageId.",
+              "type": "string"
+            },
+            "toStageId": {
+              "minLength": 1,
+              "description": "Opaque PipelineStageId.",
+              "type": "string"
+            },
+            "profile": {
+              "minLength": 1,
+              "description": "Opaque ProfileId.",
+              "type": "string"
+            },
+            "question": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "edgeKey": {
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        }
+      ]
+    },
+    "createdAt": {
+      "format": "date-time",
+      "type": "string"
+    }
+  }
+}

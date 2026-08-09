@@ -1,0 +1,198 @@
+{
+  "$id": "heniek://contract/PipelineStageTransition/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "stageId",
+    "from",
+    "to",
+    "reason",
+    "generation"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "stageId": {
+      "minLength": 1,
+      "description": "Opaque PipelineStageId.",
+      "type": "string"
+    },
+    "from": {
+      "anyOf": [
+        {
+          "const": "pending",
+          "type": "string"
+        },
+        {
+          "const": "ready",
+          "type": "string"
+        },
+        {
+          "const": "queued",
+          "type": "string"
+        },
+        {
+          "const": "running",
+          "type": "string"
+        },
+        {
+          "const": "waiting",
+          "type": "string"
+        },
+        {
+          "const": "retrying",
+          "type": "string"
+        },
+        {
+          "const": "succeeded",
+          "type": "string"
+        },
+        {
+          "const": "failed",
+          "type": "string"
+        },
+        {
+          "const": "cancelled",
+          "type": "string"
+        },
+        {
+          "const": "blocked",
+          "type": "string"
+        }
+      ]
+    },
+    "to": {
+      "anyOf": [
+        {
+          "const": "pending",
+          "type": "string"
+        },
+        {
+          "const": "ready",
+          "type": "string"
+        },
+        {
+          "const": "queued",
+          "type": "string"
+        },
+        {
+          "const": "running",
+          "type": "string"
+        },
+        {
+          "const": "waiting",
+          "type": "string"
+        },
+        {
+          "const": "retrying",
+          "type": "string"
+        },
+        {
+          "const": "succeeded",
+          "type": "string"
+        },
+        {
+          "const": "failed",
+          "type": "string"
+        },
+        {
+          "const": "cancelled",
+          "type": "string"
+        },
+        {
+          "const": "blocked",
+          "type": "string"
+        }
+      ]
+    },
+    "reason": {
+      "anyOf": [
+        {
+          "const": "dependencies_satisfied",
+          "type": "string"
+        },
+        {
+          "const": "root_eligible",
+          "type": "string"
+        },
+        {
+          "const": "dispatch_intent",
+          "type": "string"
+        },
+        {
+          "const": "attempt_started",
+          "type": "string"
+        },
+        {
+          "const": "attempt_waiting",
+          "type": "string"
+        },
+        {
+          "const": "attempt_succeeded",
+          "type": "string"
+        },
+        {
+          "const": "attempt_failed",
+          "type": "string"
+        },
+        {
+          "const": "retry_scheduled",
+          "type": "string"
+        },
+        {
+          "const": "retry_exhausted",
+          "type": "string"
+        },
+        {
+          "const": "condition_not_selected",
+          "type": "string"
+        },
+        {
+          "const": "condition_blocked",
+          "type": "string"
+        },
+        {
+          "const": "dependency_unsatisfied",
+          "type": "string"
+        },
+        {
+          "const": "cancel_requested",
+          "type": "string"
+        },
+        {
+          "const": "cancellation_settled",
+          "type": "string"
+        },
+        {
+          "const": "deadline_exceeded",
+          "type": "string"
+        },
+        {
+          "const": "manual_rerun",
+          "type": "string"
+        },
+        {
+          "const": "pipeline_cancelled",
+          "type": "string"
+        }
+      ]
+    },
+    "attemptId": {
+      "minLength": 1,
+      "description": "Opaque PipelineAttemptId.",
+      "type": "string"
+    },
+    "generation": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "blockReason": {
+      "minLength": 1,
+      "maxLength": 256,
+      "type": "string"
+    }
+  }
+}

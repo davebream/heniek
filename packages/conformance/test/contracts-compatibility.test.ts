@@ -139,6 +139,11 @@ const manifestPath = resolve(packageRoot, "../contracts/generated/manifest.json"
  * `SchedulingDecisionKind` instead of `string`, so the next omission is a
  * compile error rather than a wire-format lie.
  *
+ * Q025 raises the count 109 → 118 by pure addition: pipeline-runtime contracts
+ * for stage snapshots, attempts, transitions, scheduler decisions/intents/
+ * observations/plans, and terminal outcomes. All 109 prior hashes remain
+ * byte-identical.
+ *
  * Q024 raises the count 106 → 109 by pure addition again: `PipelineDefinition/v1`
  * (the authored YAML document), `PipelineGraph/v1` (its normalized form), and
  * `PipelineValidationResult/v1` (graph plus diagnostics). All 106 prior hashes
@@ -569,6 +574,60 @@ const EXPECTED_SCHEMAS: readonly {
     path: "generated/PipelineGraph.v1.schema.json",
   },
   {
+    schemaId: "heniek://contract/PipelineSchedulerDecision/v1",
+    schemaVersion: 1,
+    sha256: "1b50dfd40f42c7054409bdb7bbd40ce6faf467988f8bfaf52d9db9442ef54753",
+    path: "generated/PipelineSchedulerDecision.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/PipelineSchedulerInput/v1",
+    schemaVersion: 1,
+    sha256: "4b46ef59bdc4d6c2b7bc76acfa113ed71115aaa5f6b7d9f8c24be05a5acaf865",
+    path: "generated/PipelineSchedulerInput.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/PipelineSchedulerIntent/v1",
+    schemaVersion: 1,
+    sha256: "07ebcc752e4ba5c7d44eebe84da7a46bc43cdb4ae9336ef8f9ad7dc467f03a4d",
+    path: "generated/PipelineSchedulerIntent.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/PipelineSchedulerObservation/v1",
+    schemaVersion: 1,
+    sha256: "664c190560779b912f810f784a45b4c6291aca1fe6ef18007d0765be3a3b6675",
+    path: "generated/PipelineSchedulerObservation.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/PipelineSchedulerPlan/v1",
+    schemaVersion: 1,
+    sha256: "a7eed9ad580fb492f35aa18b811c1f46a57c76cb4d5cd0da7f2519d6b7dd2e98",
+    path: "generated/PipelineSchedulerPlan.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/PipelineScheduleTerminal/v1",
+    schemaVersion: 1,
+    sha256: "9e344dbdc3475ada6911e473a3763c1a6406092c23faff511c91e6cff19a9dcc",
+    path: "generated/PipelineScheduleTerminal.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/PipelineStageAttempt/v1",
+    schemaVersion: 1,
+    sha256: "761582f3ecc96d022e039a137af1b00f7df797ee2236d7bc97ed8170c1cbe842",
+    path: "generated/PipelineStageAttempt.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/PipelineStageSnapshot/v1",
+    schemaVersion: 1,
+    sha256: "ac1444c807a46c5a8666ab0551c8e7799ed79ddcecda7f5bc485cd6eaa227deb",
+    path: "generated/PipelineStageSnapshot.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/PipelineStageTransition/v1",
+    schemaVersion: 1,
+    sha256: "7ded13132b1385e5ffed72062ae9e5959966b0039dbfb76262eb9a015e3fd768",
+    path: "generated/PipelineStageTransition.v1.schema.json",
+  },
+  {
     schemaId: "heniek://contract/PipelineValidationResult/v1",
     schemaVersion: 1,
     sha256: "19a3183a732618aa3db2cb37aabe40fd923fef52f487c20b3901a6131cf5d1d4",
@@ -817,7 +876,7 @@ const EXPECTED_SCHEMAS: readonly {
 ];
 
 describe("packages/contracts generated manifest is unchanged (AC4)", () => {
-  it("manifest.json lists exactly the 109 known schemas with their recorded sha256", async () => {
+  it("manifest.json lists exactly the 118 known schemas with their recorded sha256", async () => {
     const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
     expect(manifest).toEqual({
       schemaVersion: "heniek.contracts-manifest.v1",

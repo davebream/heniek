@@ -1,0 +1,99 @@
+{
+  "$id": "heniek://contract/PipelineSchedulerInput/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "runId",
+    "pipelineId",
+    "graphRevision",
+    "scheduleRevision",
+    "graph",
+    "now",
+    "stages",
+    "observations",
+    "canonicalState",
+    "pendingEvaluatorEdgeKeys",
+    "evaluatorDecisions"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "runId": {
+      "minLength": 1,
+      "description": "Opaque RunId.",
+      "type": "string"
+    },
+    "pipelineId": {
+      "minLength": 1,
+      "description": "Opaque PipelineId.",
+      "type": "string"
+    },
+    "graphRevision": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "scheduleRevision": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "graph": {
+      "$ref": "heniek://contract/PipelineGraph/v1"
+    },
+    "now": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "deadlineAt": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "stages": {
+      "type": "array",
+      "items": {
+        "$ref": "heniek://contract/PipelineStageSnapshot/v1"
+      }
+    },
+    "observations": {
+      "type": "array",
+      "items": {
+        "$ref": "heniek://contract/PipelineSchedulerObservation/v1"
+      }
+    },
+    "canonicalState": {},
+    "pendingEvaluatorEdgeKeys": {
+      "type": "array",
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      }
+    },
+    "evaluatorDecisions": {
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "edgeKey",
+          "selected",
+          "recordedAt"
+        ],
+        "properties": {
+          "edgeKey": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "selected": {
+            "type": "boolean"
+          },
+          "recordedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

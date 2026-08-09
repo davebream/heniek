@@ -1,0 +1,81 @@
+{
+  "$id": "heniek://contract/PipelineSchedulerObservation/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "observationId",
+    "kind",
+    "recordedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "observationId": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "kind": {
+      "anyOf": [
+        {
+          "const": "attempt_started",
+          "type": "string"
+        },
+        {
+          "const": "attempt_waiting",
+          "type": "string"
+        },
+        {
+          "const": "attempt_succeeded",
+          "type": "string"
+        },
+        {
+          "const": "attempt_failed",
+          "type": "string"
+        },
+        {
+          "const": "cancellation_settled",
+          "type": "string"
+        },
+        {
+          "const": "evaluator_decided",
+          "type": "string"
+        },
+        {
+          "const": "cancel_requested",
+          "type": "string"
+        },
+        {
+          "const": "manual_rerun",
+          "type": "string"
+        }
+      ]
+    },
+    "stageId": {
+      "minLength": 1,
+      "description": "Opaque PipelineStageId.",
+      "type": "string"
+    },
+    "attemptId": {
+      "minLength": 1,
+      "description": "Opaque PipelineAttemptId.",
+      "type": "string"
+    },
+    "retryable": {
+      "type": "boolean"
+    },
+    "edgeKey": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "selected": {
+      "type": "boolean"
+    },
+    "recordedAt": {
+      "format": "date-time",
+      "type": "string"
+    }
+  }
+}

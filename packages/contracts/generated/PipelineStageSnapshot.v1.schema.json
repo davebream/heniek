@@ -1,0 +1,177 @@
+{
+  "$id": "heniek://contract/PipelineStageSnapshot/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "runId",
+    "stageId",
+    "graphRevision",
+    "generation",
+    "state",
+    "attemptOrdinal",
+    "selected",
+    "updatedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "runId": {
+      "minLength": 1,
+      "description": "Opaque RunId.",
+      "type": "string"
+    },
+    "stageId": {
+      "minLength": 1,
+      "description": "Opaque PipelineStageId.",
+      "type": "string"
+    },
+    "graphRevision": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "generation": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "state": {
+      "anyOf": [
+        {
+          "const": "pending",
+          "type": "string"
+        },
+        {
+          "const": "ready",
+          "type": "string"
+        },
+        {
+          "const": "queued",
+          "type": "string"
+        },
+        {
+          "const": "running",
+          "type": "string"
+        },
+        {
+          "const": "waiting",
+          "type": "string"
+        },
+        {
+          "const": "retrying",
+          "type": "string"
+        },
+        {
+          "const": "succeeded",
+          "type": "string"
+        },
+        {
+          "const": "failed",
+          "type": "string"
+        },
+        {
+          "const": "cancelled",
+          "type": "string"
+        },
+        {
+          "const": "blocked",
+          "type": "string"
+        }
+      ]
+    },
+    "attemptOrdinal": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "currentAttemptId": {
+      "minLength": 1,
+      "description": "Opaque PipelineAttemptId.",
+      "type": "string"
+    },
+    "lastTransitionReason": {
+      "anyOf": [
+        {
+          "const": "dependencies_satisfied",
+          "type": "string"
+        },
+        {
+          "const": "root_eligible",
+          "type": "string"
+        },
+        {
+          "const": "dispatch_intent",
+          "type": "string"
+        },
+        {
+          "const": "attempt_started",
+          "type": "string"
+        },
+        {
+          "const": "attempt_waiting",
+          "type": "string"
+        },
+        {
+          "const": "attempt_succeeded",
+          "type": "string"
+        },
+        {
+          "const": "attempt_failed",
+          "type": "string"
+        },
+        {
+          "const": "retry_scheduled",
+          "type": "string"
+        },
+        {
+          "const": "retry_exhausted",
+          "type": "string"
+        },
+        {
+          "const": "condition_not_selected",
+          "type": "string"
+        },
+        {
+          "const": "condition_blocked",
+          "type": "string"
+        },
+        {
+          "const": "dependency_unsatisfied",
+          "type": "string"
+        },
+        {
+          "const": "cancel_requested",
+          "type": "string"
+        },
+        {
+          "const": "cancellation_settled",
+          "type": "string"
+        },
+        {
+          "const": "deadline_exceeded",
+          "type": "string"
+        },
+        {
+          "const": "manual_rerun",
+          "type": "string"
+        },
+        {
+          "const": "pipeline_cancelled",
+          "type": "string"
+        }
+      ]
+    },
+    "blockReason": {
+      "minLength": 1,
+      "maxLength": 256,
+      "type": "string"
+    },
+    "selected": {
+      "type": "boolean"
+    },
+    "updatedAt": {
+      "format": "date-time",
+      "type": "string"
+    }
+  }
+}

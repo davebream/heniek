@@ -1,0 +1,296 @@
+{
+  "$id": "heniek://contract/PipelineSchedulerDecision/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "decisionId",
+    "runId",
+    "graphRevision",
+    "generation",
+    "attemptOrdinal",
+    "action",
+    "reason",
+    "recordedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "decisionId": {
+      "minLength": 1,
+      "description": "Opaque PipelineSchedulerDecisionId.",
+      "type": "string"
+    },
+    "runId": {
+      "minLength": 1,
+      "description": "Opaque RunId.",
+      "type": "string"
+    },
+    "stageId": {
+      "minLength": 1,
+      "description": "Opaque PipelineStageId.",
+      "type": "string"
+    },
+    "graphRevision": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "generation": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "attemptOrdinal": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "action": {
+      "anyOf": [
+        {
+          "const": "release",
+          "type": "string"
+        },
+        {
+          "const": "queue",
+          "type": "string"
+        },
+        {
+          "const": "start",
+          "type": "string"
+        },
+        {
+          "const": "wait",
+          "type": "string"
+        },
+        {
+          "const": "succeed",
+          "type": "string"
+        },
+        {
+          "const": "fail",
+          "type": "string"
+        },
+        {
+          "const": "retry",
+          "type": "string"
+        },
+        {
+          "const": "rearm",
+          "type": "string"
+        },
+        {
+          "const": "cancel",
+          "type": "string"
+        },
+        {
+          "const": "block",
+          "type": "string"
+        },
+        {
+          "const": "select_edge",
+          "type": "string"
+        },
+        {
+          "const": "reject_edge",
+          "type": "string"
+        },
+        {
+          "const": "request_evaluator",
+          "type": "string"
+        },
+        {
+          "const": "request_cancel",
+          "type": "string"
+        },
+        {
+          "const": "rerun",
+          "type": "string"
+        },
+        {
+          "const": "terminal",
+          "type": "string"
+        }
+      ]
+    },
+    "reason": {
+      "anyOf": [
+        {
+          "const": "dependencies_satisfied",
+          "type": "string"
+        },
+        {
+          "const": "root_eligible",
+          "type": "string"
+        },
+        {
+          "const": "dispatch_intent",
+          "type": "string"
+        },
+        {
+          "const": "attempt_started",
+          "type": "string"
+        },
+        {
+          "const": "attempt_waiting",
+          "type": "string"
+        },
+        {
+          "const": "attempt_succeeded",
+          "type": "string"
+        },
+        {
+          "const": "attempt_failed",
+          "type": "string"
+        },
+        {
+          "const": "retry_scheduled",
+          "type": "string"
+        },
+        {
+          "const": "retry_exhausted",
+          "type": "string"
+        },
+        {
+          "const": "condition_not_selected",
+          "type": "string"
+        },
+        {
+          "const": "condition_blocked",
+          "type": "string"
+        },
+        {
+          "const": "dependency_unsatisfied",
+          "type": "string"
+        },
+        {
+          "const": "cancel_requested",
+          "type": "string"
+        },
+        {
+          "const": "cancellation_settled",
+          "type": "string"
+        },
+        {
+          "const": "deadline_exceeded",
+          "type": "string"
+        },
+        {
+          "const": "manual_rerun",
+          "type": "string"
+        },
+        {
+          "const": "pipeline_cancelled",
+          "type": "string"
+        }
+      ]
+    },
+    "fromState": {
+      "anyOf": [
+        {
+          "const": "pending",
+          "type": "string"
+        },
+        {
+          "const": "ready",
+          "type": "string"
+        },
+        {
+          "const": "queued",
+          "type": "string"
+        },
+        {
+          "const": "running",
+          "type": "string"
+        },
+        {
+          "const": "waiting",
+          "type": "string"
+        },
+        {
+          "const": "retrying",
+          "type": "string"
+        },
+        {
+          "const": "succeeded",
+          "type": "string"
+        },
+        {
+          "const": "failed",
+          "type": "string"
+        },
+        {
+          "const": "cancelled",
+          "type": "string"
+        },
+        {
+          "const": "blocked",
+          "type": "string"
+        }
+      ]
+    },
+    "toState": {
+      "anyOf": [
+        {
+          "const": "pending",
+          "type": "string"
+        },
+        {
+          "const": "ready",
+          "type": "string"
+        },
+        {
+          "const": "queued",
+          "type": "string"
+        },
+        {
+          "const": "running",
+          "type": "string"
+        },
+        {
+          "const": "waiting",
+          "type": "string"
+        },
+        {
+          "const": "retrying",
+          "type": "string"
+        },
+        {
+          "const": "succeeded",
+          "type": "string"
+        },
+        {
+          "const": "failed",
+          "type": "string"
+        },
+        {
+          "const": "cancelled",
+          "type": "string"
+        },
+        {
+          "const": "blocked",
+          "type": "string"
+        }
+      ]
+    },
+    "attemptId": {
+      "minLength": 1,
+      "description": "Opaque PipelineAttemptId.",
+      "type": "string"
+    },
+    "intentId": {
+      "minLength": 1,
+      "description": "Opaque PipelineSchedulerIntentId.",
+      "type": "string"
+    },
+    "detail": {
+      "minLength": 1,
+      "maxLength": 512,
+      "type": "string"
+    },
+    "recordedAt": {
+      "format": "date-time",
+      "type": "string"
+    }
+  }
+}
