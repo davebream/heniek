@@ -46,8 +46,8 @@ afterEach(async () => {
 describe("migration 12 — pipeline scheduler", () => {
   it("creates the pipeline scheduler tables on a fresh database", () => {
     runMigrations(db);
-    expect(readUserVersion(internalHandle(db))).toBe(12);
-    expect(currentSchemaVersion()).toBe(12);
+    expect(readUserVersion(internalHandle(db))).toBe(currentSchemaVersion());
+    expect(currentSchemaVersion()).toBeGreaterThanOrEqual(12);
     const names = new Set(
       internalHandle(db)
         .prepare("SELECT name FROM sqlite_schema WHERE type = 'table'")
@@ -62,7 +62,7 @@ describe("migration 12 — pipeline scheduler", () => {
   it("upgrades from migration 11 without touching existing rows", () => {
     runMigrationList(db, MIGRATIONS, 11);
     expect(readUserVersion(internalHandle(db))).toBe(11);
-    expect(runMigrations(db)).toMatchObject({ fromVersion: 11, toVersion: 12 });
+    expect(runMigrationList(db, MIGRATIONS, 12)).toMatchObject({ fromVersion: 11, toVersion: 12 });
     expect(readUserVersion(internalHandle(db))).toBe(12);
     for (const table of PIPELINE_TABLES) {
       const count = Number(

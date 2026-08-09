@@ -14,9 +14,11 @@
  */
 
 import { assertAppendOnly, type Migration } from "./migration.js";
+import { MIGRATION_0013_PIPELINE_RUNNER } from "./pipeline-runner.js";
 import { MIGRATION_0012_PIPELINE_SCHEDULER } from "./pipeline-scheduler.js";
 
 export type { Migration } from "./migration.js";
+export { MIGRATION_0013_PIPELINE_RUNNER } from "./pipeline-runner.js";
 export { MIGRATION_0012_PIPELINE_SCHEDULER } from "./pipeline-scheduler.js";
 
 /**
@@ -1115,5 +1117,6 @@ export const MIGRATIONS: readonly Migration[] = Object.freeze([
   MIGRATION_0010_ACCOUNT_SCHEDULING,
   MIGRATION_0011_NATIVE_BRIDGE,
   MIGRATION_0012_PIPELINE_SCHEDULER,
+  MIGRATION_0013_PIPELINE_RUNNER,
 ]);
 assertAppendOnly(MIGRATIONS);

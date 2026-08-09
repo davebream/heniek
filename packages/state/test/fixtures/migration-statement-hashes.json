@@ -46,5 +46,9 @@
   "12": {
     "name": "pipeline-scheduler",
     "statementHash": "f2a0d82cbdde805d772af552463e72eb9b25768ac63fa082d7f864e30b815a98"
+  },
+  "13": {
+    "name": "pipeline-runner",
+    "statementHash": "5a05528a9823adbb626c8d36a1f95680fa038b3f8651cf8d9620ebc3ca069209"
   }
 }

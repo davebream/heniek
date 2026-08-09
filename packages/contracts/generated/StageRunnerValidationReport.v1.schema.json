@@ -1,0 +1,58 @@
+{
+  "$id": "heniek://contract/StageRunnerValidationReport/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "attemptId",
+    "valid",
+    "missingWrites",
+    "missingEvidence",
+    "envelopeValid",
+    "exitCodeAlone",
+    "recordedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "attemptId": {
+      "minLength": 1,
+      "description": "Opaque PipelineAttemptId.",
+      "type": "string"
+    },
+    "valid": {
+      "type": "boolean"
+    },
+    "missingWrites": {
+      "type": "array",
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      }
+    },
+    "missingEvidence": {
+      "type": "array",
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      }
+    },
+    "envelopeValid": {
+      "type": "boolean"
+    },
+    "exitCodeAlone": {
+      "type": "boolean"
+    },
+    "recordedAt": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "detail": {
+      "minLength": 1,
+      "maxLength": 1024,
+      "type": "string"
+    }
+  }
+}

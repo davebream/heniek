@@ -101,6 +101,13 @@ export { attachDaemonRpcServer, createConnectionHandler } from "./runtime/compos
 export { createSystemHostWitness } from "./runtime/host-witness.js";
 export { createNodeLockFileSystem } from "./runtime/lock-filesystem.js";
 export { createHmacSha256MacProvider } from "./runtime/mac.js";
+export {
+  createPipelineRunnerService,
+  type PipelineCodebaseContext,
+  type PipelineRunnerService,
+  type PipelineRunnerServiceOptions,
+  resolvePipelineCodebaseContextFromRepository,
+} from "./runtime/pipeline-runner-service.js";
 export { createSystemProcessLiveness } from "./runtime/process-liveness.js";
 export { createSystemRandomSource } from "./runtime/random-source.js";
 export {

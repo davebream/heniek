@@ -155,6 +155,10 @@ import { createSystemHostWitness } from "./host-witness.js";
 import { createNodeLockFileSystem } from "./lock-filesystem.js";
 import { createHmacSha256MacProvider } from "./mac.js";
 import { createNativeBridgeService, type NativeBridgeService } from "./native-bridge-service.js";
+import {
+  createPipelineRunnerService,
+  type PipelineRunnerService,
+} from "./pipeline-runner-service.js";
 import { createSystemProcessLiveness } from "./process-liveness.js";
 import { createSystemRandomSource } from "./random-source.js";
 import { createSchedulingExecutionService } from "./scheduling-service.js";
@@ -342,6 +346,23 @@ export interface StartDaemonDeps {
     readonly resolveProfileChain: (
       profileId: string,
     ) => Promise<Static<typeof ResolvedProfileChainV1>> | Static<typeof ResolvedProfileChainV1>;
+  };
+  /**
+   * Q026 pipeline stage runners (agent/command). Reuses the V7 backend and
+   * profile resolver; requires an explicit codebase-context callback because
+   * pipeline schedules are not bound to a single `currentDirectory` start.
+   */
+  readonly pipelineRunner?: {
+    readonly backend: ExecutionBackendV7;
+    readonly resolveProfileChain: (
+      profileId: string,
+    ) => Promise<Static<typeof ResolvedProfileChainV1>> | Static<typeof ResolvedProfileChainV1>;
+    readonly resolveCodebaseContext: (runId: string) => {
+      readonly codebaseId: string;
+      readonly repositoryId: string;
+      readonly defaultRemote: string;
+      readonly defaultBranch: string;
+    };
   };
   /**
    * Q023 native Claude bridge. A dedicated resolver rather than reusing
@@ -583,6 +604,23 @@ export async function startDaemon(deps: StartDaemonDeps): Promise<StartDaemonOut
           createIdentifierReader: (identifiers) =>
             createScopedSecretReader(secretStore, identifiers),
         });
+  const pipelineRunnerService: PipelineRunnerService | undefined =
+    deps.pipelineRunner === undefined
+      ? undefined
+      : createPipelineRunnerService({
+          db: workspaceDatabase,
+          backend: deps.pipelineRunner.backend,
+          workspaceService,
+          artifactsDirectory: home.paths.artifactsDirectory,
+          runtimeDirectory: home.paths.runtimeDirectory,
+          instanceId,
+          ids,
+          clock,
+          resolveProfileChain: deps.pipelineRunner.resolveProfileChain,
+          resolveCodebaseContext: deps.pipelineRunner.resolveCodebaseContext,
+          createIdentifierReader: (identifiers) =>
+            createScopedSecretReader(secretStore, identifiers),
+        });
   const nativeBridgeService: NativeBridgeService | undefined =
     deps.nativeBridge === undefined
       ? undefined
@@ -606,6 +644,7 @@ export async function startDaemon(deps: StartDaemonDeps): Promise<StartDaemonOut
         });
   await executionService?.observeAll();
   await schedulingService?.reconcile();
+  await pipelineRunnerService?.reconcile();
   nativeBridgeService?.reconcile();
   const startedAt = clock.nowIso();
   const reconciliation = reconcileResult?.reconciliation ?? EMPTY_RECONCILIATION;
@@ -645,6 +684,7 @@ export async function startDaemon(deps: StartDaemonDeps): Promise<StartDaemonOut
     await socket.close();
     executionService?.stop();
     schedulingService?.stop();
+    pipelineRunnerService?.stop();
     nativeBridgeService?.stop();
     workspaceDatabase.close();
     // Inode-verified: only unlinks if the path still carries this guard's

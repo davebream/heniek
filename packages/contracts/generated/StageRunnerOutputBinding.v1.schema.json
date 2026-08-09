@@ -1,0 +1,50 @@
+{
+  "$id": "heniek://contract/StageRunnerOutputBinding/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "reference",
+    "kind"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "reference": {
+      "minLength": 1,
+      "maxLength": 256,
+      "type": "string"
+    },
+    "kind": {
+      "anyOf": [
+        {
+          "const": "value",
+          "type": "string"
+        },
+        {
+          "const": "artifact",
+          "type": "string"
+        }
+      ]
+    },
+    "value": {},
+    "artifactId": {
+      "minLength": 1,
+      "description": "Opaque ArtifactId.",
+      "type": "string"
+    },
+    "contentHash": {
+      "minLength": 64,
+      "maxLength": 64,
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "relativePath": {
+      "minLength": 1,
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\u0000).+$",
+      "type": "string"
+    }
+  }
+}
