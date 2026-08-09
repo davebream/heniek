@@ -129,9 +129,30 @@ function scriptedBackend(options: {
   readonly artifacts?: Artifact[];
   readonly bytesById?: Record<string, Uint8Array>;
   readonly cancelStatuses?: ExecutionStatus[];
-}): ExecutionBackendV7 & { readonly startCalls: number; readonly cancelCalls: number } {
+  readonly knownExecutionIds?: ReadonlySet<string>;
+  readonly statusError?: Error;
+}): ExecutionBackendV7 & {
+  readonly startCalls: number;
+  readonly cancelCalls: number;
+  readonly resumeCalls: number;
+  readonly lastResume?:
+    | {
+        readonly executionId: string;
+        readonly operationId: string;
+        readonly inputArtifactRefs: readonly string[];
+      }
+    | undefined;
+} {
   let startCalls = 0;
   let cancelCalls = 0;
+  let resumeCalls = 0;
+  let lastResume:
+    | {
+        readonly executionId: string;
+        readonly operationId: string;
+        readonly inputArtifactRefs: readonly string[];
+      }
+    | undefined;
   let statusIndex = 0;
   let afterCancel = false;
   let cancelStatusIndex = 0;
@@ -139,6 +160,7 @@ function scriptedBackend(options: {
   const cancelStatuses = options.cancelStatuses ?? ["cancelled"];
   const artifacts = options.artifacts ?? [];
   const bytesById = options.bytesById ?? {};
+  const knownExecutionIds = options.knownExecutionIds;
   const result =
     options.result ??
     ({
@@ -156,6 +178,12 @@ function scriptedBackend(options: {
     get cancelCalls() {
       return cancelCalls;
     },
+    get resumeCalls() {
+      return resumeCalls;
+    },
+    get lastResume() {
+      return lastResume;
+    },
     async start() {
       startCalls += 1;
       return {
@@ -163,7 +191,13 @@ function scriptedBackend(options: {
         executionId: asBackendExecutionId("exec_1"),
       } satisfies Handle;
     },
-    async status() {
+    async status(executionId) {
+      if (options.statusError !== undefined) {
+        throw options.statusError;
+      }
+      if (knownExecutionIds !== undefined && !knownExecutionIds.has(executionId)) {
+        throw new Error(`unknown execution ${executionId}`);
+      }
       if (afterCancel) {
         const status = cancelStatuses[Math.min(cancelStatusIndex, cancelStatuses.length - 1)];
         if (status === undefined) {
@@ -183,7 +217,14 @@ function scriptedBackend(options: {
       return [];
     },
     async answer() {},
-    async resume() {},
+    async resume(request) {
+      resumeCalls += 1;
+      lastResume = {
+        executionId: request.executionId,
+        operationId: request.operationId,
+        inputArtifactRefs: [...request.inputArtifactRefs],
+      };
+    },
     async result() {
       return result;
     },
@@ -354,5 +395,123 @@ describe("createAgentStageRunner", () => {
     expect(report.detail).toMatch(/digest mismatch/i);
     const finalized = await runner.finalize("att_agent_1");
     expect(finalized.result.outcome).toBe("failed");
+  });
+
+  it("resumes a prior backend execution instead of calling start", async () => {
+    const checkout = await tempRoot();
+    const runtime = join(checkout, ".runtime");
+    const backend = scriptedBackend({
+      knownExecutionIds: new Set(["exec_prior"]),
+      statuses: ["succeeded"],
+    });
+    const runner = createAgentStageRunner({
+      backend,
+      resolveProfile: async (id) => profile(id),
+      resolvePermissions: async (p) => ({
+        schemaVersion: 1,
+        workspace: p.permissions.workspace,
+        identifiers: [...p.permissions.identifiers],
+      }),
+      resolveAgentInvocation: async () => ({
+        prompt: "continue",
+        artifactPath: "artifacts/design.md",
+        inputArtifactRefs: [],
+      }),
+      identifierReader: { read: async () => null },
+    });
+
+    const input = {
+      ...prepareInput(checkout, runtime, agentStage()),
+      retryDirective: {
+        mode: "resume" as const,
+        sessionPolicy: "resume" as const,
+        priorBackendExecutionId: "exec_prior",
+        priorAttemptId: "att_prior",
+      },
+    };
+    await runner.prepare(input);
+    await runner.start("att_agent_1");
+    expect(backend.startCalls).toBe(0);
+    expect(backend.resumeCalls).toBe(1);
+    expect(backend.lastResume).toEqual({
+      executionId: "exec_prior",
+      operationId: "resume:att_agent_1",
+      inputArtifactRefs: [],
+    });
+
+    const observation = await runner.observe("att_agent_1");
+    expect(observation).toEqual({ status: "terminal", backendStatus: "succeeded" });
+  });
+
+  it("does not silent-fresh when resume prior is missing", async () => {
+    const checkout = await tempRoot();
+    const runtime = join(checkout, ".runtime");
+    const backend = scriptedBackend({
+      knownExecutionIds: new Set(["exec_other"]),
+    });
+    const runner = createAgentStageRunner({
+      backend,
+      resolveProfile: async (id) => profile(id),
+      resolvePermissions: async (p) => ({
+        schemaVersion: 1,
+        workspace: p.permissions.workspace,
+        identifiers: [...p.permissions.identifiers],
+      }),
+      resolveAgentInvocation: async () => ({
+        prompt: "continue",
+        artifactPath: "artifacts/design.md",
+        inputArtifactRefs: [],
+      }),
+      identifierReader: { read: async () => null },
+    });
+
+    await runner.prepare({
+      ...prepareInput(checkout, runtime, agentStage()),
+      retryDirective: {
+        mode: "resume",
+        sessionPolicy: "resume",
+        priorBackendExecutionId: "exec_missing",
+      },
+    });
+    await runner.start("att_agent_1");
+    expect(backend.startCalls).toBe(0);
+    expect(backend.resumeCalls).toBe(0);
+
+    const observation = await runner.observe("att_agent_1");
+    expect(observation).toEqual({ status: "terminal", backendStatus: "failed" });
+    await runner.collect("att_agent_1");
+    const finalized = await runner.finalize("att_agent_1");
+    expect(finalized.result.outcome).toBe("failed");
+    expect(finalized.result.failure?.code).toBe("resume_prior_missing");
+    expect(finalized.result.failure?.retryable).toBe(false);
+  });
+
+  it("still calls start for fresh retry directives", async () => {
+    const checkout = await tempRoot();
+    const runtime = join(checkout, ".runtime");
+    const backend = scriptedBackend({});
+    const runner = createAgentStageRunner({
+      backend,
+      resolveProfile: async (id) => profile(id),
+      resolvePermissions: async (p) => ({
+        schemaVersion: 1,
+        workspace: p.permissions.workspace,
+        identifiers: [...p.permissions.identifiers],
+      }),
+      resolveAgentInvocation: async () => ({
+        prompt: "retry fresh",
+        artifactPath: "artifacts/design.md",
+        inputArtifactRefs: [],
+      }),
+      identifierReader: { read: async () => null },
+    });
+
+    await runner.prepare({
+      ...prepareInput(checkout, runtime, agentStage()),
+      retryDirective: { mode: "fresh", sessionPolicy: "fresh" },
+    });
+    await runner.start("att_agent_1");
+    expect(backend.startCalls).toBe(1);
+    expect(backend.resumeCalls).toBe(0);
   });
 });

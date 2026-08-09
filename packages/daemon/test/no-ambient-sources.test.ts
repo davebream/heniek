@@ -106,6 +106,12 @@ const EXPECTED_EXEMPTIONS: readonly string[] = [
   "runtime/pipeline-runner-service.ts",
   "runtime/process-liveness.ts",
   "runtime/random-source.ts",
+  /*
+   * Pure failure-classification helper for Q028 observation payloads. Listed
+   * for directory-membership completeness; it imports only @heniek/pipeline
+   * classifiers and has no ambient I/O.
+   */
+  "runtime/recovery-observation.ts",
   "runtime/scheduling-service.ts",
   "runtime/signals.ts",
   "runtime/socket-probe.ts",
@@ -130,7 +136,7 @@ const EXPECTED_EXEMPTIONS: readonly string[] = [
  * of Phase 5, the eleven `src/runtime/**` adapters included. A scan whose
  * `srcRoot` were wrong would list zero files and otherwise pass silently.
  */
-const MINIMUM_SCANNED_FILES = 39;
+const MINIMUM_SCANNED_FILES = 40;
 
 async function listTypeScriptFiles(root: string): Promise<string[]> {
   const entries = await readdir(root, { recursive: true, withFileTypes: true });

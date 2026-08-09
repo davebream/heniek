@@ -1,0 +1,159 @@
+{
+  "$id": "heniek://contract/PipelineRecoveryDecision/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "decisionId",
+    "runId",
+    "stageId",
+    "graphRevision",
+    "generation",
+    "attemptOrdinal",
+    "action",
+    "outcome",
+    "repairsUsed",
+    "repairBudget",
+    "identicalSignatureCount",
+    "recordedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "decisionId": {
+      "minLength": 1,
+      "description": "Opaque PipelineRecoveryDecisionId.",
+      "type": "string"
+    },
+    "runId": {
+      "minLength": 1,
+      "description": "Opaque RunId.",
+      "type": "string"
+    },
+    "stageId": {
+      "minLength": 1,
+      "description": "Opaque PipelineStageId.",
+      "type": "string"
+    },
+    "graphRevision": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "generation": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "attemptOrdinal": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "action": {
+      "anyOf": [
+        {
+          "const": "propose",
+          "type": "string"
+        },
+        {
+          "const": "approve",
+          "type": "string"
+        },
+        {
+          "const": "reject",
+          "type": "string"
+        },
+        {
+          "const": "dispatch",
+          "type": "string"
+        },
+        {
+          "const": "block",
+          "type": "string"
+        },
+        {
+          "const": "fail",
+          "type": "string"
+        },
+        {
+          "const": "exhaust",
+          "type": "string"
+        }
+      ]
+    },
+    "outcome": {
+      "anyOf": [
+        {
+          "const": "pause",
+          "type": "string"
+        },
+        {
+          "const": "fail",
+          "type": "string"
+        },
+        {
+          "const": "repair",
+          "type": "string"
+        },
+        {
+          "const": "repair_fresh",
+          "type": "string"
+        },
+        {
+          "const": "delegate",
+          "type": "string"
+        },
+        {
+          "const": "exhausted",
+          "type": "string"
+        },
+        {
+          "const": "unchanged_exhausted",
+          "type": "string"
+        },
+        {
+          "const": "rejected",
+          "type": "string"
+        },
+        {
+          "const": "blocked",
+          "type": "string"
+        }
+      ]
+    },
+    "failure": {
+      "$ref": "heniek://contract/PipelineFailure/v1"
+    },
+    "signature": {
+      "$ref": "heniek://contract/PipelineFailureSignature/v1"
+    },
+    "directive": {
+      "$ref": "heniek://contract/PipelineRetryDirective/v1"
+    },
+    "proposalId": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "repairsUsed": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "repairBudget": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "identicalSignatureCount": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "detail": {
+      "minLength": 1,
+      "maxLength": 512,
+      "type": "string"
+    },
+    "recordedAt": {
+      "format": "date-time",
+      "type": "string"
+    }
+  }
+}

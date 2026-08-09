@@ -62,8 +62,23 @@ describe("pipeline stage transitions", () => {
     expect(adjacency.pending).toEqual(["blocked", "cancelled", "ready"]);
     expect(adjacency.ready).toEqual(["blocked", "cancelled", "queued"]);
     expect(adjacency.queued).toEqual(["cancelled", "running"]);
-    expect(adjacency.running).toEqual(["cancelled", "failed", "retrying", "succeeded", "waiting"]);
-    expect(adjacency.waiting).toEqual(["cancelled", "failed", "retrying", "running", "succeeded"]);
+    expect(adjacency.running).toEqual([
+      "blocked",
+      "cancelled",
+      "failed",
+      "retrying",
+      "succeeded",
+      "waiting",
+    ]);
+    expect(adjacency.waiting).toEqual([
+      "blocked",
+      "cancelled",
+      "failed",
+      "retrying",
+      "running",
+      "succeeded",
+      "waiting",
+    ]);
     expect(adjacency.retrying).toEqual(["cancelled", "failed", "ready"]);
     expect(adjacency.succeeded).toEqual(["pending"]);
     expect(adjacency.failed).toEqual(["pending"]);

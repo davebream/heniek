@@ -5,18 +5,30 @@ import { RunId } from "../run/ids.js";
 import {
   PipelineAttemptId,
   PipelineId,
+  PipelineRecoveryDecisionId,
   PipelineSchedulerDecisionId,
   PipelineSchedulerIntentId,
   PipelineStageId,
 } from "./ids.js";
+import {
+  PipelineFailureSignatureV1,
+  PipelineFailureV1,
+  PipelineRecoveryDecisionV1,
+  PipelineRetryDirectiveV1,
+} from "./recovery.js";
 import { PipelineGraphV1 } from "./schemas.js";
 import { PipelineStageState } from "./state.js";
 import {
+  PipelineExecutionMode,
   PipelineSchedulerDecisionAction,
+  PipelineSchedulerDecisionActionV2,
   PipelineSchedulerIntentKind,
+  PipelineSchedulerIntentKindV2,
+  PipelineSessionPolicy,
   PipelineStageType,
   PipelineTerminalOutcome,
   PipelineTransitionReason,
+  PipelineTransitionReasonV2,
 } from "./vocabulary.js";
 
 /**
@@ -228,4 +240,189 @@ export const PipelineSchedulerPlanV1 = versioned("PipelineSchedulerPlan", 1, {
   stagePatches: Type.Array(Type.Ref(PipelineStageSnapshotV1)),
   consumedObservationIds: Type.Array(Type.String({ minLength: 1 })),
   terminal: Type.Optional(Type.Ref(PipelineScheduleTerminalV1)),
+});
+
+const Sha256Hex = Type.String({
+  minLength: 64,
+  maxLength: 64,
+  pattern: "^[0-9a-f]{64}$",
+});
+
+const RecoveryDispatchIntentPayload = Type.Object(
+  {
+    kind: Type.Literal("recovery_dispatch"),
+    stageId: PipelineStageId,
+    stageType: PipelineStageType,
+    attemptId: PipelineAttemptId,
+    generation: Type.Integer({ minimum: 1 }),
+    attemptOrdinal: Type.Integer({ minimum: 1 }),
+    directive: Type.Ref(PipelineRetryDirectiveV1),
+    recoveryDecisionId: PipelineRecoveryDecisionId,
+  },
+  { additionalProperties: false },
+);
+
+/**
+ * V2 observation envelope. V1 stays frozen; recovery kinds and failure
+ * fingerprints are additive optional fields.
+ */
+export const PipelineSchedulerObservationV2 = versioned("PipelineSchedulerObservation", 2, {
+  observationId: Type.String({ minLength: 1 }),
+  kind: Type.Union([
+    Type.Literal("attempt_started"),
+    Type.Literal("attempt_waiting"),
+    Type.Literal("attempt_succeeded"),
+    Type.Literal("attempt_failed"),
+    Type.Literal("cancellation_settled"),
+    Type.Literal("evaluator_decided"),
+    Type.Literal("cancel_requested"),
+    Type.Literal("manual_rerun"),
+    Type.Literal("recovery_proposed"),
+    Type.Literal("recovery_approved"),
+    Type.Literal("recovery_rejected"),
+  ]),
+  stageId: Type.Optional(PipelineStageId),
+  attemptId: Type.Optional(PipelineAttemptId),
+  /** When `attempt_failed`, whether another repair attempt is allowed by policy. */
+  retryable: Type.Optional(Type.Boolean()),
+  /** Evaluator edge key (`from\\0to`) and whether the branch was selected. */
+  edgeKey: Type.Optional(Type.String({ minLength: 1 })),
+  selected: Type.Optional(Type.Boolean()),
+  recordedAt: Type.String({ format: "date-time" }),
+  failure: Type.Optional(Type.Ref(PipelineFailureV1)),
+  signature: Type.Optional(Type.Ref(PipelineFailureSignatureV1)),
+  recoveryDecisionId: Type.Optional(PipelineRecoveryDecisionId),
+  proposalId: Type.Optional(Type.String({ minLength: 1 })),
+  /** For `recovery_approved` / `recovery_rejected`. */
+  approved: Type.Optional(Type.Boolean()),
+});
+
+/** V2 outbox intent including recovery-driven dispatch. */
+export const PipelineSchedulerIntentV2 = versioned("PipelineSchedulerIntent", 2, {
+  intentId: PipelineSchedulerIntentId,
+  runId: RunId,
+  graphRevision: Type.Integer({ minimum: 1 }),
+  kind: PipelineSchedulerIntentKindV2,
+  payload: Type.Union([
+    DispatchIntentPayload,
+    CancelIntentPayload,
+    EvaluatorIntentPayload,
+    RecoveryDispatchIntentPayload,
+  ]),
+  createdAt: Type.String({ format: "date-time" }),
+});
+
+/**
+ * Scheduler stage attempt with optional recovery binding. Distinct from
+ * `StageRunnerAttempt` — this is the scheduler's attempt ledger row.
+ */
+export const PipelineStageAttemptV2 = versioned("PipelineStageAttempt", 2, {
+  attemptId: PipelineAttemptId,
+  runId: RunId,
+  pipelineId: PipelineId,
+  stageId: PipelineStageId,
+  graphRevision: Type.Integer({ minimum: 1 }),
+  generation: Type.Integer({ minimum: 1 }),
+  attemptOrdinal: Type.Integer({ minimum: 1 }),
+  stageType: PipelineStageType,
+  createdAt: Type.String({ format: "date-time" }),
+  sessionPolicy: Type.Optional(PipelineSessionPolicy),
+  priorAttemptId: Type.Optional(PipelineAttemptId),
+  recoveryDecisionId: Type.Optional(PipelineRecoveryDecisionId),
+  delegatedProfileId: Type.Optional(ProfileId),
+  retryDirective: Type.Optional(Type.Ref(PipelineRetryDirectiveV1)),
+});
+
+/**
+ * V2 scheduler decision with widened reason/action vocabulary and optional
+ * recovery linkage.
+ */
+export const PipelineSchedulerDecisionV2 = versioned("PipelineSchedulerDecision", 2, {
+  decisionId: PipelineSchedulerDecisionId,
+  runId: RunId,
+  stageId: Type.Optional(PipelineStageId),
+  graphRevision: Type.Integer({ minimum: 1 }),
+  generation: Type.Integer({ minimum: 1 }),
+  attemptOrdinal: Type.Integer({ minimum: 0 }),
+  action: PipelineSchedulerDecisionActionV2,
+  reason: PipelineTransitionReasonV2,
+  fromState: Type.Optional(PipelineStageState.schema),
+  toState: Type.Optional(PipelineStageState.schema),
+  attemptId: Type.Optional(PipelineAttemptId),
+  intentId: Type.Optional(PipelineSchedulerIntentId),
+  detail: Type.Optional(Type.String({ minLength: 1, maxLength: 512 })),
+  recordedAt: Type.String({ format: "date-time" }),
+  recoveryDecisionId: Type.Optional(PipelineRecoveryDecisionId),
+  signatureDigest: Type.Optional(Sha256Hex),
+});
+
+const PipelineStageRecoveryState = Type.Object(
+  {
+    stageId: PipelineStageId,
+    generation: Type.Integer({ minimum: 1 }),
+    repairsUsed: Type.Integer({ minimum: 0 }),
+    lastSignatureDigest: Type.Optional(Sha256Hex),
+    identicalSignatureCount: Type.Integer({ minimum: 0 }),
+    pendingProposalId: Type.Optional(Type.String({ minLength: 1 })),
+    pendingProposalJson: Type.Optional(Type.Unknown()),
+  },
+  { additionalProperties: false },
+);
+
+const PipelineEffectiveLimits = Type.Object(
+  {
+    maxRepairAttempts: Type.Optional(Type.Integer({ minimum: 0 })),
+    maxConcurrentWorkers: Type.Optional(Type.Integer({ minimum: 1 })),
+    maxPipelineDurationMs: Type.Optional(Type.Integer({ minimum: 1 })),
+    maxGraphRevisions: Type.Optional(Type.Integer({ minimum: 1 })),
+    stageDurationMsByStageId: Type.Optional(
+      Type.Record(Type.String({ minLength: 1 }), Type.Integer({ minimum: 1 })),
+    ),
+  },
+  { additionalProperties: false },
+);
+
+/** V2 scheduler input with recovery counters, effective limits, and mode. */
+export const PipelineSchedulerInputV2 = versioned("PipelineSchedulerInput", 2, {
+  runId: RunId,
+  pipelineId: PipelineId,
+  graphRevision: Type.Integer({ minimum: 1 }),
+  scheduleRevision: Type.Integer({ minimum: 1 }),
+  graph: Type.Ref(PipelineGraphV1),
+  now: Type.String({ format: "date-time" }),
+  deadlineAt: Type.Optional(Type.String({ format: "date-time" })),
+  stages: Type.Array(Type.Ref(PipelineStageSnapshotV1)),
+  observations: Type.Array(Type.Ref(PipelineSchedulerObservationV2)),
+  canonicalState: Type.Unknown(),
+  pendingEvaluatorEdgeKeys: Type.Array(Type.String({ minLength: 1 })),
+  evaluatorDecisions: Type.Array(
+    Type.Object(
+      {
+        edgeKey: Type.String({ minLength: 1 }),
+        selected: Type.Boolean(),
+        recordedAt: Type.String({ format: "date-time" }),
+      },
+      { additionalProperties: false },
+    ),
+  ),
+  recoveryState: Type.Optional(Type.Array(PipelineStageRecoveryState)),
+  effectiveLimits: Type.Optional(PipelineEffectiveLimits),
+  executionMode: Type.Optional(PipelineExecutionMode),
+});
+
+/** V2 plan carrying recovery decisions and V2 attempt/intent/decision rows. */
+export const PipelineSchedulerPlanV2 = versioned("PipelineSchedulerPlan", 2, {
+  runId: RunId,
+  graphRevision: Type.Integer({ minimum: 1 }),
+  expectedScheduleRevision: Type.Integer({ minimum: 1 }),
+  nextScheduleRevision: Type.Integer({ minimum: 1 }),
+  recordedAt: Type.String({ format: "date-time" }),
+  transitions: Type.Array(Type.Ref(PipelineStageTransitionV1)),
+  decisions: Type.Array(Type.Ref(PipelineSchedulerDecisionV2)),
+  intents: Type.Array(Type.Ref(PipelineSchedulerIntentV2)),
+  attempts: Type.Array(Type.Ref(PipelineStageAttemptV2)),
+  stagePatches: Type.Array(Type.Ref(PipelineStageSnapshotV1)),
+  consumedObservationIds: Type.Array(Type.String({ minLength: 1 })),
+  terminal: Type.Optional(Type.Ref(PipelineScheduleTerminalV1)),
+  recoveryDecisions: Type.Array(Type.Ref(PipelineRecoveryDecisionV1)),
 });

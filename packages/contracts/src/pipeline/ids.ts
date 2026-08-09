@@ -48,3 +48,11 @@ export type PipelineSchedulerDecisionId = Static<typeof PipelineSchedulerDecisio
  */
 export const PipelineSchedulerIntentId = defineIdNamespace("PipelineSchedulerIntentId");
 export type PipelineSchedulerIntentId = Static<typeof PipelineSchedulerIntentId>;
+
+/**
+ * One auditable recovery decision (propose / approve / reject / dispatch /
+ * block / fail / exhaust). Identity is opaque on the wire; derivation rules
+ * live with the recovery policy implementation.
+ */
+export const PipelineRecoveryDecisionId = defineIdNamespace("PipelineRecoveryDecisionId");
+export type PipelineRecoveryDecisionId = Static<typeof PipelineRecoveryDecisionId>;

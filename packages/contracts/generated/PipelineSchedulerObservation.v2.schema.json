@@ -1,0 +1,111 @@
+{
+  "$id": "heniek://contract/PipelineSchedulerObservation/v2",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "observationId",
+    "kind",
+    "recordedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 2,
+      "type": "number"
+    },
+    "observationId": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "kind": {
+      "anyOf": [
+        {
+          "const": "attempt_started",
+          "type": "string"
+        },
+        {
+          "const": "attempt_waiting",
+          "type": "string"
+        },
+        {
+          "const": "attempt_succeeded",
+          "type": "string"
+        },
+        {
+          "const": "attempt_failed",
+          "type": "string"
+        },
+        {
+          "const": "cancellation_settled",
+          "type": "string"
+        },
+        {
+          "const": "evaluator_decided",
+          "type": "string"
+        },
+        {
+          "const": "cancel_requested",
+          "type": "string"
+        },
+        {
+          "const": "manual_rerun",
+          "type": "string"
+        },
+        {
+          "const": "recovery_proposed",
+          "type": "string"
+        },
+        {
+          "const": "recovery_approved",
+          "type": "string"
+        },
+        {
+          "const": "recovery_rejected",
+          "type": "string"
+        }
+      ]
+    },
+    "stageId": {
+      "minLength": 1,
+      "description": "Opaque PipelineStageId.",
+      "type": "string"
+    },
+    "attemptId": {
+      "minLength": 1,
+      "description": "Opaque PipelineAttemptId.",
+      "type": "string"
+    },
+    "retryable": {
+      "type": "boolean"
+    },
+    "edgeKey": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "selected": {
+      "type": "boolean"
+    },
+    "recordedAt": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "failure": {
+      "$ref": "heniek://contract/PipelineFailure/v1"
+    },
+    "signature": {
+      "$ref": "heniek://contract/PipelineFailureSignature/v1"
+    },
+    "recoveryDecisionId": {
+      "minLength": 1,
+      "description": "Opaque PipelineRecoveryDecisionId.",
+      "type": "string"
+    },
+    "proposalId": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "approved": {
+      "type": "boolean"
+    }
+  }
+}

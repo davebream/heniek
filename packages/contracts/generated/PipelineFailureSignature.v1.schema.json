@@ -1,0 +1,80 @@
+{
+  "$id": "heniek://contract/PipelineFailureSignature/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "digest",
+    "category",
+    "classification",
+    "phase",
+    "code"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "digest": {
+      "minLength": 64,
+      "maxLength": 64,
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "category": {
+      "anyOf": [
+        {
+          "const": "transient",
+          "type": "string"
+        },
+        {
+          "const": "provider",
+          "type": "string"
+        },
+        {
+          "const": "validation",
+          "type": "string"
+        },
+        {
+          "const": "conflict",
+          "type": "string"
+        },
+        {
+          "const": "security",
+          "type": "string"
+        },
+        {
+          "const": "terminal",
+          "type": "string"
+        }
+      ]
+    },
+    "classification": {
+      "minLength": 1,
+      "maxLength": 128,
+      "type": "string"
+    },
+    "phase": {
+      "minLength": 1,
+      "maxLength": 64,
+      "type": "string"
+    },
+    "code": {
+      "minLength": 1,
+      "maxLength": 128,
+      "type": "string"
+    },
+    "backendClassification": {
+      "minLength": 1,
+      "maxLength": 128,
+      "type": "string"
+    },
+    "validationFailures": {
+      "type": "array",
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      }
+    }
+  }
+}

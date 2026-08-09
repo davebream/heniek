@@ -1,0 +1,64 @@
+{
+  "$id": "heniek://contract/PipelineRetryDirective/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "mode",
+    "sessionPolicy"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "mode": {
+      "anyOf": [
+        {
+          "const": "fresh",
+          "type": "string"
+        },
+        {
+          "const": "resume",
+          "type": "string"
+        },
+        {
+          "const": "delegate",
+          "type": "string"
+        }
+      ]
+    },
+    "sessionPolicy": {
+      "anyOf": [
+        {
+          "const": "fresh",
+          "type": "string"
+        },
+        {
+          "const": "resume",
+          "type": "string"
+        }
+      ]
+    },
+    "priorAttemptId": {
+      "minLength": 1,
+      "description": "Opaque PipelineAttemptId.",
+      "type": "string"
+    },
+    "priorBackendExecutionId": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "delegateTo": {
+      "minLength": 1,
+      "description": "Opaque ProfileId.",
+      "type": "string"
+    },
+    "recoveryContextDigest": {
+      "minLength": 64,
+      "maxLength": 64,
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    }
+  }
+}

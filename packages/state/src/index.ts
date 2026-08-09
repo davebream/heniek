@@ -162,6 +162,26 @@ export {
   type WitnessClassifier,
 } from "./native-bridge/store.js";
 export {
+  type InsertRecoveryDecisionInput,
+  type InsertRetryDirectiveInput,
+  insertRecoveryDecision,
+  insertRetryDirective,
+  listRecoveryDecisions,
+  listStageRecoveryStates,
+  type PipelineCanonicalRunStateRow,
+  type PipelineRecoveryDecisionRow,
+  type PipelineRetryDirectiveRow,
+  type PipelineStageRecoveryStateRow,
+  readCanonicalRunState,
+  readRetryDirective,
+  readStageRecoveryState,
+  recordRecoveryApproval,
+  type UpsertCanonicalRunStateInput,
+  type UpsertStageRecoveryStateInput,
+  upsertCanonicalRunState,
+  upsertStageRecoveryState,
+} from "./pipeline/recovery-store.js";
+export {
   type AppendRunnerExternalObservationInput,
   type AppendRunnerReconciliationTraceInput,
   appendRunnerExternalObservation,

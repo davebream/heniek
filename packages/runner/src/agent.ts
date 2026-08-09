@@ -8,7 +8,7 @@ import { ExternalStageResultV1 } from "@heniek/contracts";
 import { validateExecutionWorkspace } from "@heniek/workspace";
 import { Value } from "@sinclair/typebox/value";
 import { bump, notifyStore, systemClock } from "./attempt.js";
-import { asAttemptId, asStageId, asWorkspaceId } from "./brands.js";
+import { asAttemptId, asBackendExecutionId, asStageId, asWorkspaceId } from "./brands.js";
 import { redactFailureMessage } from "./redact.js";
 import type {
   AgentStageRunnerDeps,
@@ -23,6 +23,7 @@ import type {
   StageRunnerPrepareInput,
   StageRunnerPrepareOutcome,
   StageRunnerResult,
+  StageRunnerRetryDirective,
   StageRunnerValidationReport,
 } from "./types.js";
 import { validateStageCompletion } from "./validate.js";
@@ -33,13 +34,29 @@ interface AgentAttemptState {
   readonly executionRequest: ExecutionRequest;
   readonly writes: readonly string[];
   readonly requirements: NonNullable<StageRunnerPrepareInput["stage"]["completion"]>["require"];
+  readonly retryDirective?: StageRunnerRetryDirective;
+  readonly priorBackendExecutionId?: string;
   started: boolean;
+  /** Resume was requested but prior execution was missing or resume failed. */
+  resumeFailed?: StageRunnerFailure;
   backendStatus?: ExecutionStatus;
   timedOut: boolean;
   cancelled: boolean;
   cleanup?: StageRunnerCleanupReport;
   validation?: StageRunnerValidationReport;
   digestMismatch: boolean;
+}
+
+function resumeFailure(message: string, code: string): StageRunnerFailure {
+  return {
+    schemaVersion: 1,
+    classification: "start_failed",
+    phase: "start",
+    code,
+    message: redactFailureMessage(message),
+    retryable: false,
+    recovery: "none",
+  } as StageRunnerFailure;
 }
 
 function minIso(a: string | undefined, b: string | undefined): string | undefined {
@@ -202,12 +219,17 @@ export function createAgentStageRunner(deps: AgentStageRunnerDeps): StageRunner 
         createdAt: now,
       };
 
+      const priorBackendExecutionId =
+        input.priorBackendExecutionId ?? input.retryDirective?.priorBackendExecutionId;
+
       attempts.set(input.attemptId, {
         snapshot,
         profile,
         executionRequest,
         writes: [...input.stage.writes],
         requirements: input.stage.completion?.require ?? [],
+        ...(input.retryDirective === undefined ? {} : { retryDirective: input.retryDirective }),
+        ...(priorBackendExecutionId === undefined ? {} : { priorBackendExecutionId }),
         started: false,
         timedOut: false,
         cancelled: false,
@@ -231,6 +253,68 @@ export function createAgentStageRunner(deps: AgentStageRunnerDeps): StageRunner 
       if (state.started) {
         throw new Error("agent backend.start must be called exactly once");
       }
+
+      const mode = state.retryDirective?.mode ?? "fresh";
+      const priorId = state.priorBackendExecutionId;
+
+      if (mode === "resume") {
+        if (priorId === undefined || priorId.length === 0) {
+          state.resumeFailed = resumeFailure(
+            "resume requested without priorBackendExecutionId",
+            "resume_missing_prior",
+          );
+          state.snapshot.failure = state.resumeFailed;
+          state.started = true;
+          state.snapshot.phase = "start";
+          state.snapshot.startedAt = clock.nowIso();
+          bump(state.snapshot, clock);
+          await notifyStore(deps.store, state.snapshot);
+          state.snapshot.phase = "observe";
+          bump(state.snapshot, clock);
+          await notifyStore(deps.store, state.snapshot);
+          return;
+        }
+
+        try {
+          await deps.backend.status(priorId);
+        } catch {
+          state.resumeFailed = resumeFailure(
+            `resume requested but prior backend execution ${priorId} is unavailable`,
+            "resume_prior_missing",
+          );
+          state.snapshot.failure = state.resumeFailed;
+          state.started = true;
+          state.snapshot.phase = "start";
+          state.snapshot.startedAt = clock.nowIso();
+          bump(state.snapshot, clock);
+          await notifyStore(deps.store, state.snapshot);
+          state.snapshot.phase = "observe";
+          bump(state.snapshot, clock);
+          await notifyStore(deps.store, state.snapshot);
+          return;
+        }
+
+        await deps.backend.resume({
+          schemaVersion: 1,
+          executionId: asBackendExecutionId(priorId),
+          operationId: `resume:${attemptId}`,
+          inputArtifactRefs: [...state.executionRequest.inputArtifactRefs],
+        });
+        state.started = true;
+        // Resume continues the prior backend identity — do not mint a new id.
+        state.snapshot.backendExecutionId = priorId;
+        state.snapshot.phase = "start";
+        state.snapshot.startedAt = clock.nowIso();
+        bump(state.snapshot, clock);
+        await notifyStore(deps.store, state.snapshot);
+        state.snapshot.phase = "observe";
+        bump(state.snapshot, clock);
+        await notifyStore(deps.store, state.snapshot);
+        return;
+      }
+
+      // fresh and delegate both start a new backend execution; daemon resolves
+      // delegated profiles onto stage.profile before prepare.
       const handle = await deps.backend.start(state.executionRequest, {
         identifierReader: deps.identifierReader,
       });
@@ -247,6 +331,10 @@ export function createAgentStageRunner(deps: AgentStageRunnerDeps): StageRunner 
 
     async observe(attemptId: string): Promise<StageRunnerObserveOutcome> {
       const state = requireAttempt(attemptId);
+      if (state.resumeFailed !== undefined) {
+        state.backendStatus = "failed";
+        return { status: "terminal", backendStatus: "failed" };
+      }
       const executionId = state.snapshot.backendExecutionId;
       if (executionId === undefined) {
         throw new Error("observe called before start");
@@ -360,6 +448,12 @@ export function createAgentStageRunner(deps: AgentStageRunnerDeps): StageRunner 
     async collect(attemptId: string): Promise<void> {
       const state = requireAttempt(attemptId);
       state.snapshot.phase = "collect";
+      if (state.resumeFailed !== undefined) {
+        state.snapshot.failure = state.resumeFailed;
+        bump(state.snapshot, clock);
+        await notifyStore(deps.store, state.snapshot);
+        return;
+      }
       const executionId = state.snapshot.backendExecutionId;
       if (executionId === undefined) {
         throw new Error("collect called before start");

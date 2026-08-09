@@ -410,4 +410,173 @@ describe("tickScheduler", () => {
     const input = baseInput(linearGraph());
     expect(JSON.stringify(tickScheduler(input))).toBe(JSON.stringify(tickScheduler(input)));
   });
+
+  it("schedules validation repair_fresh with a retry directive on the next attempt", () => {
+    const graph: PipelineGraph = {
+      schemaVersion: 1,
+      pipelineId: "repair",
+      mode: "autonomous",
+      limits: { maxRepairAttempts: 3 },
+      context: {},
+      stages: [
+        {
+          id: "design",
+          type: "agent",
+          mode: "autonomous",
+          optional: false,
+          profile: "designer",
+          reads: ["task.current"],
+          writes: ["artifacts.design"],
+          overridable: [],
+          onValidationFailure: { strategy: "repair_fresh" },
+        },
+      ],
+      edges: [],
+    } as never;
+    const queued = tickScheduler(baseInput(graph));
+    const failed = tickScheduler({
+      ...baseInput(graph),
+      scheduleRevision: 2,
+      stages: queued.stagePatches,
+      effectiveLimits: { maxRepairAttempts: 3 },
+      observations: [
+        {
+          schemaVersion: 2,
+          observationId: "s",
+          kind: "attempt_started",
+          stageId: "design",
+          attemptId: queued.attempts[0]!.attemptId,
+          recordedAt: "2026-08-09T12:00:01.000Z",
+        },
+        {
+          schemaVersion: 2,
+          observationId: "f",
+          kind: "attempt_failed",
+          stageId: "design",
+          attemptId: queued.attempts[0]!.attemptId,
+          retryable: true,
+          classification: "validation_failed",
+          phase: "validate",
+          code: "schema",
+          recordedAt: "2026-08-09T12:00:02.000Z",
+        },
+      ],
+    });
+    expect(failed.stagePatches.find((stage) => stage.stageId === "design")?.state).toBe("retrying");
+    expect(failed.recoveryDecisions?.[0]?.outcome).toBe("repair_fresh");
+
+    const rearmed = tickScheduler({
+      ...baseInput(graph),
+      scheduleRevision: 3,
+      stages: failed.stagePatches,
+      effectiveLimits: { maxRepairAttempts: 3 },
+      ...(failed.recoveryState !== undefined ? { recoveryState: failed.recoveryState } : {}),
+      observations: [],
+    });
+    expect(rearmed.attempts[0]?.attemptOrdinal).toBe(2);
+    expect(rearmed.attempts[0]?.retryDirective?.mode).toBe("fresh");
+    expect(rearmed.attempts[0]?.sessionPolicy).toBe("fresh");
+  });
+
+  it("fails with unchanged_failure_exhausted for repeated identical signatures", () => {
+    const graph: PipelineGraph = {
+      schemaVersion: 1,
+      pipelineId: "unchanged",
+      mode: "autonomous",
+      limits: { maxRepairAttempts: 2 },
+      context: {},
+      stages: [
+        {
+          id: "design",
+          type: "agent",
+          mode: "autonomous",
+          optional: false,
+          profile: "designer",
+          reads: ["task.current"],
+          writes: ["artifacts.design"],
+          overridable: [],
+        },
+      ],
+      edges: [],
+    } as never;
+    const queued = tickScheduler(baseInput(graph));
+    const firstFail = tickScheduler({
+      ...baseInput(graph),
+      scheduleRevision: 2,
+      stages: queued.stagePatches,
+      effectiveLimits: { maxRepairAttempts: 2 },
+      observations: [
+        {
+          schemaVersion: 2,
+          observationId: "s1",
+          kind: "attempt_started",
+          stageId: "design",
+          attemptId: queued.attempts[0]!.attemptId,
+          recordedAt: "2026-08-09T12:00:01.000Z",
+        },
+        {
+          schemaVersion: 2,
+          observationId: "f1",
+          kind: "attempt_failed",
+          stageId: "design",
+          attemptId: queued.attempts[0]!.attemptId,
+          retryable: true,
+          classification: "timeout",
+          phase: "running",
+          code: "timeout",
+          recordedAt: "2026-08-09T12:00:02.000Z",
+        },
+      ],
+    });
+    expect(firstFail.stagePatches.find((stage) => stage.stageId === "design")?.state).toBe(
+      "retrying",
+    );
+
+    const rearmed = tickScheduler({
+      ...baseInput(graph),
+      scheduleRevision: 3,
+      stages: firstFail.stagePatches,
+      effectiveLimits: { maxRepairAttempts: 2 },
+      ...(firstFail.recoveryState !== undefined ? { recoveryState: firstFail.recoveryState } : {}),
+      observations: [],
+    });
+    const secondFail = tickScheduler({
+      ...baseInput(graph),
+      scheduleRevision: 4,
+      stages: rearmed.stagePatches,
+      effectiveLimits: { maxRepairAttempts: 2 },
+      ...(rearmed.recoveryState !== undefined ? { recoveryState: rearmed.recoveryState } : {}),
+      observations: [
+        {
+          schemaVersion: 2,
+          observationId: "s2",
+          kind: "attempt_started",
+          stageId: "design",
+          attemptId: rearmed.attempts[0]!.attemptId,
+          recordedAt: "2026-08-09T12:00:03.000Z",
+        },
+        {
+          schemaVersion: 2,
+          observationId: "f2",
+          kind: "attempt_failed",
+          stageId: "design",
+          attemptId: rearmed.attempts[0]!.attemptId,
+          retryable: true,
+          classification: "timeout",
+          phase: "running",
+          code: "timeout",
+          recordedAt: "2026-08-09T12:00:04.000Z",
+        },
+      ],
+    });
+    expect(secondFail.stagePatches.find((stage) => stage.stageId === "design")?.state).toBe(
+      "failed",
+    );
+    expect(
+      secondFail.decisions.some((decision) => decision.reason === "unchanged_failure_exhausted"),
+    ).toBe(true);
+    expect(
+      secondFail.recoveryDecisions?.some((decision) => decision.outcome === "unchanged_exhausted"),
+    ).toBe(true);
+  });
 });
