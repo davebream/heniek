@@ -3,6 +3,7 @@ export * from "./document.js";
 export * from "./expression/evaluate.js";
 export * from "./expression/lex.js";
 export * from "./expression/parse.js";
+export * from "./fusion/index.js";
 export * from "./graph/canonical.js";
 export * from "./graph/normalize.js";
 export * from "./graph/validate.js";

@@ -1,4 +1,4 @@
-export { createAgentStageRunner } from "./agent.js";
+export { asExecutionBackendV8, createAgentStageRunner } from "./agent.js";
 export { type ApprovalStageRunner, createApprovalStageRunner } from "./approval.js";
 export { asAttemptId, asProfileId, asStageId, asWorkspaceId } from "./brands.js";
 export { createCommandStageRunner } from "./command.js";
@@ -48,6 +48,7 @@ export type {
   StageRunnerPrepareOutcome,
   StageRunnerResult,
   StageRunnerRetryDirective,
+  StageRunnerSegmentDirective,
   StageRunnerStageType,
   StageRunnerStoreCallbacks,
   StageRunnerValidationReport,

@@ -643,6 +643,20 @@ export const ExecutionResumeRequestV1 = versioned("ExecutionResumeRequest", 1, {
   inputArtifactRefs: Type.Array(ArtifactId),
 });
 
+/**
+ * Q029 resume for fused stage succession and smart continuation. Carries the
+ * next stage's bounded instruction and optional capsule reference so adapters
+ * can create the next `/v2` turn without provider DTOs. V1 stays frozen.
+ */
+export const ExecutionResumeRequestV2 = versioned("ExecutionResumeRequest", 2, {
+  executionId: BackendExecutionId,
+  operationId: Type.String({ minLength: 1 }),
+  inputArtifactRefs: Type.Array(ArtifactId),
+  instruction: Type.String({ minLength: 1, maxLength: 1024 }),
+  stageId: Type.Optional(StageId),
+  capsuleRef: Type.Optional(ArtifactId),
+});
+
 export const BackendArtifactV1 = versioned("BackendArtifact", 1, {
   id: BackendArtifactId,
   path: Type.String({ minLength: 1 }),

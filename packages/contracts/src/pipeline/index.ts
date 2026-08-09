@@ -1,3 +1,4 @@
+export * from "./fusion.js";
 export * from "./ids.js";
 export * from "./operations.js";
 export * from "./recovery.js";

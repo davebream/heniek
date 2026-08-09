@@ -1,0 +1,216 @@
+{
+  "$id": "heniek://contract/PipelineFusionDecision/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "decisionId",
+    "runId",
+    "fromStageId",
+    "toStageId",
+    "outcome",
+    "recordedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "decisionId": {
+      "minLength": 1,
+      "description": "Opaque PipelineFusionDecisionId.",
+      "type": "string"
+    },
+    "runId": {
+      "minLength": 1,
+      "description": "Opaque RunId.",
+      "type": "string"
+    },
+    "fromStageId": {
+      "minLength": 1,
+      "description": "Opaque PipelineStageId.",
+      "type": "string"
+    },
+    "toStageId": {
+      "minLength": 1,
+      "description": "Opaque PipelineStageId.",
+      "type": "string"
+    },
+    "fromAttemptId": {
+      "minLength": 1,
+      "description": "Opaque PipelineAttemptId.",
+      "type": "string"
+    },
+    "toAttemptId": {
+      "minLength": 1,
+      "description": "Opaque PipelineAttemptId.",
+      "type": "string"
+    },
+    "outcome": {
+      "anyOf": [
+        {
+          "const": "fuse",
+          "type": "string"
+        },
+        {
+          "const": "split",
+          "type": "string"
+        }
+      ]
+    },
+    "splitReason": {
+      "anyOf": [
+        {
+          "const": "explicit_fresh",
+          "type": "string"
+        },
+        {
+          "const": "profile_mismatch",
+          "type": "string"
+        },
+        {
+          "const": "fingerprint_mismatch",
+          "type": "string"
+        },
+        {
+          "const": "permissions_mismatch",
+          "type": "string"
+        },
+        {
+          "const": "workspace_mismatch",
+          "type": "string"
+        },
+        {
+          "const": "lease_mismatch",
+          "type": "string"
+        },
+        {
+          "const": "backend_no_continuation",
+          "type": "string"
+        },
+        {
+          "const": "fresh_review_required",
+          "type": "string"
+        },
+        {
+          "const": "retry_requires_fresh",
+          "type": "string"
+        },
+        {
+          "const": "delegated_recovery",
+          "type": "string"
+        },
+        {
+          "const": "branching_ambiguity",
+          "type": "string"
+        },
+        {
+          "const": "pressure_unavailable",
+          "type": "string"
+        },
+        {
+          "const": "pressure_contradictory",
+          "type": "string"
+        },
+        {
+          "const": "pressure_soft_threshold",
+          "type": "string"
+        },
+        {
+          "const": "pressure_hard_threshold",
+          "type": "string"
+        },
+        {
+          "const": "capacity_exhausted",
+          "type": "string"
+        },
+        {
+          "const": "non_agent_stage",
+          "type": "string"
+        },
+        {
+          "const": "not_adjacent",
+          "type": "string"
+        }
+      ]
+    },
+    "segmentId": {
+      "minLength": 1,
+      "description": "Opaque PipelineSegmentId.",
+      "type": "string"
+    },
+    "pressure": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "confidence",
+        "state",
+        "softThreshold",
+        "hardThreshold"
+      ],
+      "properties": {
+        "ratio": {
+          "minimum": 0,
+          "maximum": 1,
+          "type": "number"
+        },
+        "confidence": {
+          "anyOf": [
+            {
+              "const": "exact",
+              "type": "string"
+            },
+            {
+              "const": "estimated",
+              "type": "string"
+            },
+            {
+              "const": "unavailable",
+              "type": "string"
+            }
+          ]
+        },
+        "state": {
+          "anyOf": [
+            {
+              "const": "measured",
+              "type": "string"
+            },
+            {
+              "const": "exhausted",
+              "type": "string"
+            },
+            {
+              "const": "unavailable",
+              "type": "string"
+            }
+          ]
+        },
+        "softThreshold": {
+          "minimum": 0,
+          "maximum": 1,
+          "type": "number"
+        },
+        "hardThreshold": {
+          "minimum": 0,
+          "maximum": 1,
+          "type": "number"
+        },
+        "telemetryCursor": {
+          "minLength": 1,
+          "maxLength": 256,
+          "type": "string"
+        }
+      }
+    },
+    "detail": {
+      "minLength": 1,
+      "maxLength": 512,
+      "type": "string"
+    },
+    "recordedAt": {
+      "format": "date-time",
+      "type": "string"
+    }
+  }
+}

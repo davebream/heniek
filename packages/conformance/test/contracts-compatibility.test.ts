@@ -158,6 +158,10 @@ const manifestPath = resolve(packageRoot, "../contracts/generated/manifest.json"
  * observation/intent/attempt/decision/input/plan v2. All 142 prior hashes
  * remain byte-identical.
  *
+ * Q029 raises the count 152 → 157 by pure addition: PipelineExecutionSegment/
+ * FusionDecision/ContinuationCapsule/IncomingVerification v1 and
+ * ExecutionResumeRequest v2. All 152 prior hashes remain byte-identical.
+ *
  * Q024 raises the count 106 → 109 by pure addition again: `PipelineDefinition/v1`
  * (the authored YAML document), `PipelineGraph/v1` (its normalized form), and
  * `PipelineValidationResult/v1` (graph plus diagnostics). All 106 prior hashes
@@ -438,6 +442,12 @@ const EXPECTED_SCHEMAS: readonly {
     path: "generated/ExecutionResumeRequest.v1.schema.json",
   },
   {
+    schemaId: "heniek://contract/ExecutionResumeRequest/v2",
+    schemaVersion: 2,
+    sha256: "ca164d5d59ab47a8555dcd16b08967b815d3c4e7113f933466a4840a3648fa6b",
+    path: "generated/ExecutionResumeRequest.v2.schema.json",
+  },
+  {
     schemaId: "heniek://contract/ExecutionTelemetry/v1",
     schemaVersion: 1,
     sha256: "ebf92b2b848a42cedb66191b4fe8b00a9aaea6d32182e1409f5f0b8123f0a306",
@@ -606,10 +616,22 @@ const EXPECTED_SCHEMAS: readonly {
     path: "generated/PendingInteraction.v2.schema.json",
   },
   {
+    schemaId: "heniek://contract/PipelineContinuationCapsule/v1",
+    schemaVersion: 1,
+    sha256: "dc88fa4e396c08fb55c80c755b6d07c52157b720e818a810d4df7d77db1843fc",
+    path: "generated/PipelineContinuationCapsule.v1.schema.json",
+  },
+  {
     schemaId: "heniek://contract/PipelineDefinition/v1",
     schemaVersion: 1,
     sha256: "8f13880f0509468a85ed5b7e8701e8bdddf00fae640e8c7b3fc4f24b5dec14a1",
     path: "generated/PipelineDefinition.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/PipelineExecutionSegment/v1",
+    schemaVersion: 1,
+    sha256: "a7a579514bd322db32d324582242f933f636a3d0d5c73b2818b93d19131326cc",
+    path: "generated/PipelineExecutionSegment.v1.schema.json",
   },
   {
     schemaId: "heniek://contract/PipelineFailure/v1",
@@ -624,10 +646,22 @@ const EXPECTED_SCHEMAS: readonly {
     path: "generated/PipelineFailureSignature.v1.schema.json",
   },
   {
+    schemaId: "heniek://contract/PipelineFusionDecision/v1",
+    schemaVersion: 1,
+    sha256: "bfd39b491aaad92db1423a8ab1c48067cd239b7c957d13f591ff5caf09038c3f",
+    path: "generated/PipelineFusionDecision.v1.schema.json",
+  },
+  {
     schemaId: "heniek://contract/PipelineGraph/v1",
     schemaVersion: 1,
     sha256: "16307f658328ededa1998ef22706004b4bce06247d6775df0361616dd7dfa3b1",
     path: "generated/PipelineGraph.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/PipelineIncomingVerification/v1",
+    schemaVersion: 1,
+    sha256: "2b7cdf7ae891a18b603946d5b834e7bb1f7e87667670a4706c32820803cc3e1e",
+    path: "generated/PipelineIncomingVerification.v1.schema.json",
   },
   {
     schemaId: "heniek://contract/PipelineRecoveryDecision/v1",
@@ -1094,7 +1128,7 @@ const EXPECTED_SCHEMAS: readonly {
 ];
 
 describe("packages/contracts generated manifest is unchanged (AC4)", () => {
-  it("manifest.json lists exactly the 152 known schemas with their recorded sha256", async () => {
+  it("manifest.json lists exactly the 157 known schemas with their recorded sha256", async () => {
     const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
     expect(manifest).toEqual({
       schemaVersion: "heniek.contracts-manifest.v1",

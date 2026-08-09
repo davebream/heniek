@@ -72,8 +72,8 @@ function seedStageAttempt(handle: ReturnType<typeof internalHandle>, attemptId =
 describe("migration 15 — pipeline recovery", () => {
   it("creates recovery tables on a fresh database", () => {
     runMigrations(db);
-    expect(readUserVersion(internalHandle(db))).toBe(15);
-    expect(currentSchemaVersion()).toBe(15);
+    expect(readUserVersion(internalHandle(db))).toBe(currentSchemaVersion());
+    expect(currentSchemaVersion()).toBeGreaterThanOrEqual(15);
     const names = new Set(
       internalHandle(db)
         .prepare("SELECT name FROM sqlite_schema WHERE type = 'table'")
@@ -107,8 +107,11 @@ describe("migration 15 — pipeline recovery", () => {
          VALUES ('obs:1', 'run-1', 'attempt_failed', '{}', ?, NULL)`,
       )
       .run(NOW);
-    expect(runMigrations(db)).toMatchObject({ fromVersion: 14, toVersion: 15 });
-    expect(readUserVersion(handle)).toBe(15);
+    expect(runMigrations(db)).toMatchObject({
+      fromVersion: 14,
+      toVersion: currentSchemaVersion(),
+    });
+    expect(readUserVersion(handle)).toBe(currentSchemaVersion());
 
     const preserved = handle
       .prepare(`SELECT observation_id, kind FROM pipeline_scheduler_observation`)

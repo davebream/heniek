@@ -1,0 +1,148 @@
+{
+  "$id": "heniek://contract/PipelineIncomingVerification/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "verificationId",
+    "capsuleId",
+    "runId",
+    "verdict",
+    "blockers",
+    "observedHeads",
+    "observedDirtyFiles",
+    "recordedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "verificationId": {
+      "minLength": 1,
+      "description": "Opaque PipelineIncomingVerificationId.",
+      "type": "string"
+    },
+    "capsuleId": {
+      "minLength": 1,
+      "description": "Opaque PipelineContinuationCapsuleId.",
+      "type": "string"
+    },
+    "runId": {
+      "minLength": 1,
+      "description": "Opaque RunId.",
+      "type": "string"
+    },
+    "segmentId": {
+      "minLength": 1,
+      "description": "Opaque PipelineSegmentId.",
+      "type": "string"
+    },
+    "verdict": {
+      "anyOf": [
+        {
+          "const": "pass",
+          "type": "string"
+        },
+        {
+          "const": "block",
+          "type": "string"
+        }
+      ]
+    },
+    "blockers": {
+      "maxItems": 64,
+      "type": "array",
+      "items": {
+        "anyOf": [
+          {
+            "const": "schema_invalid",
+            "type": "string"
+          },
+          {
+            "const": "digest_mismatch",
+            "type": "string"
+          },
+          {
+            "const": "missing_artifact",
+            "type": "string"
+          },
+          {
+            "const": "artifact_hash_mismatch",
+            "type": "string"
+          },
+          {
+            "const": "missing_context_file",
+            "type": "string"
+          },
+          {
+            "const": "context_file_hash_mismatch",
+            "type": "string"
+          },
+          {
+            "const": "stale_head",
+            "type": "string"
+          },
+          {
+            "const": "dirty_set_mismatch",
+            "type": "string"
+          },
+          {
+            "const": "contradictory_completion",
+            "type": "string"
+          },
+          {
+            "const": "cheap_check_failed",
+            "type": "string"
+          },
+          {
+            "const": "tampered_capsule",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    "observedHeads": {
+      "maxItems": 64,
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "repositoryId",
+          "head"
+        ],
+        "properties": {
+          "repositoryId": {
+            "minLength": 1,
+            "description": "Opaque RepositoryId.",
+            "type": "string"
+          },
+          "head": {
+            "minLength": 1,
+            "maxLength": 128,
+            "type": "string"
+          }
+        }
+      }
+    },
+    "observedDirtyFiles": {
+      "maxItems": 64,
+      "type": "array",
+      "items": {
+        "minLength": 1,
+        "maxLength": 512,
+        "type": "string"
+      }
+    },
+    "detail": {
+      "minLength": 1,
+      "maxLength": 512,
+      "type": "string"
+    },
+    "recordedAt": {
+      "format": "date-time",
+      "type": "string"
+    }
+  }
+}
