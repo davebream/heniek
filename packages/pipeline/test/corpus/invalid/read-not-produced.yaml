@@ -1,0 +1,20 @@
+schemaVersion: 1
+id: unsatisfied-read
+stages:
+  - id: first
+    type: agent
+    profile: opus-planner
+    writes: [artifacts.plan]
+  - id: second
+    type: agent
+    profile: opus-planner
+    needs: [first]
+    reads:
+      - artifacts.plan
+      - artifacts.design
+      - session.token_budget
+  - id: sibling
+    type: agent
+    profile: opus-planner
+    needs: [first]
+    writes: [artifacts.design]

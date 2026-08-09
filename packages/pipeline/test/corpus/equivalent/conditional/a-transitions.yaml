@@ -1,0 +1,24 @@
+schemaVersion: 1
+id: conditional
+stages:
+  - id: gate
+    type: verify
+    profile: sol-verifier
+    writes: [artifacts.gate]
+    transitions:
+      - when:
+          expression: gate.blockingFindings.length > 0 && !gate.skipped
+        then: repair
+      - when:
+          evaluator: opus-arbiter
+          question: Is the remaining risk acceptable?
+        then: ship
+  - id: repair
+    type: agent
+    profile: grok-builder
+    reads: [artifacts.gate]
+    writes: [artifacts.repair]
+  - id: ship
+    type: publish
+    reads: [artifacts.gate]
+    writes: [artifacts.release]

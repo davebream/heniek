@@ -1,0 +1,19 @@
+schemaVersion: 1
+id: racing-writes
+stages:
+  - id: start
+    type: agent
+    profile: opus-planner
+    writes: [artifacts.plan]
+  - id: left
+    type: agent
+    profile: opus-planner
+    needs: [start]
+    reads: [artifacts.plan]
+    writes: [artifacts.report]
+  - id: right
+    type: agent
+    profile: opus-planner
+    needs: [start]
+    reads: [artifacts.plan]
+    writes: [artifacts.report, task.current]

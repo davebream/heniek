@@ -1,0 +1,6 @@
+# The smallest legal pipeline: one stage, no edges, everything defaulted.
+schemaVersion: 1
+id: minimal
+stages:
+  - id: only
+    type: approval

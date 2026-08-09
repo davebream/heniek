@@ -1,0 +1,26 @@
+{
+  "diagnostics": [
+    {
+      "code": "pipeline.conflicting-writes",
+      "column": 14,
+      "line": 19,
+      "message": "\"left\" and \"right\" both write \"artifacts.report\" and may run at the same time.",
+      "pointer": "/stages/2/writes/0",
+      "severity": "error",
+      "sourcePath": "packages/pipeline/test/corpus/invalid/conflicting-writes.yaml",
+      "suggestion": "Order the two stages so one runs after the other, or have them write different targets."
+    },
+    {
+      "code": "pipeline.write-not-allowed",
+      "column": 32,
+      "line": 19,
+      "message": "\"task.current\" is supplied by the run, so a stage cannot write it.",
+      "pointer": "/stages/2/writes/1",
+      "severity": "error",
+      "sourcePath": "packages/pipeline/test/corpus/invalid/conflicting-writes.yaml",
+      "suggestion": "Write to `artifacts.` or `decisions.` instead."
+    }
+  ],
+  "schemaVersion": 1,
+  "sourcePath": "packages/pipeline/test/corpus/invalid/conflicting-writes.yaml"
+}

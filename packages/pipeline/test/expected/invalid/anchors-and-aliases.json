@@ -1,0 +1,33 @@
+{
+  "diagnostics": [
+    {
+      "code": "yaml.alias-not-supported",
+      "column": 9,
+      "line": 7,
+      "message": "Alias nodes are not supported by the restricted YAML subset.",
+      "severity": "error",
+      "sourcePath": "packages/pipeline/test/corpus/invalid/anchors-and-aliases.yaml",
+      "suggestion": "Write the value out in full. Aliases (`*name`) are outside the restricted YAML subset, so a pipeline file always reads the same way it runs."
+    },
+    {
+      "code": "yaml.anchor-not-supported",
+      "column": 3,
+      "line": 4,
+      "message": "Anchors are not supported by the restricted YAML subset.",
+      "severity": "error",
+      "sourcePath": "packages/pipeline/test/corpus/invalid/anchors-and-aliases.yaml",
+      "suggestion": "Remove the anchor (`&name`) and write the value out in full; share repeated configuration through a profile instead."
+    },
+    {
+      "code": "yaml.merge-key-not-supported",
+      "column": 5,
+      "line": 7,
+      "message": "The \"<<\" merge key is not supported by the restricted YAML subset.",
+      "severity": "error",
+      "sourcePath": "packages/pipeline/test/corpus/invalid/anchors-and-aliases.yaml",
+      "suggestion": "Remove the `<<` merge key and write the merged keys out in full."
+    }
+  ],
+  "schemaVersion": 1,
+  "sourcePath": "packages/pipeline/test/corpus/invalid/anchors-and-aliases.yaml"
+}

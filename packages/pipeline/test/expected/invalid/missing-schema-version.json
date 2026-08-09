@@ -1,0 +1,16 @@
+{
+  "diagnostics": [
+    {
+      "code": "configuration.schema-violation",
+      "column": 1,
+      "line": 2,
+      "message": "(root) must have required property 'schemaVersion'",
+      "pointer": "",
+      "severity": "error",
+      "sourcePath": "packages/pipeline/test/corpus/invalid/missing-schema-version.yaml",
+      "suggestion": "A pipeline document is a mapping with at least `schemaVersion`, `id`, and `stages`."
+    }
+  ],
+  "schemaVersion": 1,
+  "sourcePath": "packages/pipeline/test/corpus/invalid/missing-schema-version.yaml"
+}

@@ -1,0 +1,549 @@
+{
+  "$id": "heniek://contract/PipelineDefinition/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "id",
+    "stages"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "id": {
+      "minLength": 1,
+      "description": "Opaque PipelineId.",
+      "type": "string"
+    },
+    "name": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "description": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "mode": {
+      "anyOf": [
+        {
+          "const": "autonomous",
+          "type": "string"
+        },
+        {
+          "const": "hitl",
+          "type": "string"
+        }
+      ]
+    },
+    "limits": {
+      "additionalProperties": false,
+      "type": "object",
+      "properties": {
+        "max_pipeline_duration": {
+          "pattern": "^[1-9][0-9]*(?:ms|s|m|h|d)$",
+          "type": "string"
+        },
+        "max_concurrent_workers": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "max_repair_attempts": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "max_graph_revisions": {
+          "minimum": 1,
+          "type": "integer"
+        }
+      }
+    },
+    "context": {
+      "additionalProperties": false,
+      "type": "object",
+      "properties": {
+        "handoff_soft_threshold": {
+          "minimum": 0,
+          "maximum": 1,
+          "type": "number"
+        },
+        "handoff_hard_threshold": {
+          "minimum": 0,
+          "maximum": 1,
+          "type": "number"
+        }
+      }
+    },
+    "stages": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "type"
+        ],
+        "properties": {
+          "id": {
+            "minLength": 1,
+            "description": "Opaque PipelineStageId.",
+            "type": "string"
+          },
+          "type": {
+            "anyOf": [
+              {
+                "const": "agent",
+                "type": "string"
+              },
+              {
+                "const": "command",
+                "type": "string"
+              },
+              {
+                "const": "approval",
+                "type": "string"
+              },
+              {
+                "const": "integration",
+                "type": "string"
+              },
+              {
+                "const": "verify",
+                "type": "string"
+              },
+              {
+                "const": "publish",
+                "type": "string"
+              }
+            ]
+          },
+          "profile": {
+            "minLength": 1,
+            "description": "Opaque ProfileId.",
+            "type": "string"
+          },
+          "optional": {
+            "type": "boolean"
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "const": "autonomous",
+                "type": "string"
+              },
+              {
+                "const": "hitl",
+                "type": "string"
+              }
+            ]
+          },
+          "needs": {
+            "type": "array",
+            "items": {
+              "minLength": 1,
+              "description": "Opaque PipelineStageId.",
+              "type": "string"
+            }
+          },
+          "reads": {
+            "type": "array",
+            "items": {
+              "minLength": 1,
+              "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-zA-Z0-9][a-zA-Z0-9._-]*)+$",
+              "type": "string"
+            }
+          },
+          "writes": {
+            "type": "array",
+            "items": {
+              "minLength": 1,
+              "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-zA-Z0-9][a-zA-Z0-9._-]*)+$",
+              "type": "string"
+            }
+          },
+          "overridable": {
+            "type": "array",
+            "items": {
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+              "type": "string"
+            }
+          },
+          "session": {
+            "additionalProperties": false,
+            "type": "object",
+            "required": [
+              "policy"
+            ],
+            "properties": {
+              "policy": {
+                "anyOf": [
+                  {
+                    "const": "fresh",
+                    "type": "string"
+                  },
+                  {
+                    "const": "resume",
+                    "type": "string"
+                  }
+                ]
+              }
+            }
+          },
+          "limits": {
+            "additionalProperties": false,
+            "type": "object",
+            "properties": {
+              "max_duration": {
+                "pattern": "^[1-9][0-9]*(?:ms|s|m|h|d)$",
+                "type": "string"
+              },
+              "max_repair_attempts": {
+                "minimum": 0,
+                "type": "integer"
+              }
+            }
+          },
+          "command": {
+            "additionalProperties": false,
+            "type": "object",
+            "required": [
+              "argv"
+            ],
+            "properties": {
+              "argv": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "cwd": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "env": {
+                "type": "object",
+                "patternProperties": {
+                  "^(.*)$": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "completion": {
+            "additionalProperties": false,
+            "type": "object",
+            "required": [
+              "require"
+            ],
+            "properties": {
+              "require": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "anyOf": [
+                    {
+                      "const": "valid_result_envelope",
+                      "type": "string"
+                    },
+                    {
+                      "const": "non_empty_diff",
+                      "type": "string"
+                    },
+                    {
+                      "additionalProperties": false,
+                      "type": "object",
+                      "required": [
+                        "artifact"
+                      ],
+                      "properties": {
+                        "artifact": {
+                          "minLength": 1,
+                          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+                          "type": "string"
+                        }
+                      }
+                    },
+                    {
+                      "additionalProperties": false,
+                      "type": "object",
+                      "required": [
+                        "schema_check"
+                      ],
+                      "properties": {
+                        "schema_check": {
+                          "minLength": 1,
+                          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+                          "type": "string"
+                        }
+                      }
+                    },
+                    {
+                      "additionalProperties": false,
+                      "type": "object",
+                      "required": [
+                        "sections"
+                      ],
+                      "properties": {
+                        "sections": {
+                          "minItems": 1,
+                          "type": "array",
+                          "items": {
+                            "minLength": 1,
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "additionalProperties": false,
+                      "type": "object",
+                      "required": [
+                        "command"
+                      ],
+                      "properties": {
+                        "command": {
+                          "additionalProperties": false,
+                          "type": "object",
+                          "required": [
+                            "argv"
+                          ],
+                          "properties": {
+                            "argv": {
+                              "minItems": 1,
+                              "type": "array",
+                              "items": {
+                                "minLength": 1,
+                                "type": "string"
+                              }
+                            },
+                            "exit_code": {
+                              "minimum": 0,
+                              "maximum": 255,
+                              "type": "integer"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "additionalProperties": false,
+                      "type": "object",
+                      "required": [
+                        "repository_state"
+                      ],
+                      "properties": {
+                        "repository_state": {
+                          "anyOf": [
+                            {
+                              "const": "clean",
+                              "type": "string"
+                            },
+                            {
+                              "const": "no_untracked_files",
+                              "type": "string"
+                            },
+                            {
+                              "const": "no_staged_changes",
+                              "type": "string"
+                            }
+                          ]
+                        }
+                      }
+                    },
+                    {
+                      "additionalProperties": false,
+                      "type": "object",
+                      "required": [
+                        "verdict"
+                      ],
+                      "properties": {
+                        "verdict": {
+                          "minLength": 1,
+                          "description": "Opaque ProfileId.",
+                          "type": "string"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "on_validation_failure": {
+            "additionalProperties": false,
+            "type": "object",
+            "required": [
+              "strategy"
+            ],
+            "properties": {
+              "strategy": {
+                "anyOf": [
+                  {
+                    "const": "pause",
+                    "type": "string"
+                  },
+                  {
+                    "const": "fail",
+                    "type": "string"
+                  },
+                  {
+                    "const": "repair",
+                    "type": "string"
+                  },
+                  {
+                    "const": "repair_fresh",
+                    "type": "string"
+                  },
+                  {
+                    "const": "delegate",
+                    "type": "string"
+                  }
+                ]
+              },
+              "session": {
+                "anyOf": [
+                  {
+                    "const": "fresh",
+                    "type": "string"
+                  },
+                  {
+                    "const": "resume",
+                    "type": "string"
+                  }
+                ]
+              },
+              "max_attempts": {
+                "minimum": 1,
+                "type": "integer"
+              },
+              "delegate_to": {
+                "minLength": 1,
+                "description": "Opaque ProfileId.",
+                "type": "string"
+              }
+            }
+          },
+          "transitions": {
+            "type": "array",
+            "items": {
+              "additionalProperties": false,
+              "type": "object",
+              "required": [
+                "when",
+                "then"
+              ],
+              "properties": {
+                "when": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "type": "object",
+                      "required": [
+                        "expression"
+                      ],
+                      "properties": {
+                        "expression": {
+                          "minLength": 1,
+                          "type": "string"
+                        }
+                      }
+                    },
+                    {
+                      "additionalProperties": false,
+                      "type": "object",
+                      "required": [
+                        "evaluator",
+                        "question"
+                      ],
+                      "properties": {
+                        "evaluator": {
+                          "minLength": 1,
+                          "description": "Opaque ProfileId.",
+                          "type": "string"
+                        },
+                        "question": {
+                          "minLength": 1,
+                          "type": "string"
+                        }
+                      }
+                    }
+                  ]
+                },
+                "then": {
+                  "minLength": 1,
+                  "description": "Opaque PipelineStageId.",
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "edges": {
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "from",
+          "to"
+        ],
+        "properties": {
+          "from": {
+            "minLength": 1,
+            "description": "Opaque PipelineStageId.",
+            "type": "string"
+          },
+          "to": {
+            "minLength": 1,
+            "description": "Opaque PipelineStageId.",
+            "type": "string"
+          },
+          "when": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                  "expression"
+                ],
+                "properties": {
+                  "expression": {
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                }
+              },
+              {
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                  "evaluator",
+                  "question"
+                ],
+                "properties": {
+                  "evaluator": {
+                    "minLength": 1,
+                    "description": "Opaque ProfileId.",
+                    "type": "string"
+                  },
+                  "question": {
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

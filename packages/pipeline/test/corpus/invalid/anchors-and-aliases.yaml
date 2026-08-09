@@ -1,0 +1,8 @@
+schemaVersion: 1
+id: anchored
+defaults: &defaults
+  type: agent
+stages:
+  - id: first
+    <<: *defaults
+    profile: opus-planner

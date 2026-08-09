@@ -1,0 +1,36 @@
+{
+  "diagnostics": [
+    {
+      "code": "pipeline.cycle",
+      "column": 5,
+      "line": 13,
+      "message": "These stages depend on each other in a cycle: island → island_two → island.",
+      "pointer": "/stages/2",
+      "severity": "error",
+      "sourcePath": "packages/pipeline/test/corpus/invalid/unreachable-stage.yaml",
+      "suggestion": "Break the cycle by removing one dependency; a pipeline is a DAG, so no stage may wait for a stage that waits for it."
+    },
+    {
+      "code": "pipeline.unreachable-stage",
+      "column": 5,
+      "line": 13,
+      "message": "Stage \"island\" cannot be reached from any starting stage.",
+      "pointer": "/stages/2",
+      "severity": "error",
+      "sourcePath": "packages/pipeline/test/corpus/invalid/unreachable-stage.yaml",
+      "suggestion": "Connect \"island\" to the graph with `needs` or an edge, or remove it."
+    },
+    {
+      "code": "pipeline.unreachable-stage",
+      "column": 5,
+      "line": 16,
+      "message": "Stage \"island_two\" cannot be reached from any starting stage.",
+      "pointer": "/stages/3",
+      "severity": "error",
+      "sourcePath": "packages/pipeline/test/corpus/invalid/unreachable-stage.yaml",
+      "suggestion": "Connect \"island_two\" to the graph with `needs` or an edge, or remove it."
+    }
+  ],
+  "schemaVersion": 1,
+  "sourcePath": "packages/pipeline/test/corpus/invalid/unreachable-stage.yaml"
+}

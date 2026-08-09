@@ -1,0 +1,99 @@
+{
+  "context": {},
+  "edges": [
+    {
+      "from": "checks",
+      "to": "triage"
+    },
+    {
+      "condition": {
+        "kind": "evaluator",
+        "profile": "opus-arbiter",
+        "question": "Is the finding local enough for repair, or does it invalidate the design?\n"
+      },
+      "from": "triage",
+      "to": "integrate"
+    }
+  ],
+  "limits": {},
+  "mode": "hitl",
+  "pipelineId": "command-and-evaluator",
+  "schemaVersion": 1,
+  "stages": [
+    {
+      "command": {
+        "argv": [
+          "pnpm",
+          "check"
+        ],
+        "cwd": ".",
+        "env": {
+          "CI": "true"
+        }
+      },
+      "completion": {
+        "require": [
+          {
+            "argv": [
+              "pnpm",
+              "check"
+            ],
+            "exitCode": 0,
+            "kind": "command"
+          },
+          {
+            "kind": "schema_check",
+            "name": "check-report"
+          },
+          {
+            "kind": "sections",
+            "names": [
+              "summary",
+              "failures"
+            ]
+          }
+        ]
+      },
+      "id": "checks",
+      "mode": "hitl",
+      "optional": false,
+      "overridable": [],
+      "reads": [],
+      "type": "command",
+      "writes": [
+        "artifacts.check_report"
+      ]
+    },
+    {
+      "id": "integrate",
+      "mode": "hitl",
+      "optional": false,
+      "overridable": [],
+      "reads": [
+        "decisions.triage"
+      ],
+      "type": "integration",
+      "writes": [
+        "artifacts.integration"
+      ]
+    },
+    {
+      "id": "triage",
+      "mode": "hitl",
+      "onValidationFailure": {
+        "delegateTo": "sol-critic",
+        "strategy": "delegate"
+      },
+      "optional": false,
+      "overridable": [],
+      "profile": "opus-arbiter",
+      "reads": [
+        "artifacts.check_report"
+      ],
+      "type": "agent",
+      "writes": [
+        "decisions.triage"
+      ]
+    }
+  ]
+}

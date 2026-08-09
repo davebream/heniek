@@ -1,0 +1,104 @@
+{
+  "context": {},
+  "edges": [
+    {
+      "condition": {
+        "kind": "expression",
+        "nodes": [
+          {
+            "kind": "path",
+            "path": [
+              "gate",
+              "blockingFindings",
+              "length"
+            ]
+          },
+          {
+            "kind": "literal",
+            "value": 0
+          },
+          {
+            "kind": "compare",
+            "left": 0,
+            "operator": "gt",
+            "right": 1
+          },
+          {
+            "kind": "path",
+            "path": [
+              "gate",
+              "skipped"
+            ]
+          },
+          {
+            "kind": "not",
+            "operand": 3
+          },
+          {
+            "kind": "logical",
+            "left": 2,
+            "operator": "and",
+            "right": 4
+          }
+        ],
+        "root": 5
+      },
+      "from": "gate",
+      "to": "repair"
+    },
+    {
+      "condition": {
+        "kind": "evaluator",
+        "profile": "opus-arbiter",
+        "question": "Is the remaining risk acceptable?"
+      },
+      "from": "gate",
+      "to": "ship"
+    }
+  ],
+  "limits": {},
+  "mode": "autonomous",
+  "pipelineId": "conditional",
+  "schemaVersion": 1,
+  "stages": [
+    {
+      "id": "gate",
+      "mode": "autonomous",
+      "optional": false,
+      "overridable": [],
+      "profile": "sol-verifier",
+      "reads": [],
+      "type": "verify",
+      "writes": [
+        "artifacts.gate"
+      ]
+    },
+    {
+      "id": "repair",
+      "mode": "autonomous",
+      "optional": false,
+      "overridable": [],
+      "profile": "grok-builder",
+      "reads": [
+        "artifacts.gate"
+      ],
+      "type": "agent",
+      "writes": [
+        "artifacts.repair"
+      ]
+    },
+    {
+      "id": "ship",
+      "mode": "autonomous",
+      "optional": false,
+      "overridable": [],
+      "reads": [
+        "artifacts.gate"
+      ],
+      "type": "publish",
+      "writes": [
+        "artifacts.release"
+      ]
+    }
+  ]
+}

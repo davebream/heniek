@@ -1,0 +1,5 @@
+# §8.1: the schema version is explicit or the document is not a pipeline.
+id: no-version
+stages:
+  - id: only
+    type: approval

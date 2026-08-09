@@ -1,0 +1,23 @@
+schemaVersion: 1
+id: shape-mismatches
+limits:
+  max_repair_attempts: 2
+  max_pipeline_duration: 30m
+stages:
+  - id: needs_profile
+    type: agent
+  - id: has_stray_profile
+    type: command
+    profile: opus-planner
+    needs: [needs_profile]
+  - id: loose_limits
+    type: verify
+    profile: sol-verifier
+    needs: [has_stray_profile]
+    limits:
+      max_repair_attempts: 9
+      max_duration: 4h
+    on_validation_failure:
+      strategy: pause
+      max_attempts: 7
+      delegate_to: sol-critic

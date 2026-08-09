@@ -1,0 +1,16 @@
+{
+  "diagnostics": [
+    {
+      "code": "pipeline.duplicate-edge",
+      "column": 9,
+      "line": 9,
+      "message": "\"gate\" leads to \"ship\" more than once, under different conditions.",
+      "pointer": "/stages/0/transitions/0",
+      "severity": "error",
+      "sourcePath": "packages/pipeline/test/corpus/invalid/contradictory-edges.yaml",
+      "suggestion": "Combine them into one edge — use `||` inside a single expression if either condition should allow the transition."
+    }
+  ],
+  "schemaVersion": 1,
+  "sourcePath": "packages/pipeline/test/corpus/invalid/contradictory-edges.yaml"
+}

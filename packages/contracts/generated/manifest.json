@@ -398,6 +398,24 @@
       "path": "generated/PendingInteraction.v2.schema.json"
     },
     {
+      "schemaId": "heniek://contract/PipelineDefinition/v1",
+      "schemaVersion": 1,
+      "sha256": "8f13880f0509468a85ed5b7e8701e8bdddf00fae640e8c7b3fc4f24b5dec14a1",
+      "path": "generated/PipelineDefinition.v1.schema.json"
+    },
+    {
+      "schemaId": "heniek://contract/PipelineGraph/v1",
+      "schemaVersion": 1,
+      "sha256": "16307f658328ededa1998ef22706004b4bce06247d6775df0361616dd7dfa3b1",
+      "path": "generated/PipelineGraph.v1.schema.json"
+    },
+    {
+      "schemaId": "heniek://contract/PipelineValidationResult/v1",
+      "schemaVersion": 1,
+      "sha256": "19a3183a732618aa3db2cb37aabe40fd923fef52f487c20b3901a6131cf5d1d4",
+      "path": "generated/PipelineValidationResult.v1.schema.json"
+    },
+    {
       "schemaId": "heniek://contract/ProfileConfiguration/v1",
       "schemaVersion": 1,
       "sha256": "dce7d5cd0d6eba0941613e3727dc086b8c7cdbf0cc7268e609c9ac3ac0ae0ac4",

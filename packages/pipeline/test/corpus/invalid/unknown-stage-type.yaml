@@ -1,0 +1,6 @@
+schemaVersion: 1
+id: bad-type
+stages:
+  - id: only
+    type: agents
+    profile: opus-planner

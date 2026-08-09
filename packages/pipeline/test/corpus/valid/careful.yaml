@@ -1,0 +1,111 @@
+# The specification's own careful path (§14.6), written with every surface a
+# pipeline author has: inherited mode, layered limits, context thresholds,
+# `needs` dependencies, a `transitions` condition, and a completion contract.
+schemaVersion: 1
+id: careful-epic
+name: Careful epic
+description: Understand, critique, revise, build, verify, publish.
+mode: autonomous
+
+limits:
+  max_pipeline_duration: 4h
+  max_concurrent_workers: 4
+  max_repair_attempts: 3
+  max_graph_revisions: 5
+
+context:
+  handoff_soft_threshold: 0.65
+  handoff_hard_threshold: 0.80
+
+stages:
+  - id: understand
+    type: agent
+    profile: opus-planner
+    reads:
+      - task.current
+    writes:
+      - artifacts.understanding
+
+  - id: design
+    type: agent
+    profile: opus-designer
+    needs: [understand]
+    reads:
+      - task.current
+      - artifacts.understanding
+    writes:
+      - artifacts.design
+      - decisions.architecture
+
+  - id: critique
+    type: agent
+    profile: sol-critic
+    needs: [design]
+    reads:
+      - task.current
+      - artifacts.design.selected
+      - decisions.architecture
+    writes:
+      - artifacts.critique
+      - decisions.critique_verdict
+    session:
+      policy: fresh
+    completion:
+      require:
+        - valid_result_envelope
+        - artifact: critique-report
+    on_validation_failure:
+      strategy: repair
+      session: resume
+      max_attempts: 2
+
+  - id: build
+    type: agent
+    profile: grok-builder
+    needs: [critique]
+    mode: hitl
+    reads:
+      - artifacts.design.selected
+      - artifacts.critique
+    writes:
+      - artifacts.implementation
+    overridable:
+      - effort
+      - max_duration
+    limits:
+      max_duration: 90m
+      max_repair_attempts: 2
+
+  - id: verify
+    type: verify
+    profile: sol-verifier
+    needs: [build]
+    reads:
+      - artifacts.implementation
+    writes:
+      - artifacts.verification
+    completion:
+      require:
+        - non_empty_diff
+        - repository_state: no_untracked_files
+    transitions:
+      - when:
+          expression: verify.blockingFindings.length > 0
+        then: repair
+
+  - id: repair
+    type: agent
+    profile: grok-builder
+    reads:
+      - artifacts.verification
+    writes:
+      - artifacts.repair
+
+  - id: publish
+    type: publish
+    profile: sol-publisher
+    needs: [verify]
+    reads:
+      - artifacts.implementation
+    writes:
+      - artifacts.pull_request

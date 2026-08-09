@@ -1,0 +1,210 @@
+{
+  "context": {
+    "handoffHardThreshold": 0.8,
+    "handoffSoftThreshold": 0.65
+  },
+  "description": "Understand, critique, revise, build, verify, publish.",
+  "edges": [
+    {
+      "from": "build",
+      "to": "verify"
+    },
+    {
+      "from": "critique",
+      "to": "build"
+    },
+    {
+      "from": "design",
+      "to": "critique"
+    },
+    {
+      "from": "understand",
+      "to": "design"
+    },
+    {
+      "from": "verify",
+      "to": "publish"
+    },
+    {
+      "condition": {
+        "kind": "expression",
+        "nodes": [
+          {
+            "kind": "path",
+            "path": [
+              "verify",
+              "blockingFindings",
+              "length"
+            ]
+          },
+          {
+            "kind": "literal",
+            "value": 0
+          },
+          {
+            "kind": "compare",
+            "left": 0,
+            "operator": "gt",
+            "right": 1
+          }
+        ],
+        "root": 2
+      },
+      "from": "verify",
+      "to": "repair"
+    }
+  ],
+  "limits": {
+    "maxConcurrentWorkers": 4,
+    "maxGraphRevisions": 5,
+    "maxPipelineDurationMs": 14400000,
+    "maxRepairAttempts": 3
+  },
+  "mode": "autonomous",
+  "name": "Careful epic",
+  "pipelineId": "careful-epic",
+  "schemaVersion": 1,
+  "stages": [
+    {
+      "id": "build",
+      "limits": {
+        "maxDurationMs": 5400000,
+        "maxRepairAttempts": 2
+      },
+      "mode": "hitl",
+      "optional": false,
+      "overridable": [
+        "effort",
+        "max_duration"
+      ],
+      "profile": "grok-builder",
+      "reads": [
+        "artifacts.critique",
+        "artifacts.design.selected"
+      ],
+      "type": "agent",
+      "writes": [
+        "artifacts.implementation"
+      ]
+    },
+    {
+      "completion": {
+        "require": [
+          {
+            "kind": "artifact",
+            "name": "critique-report"
+          },
+          {
+            "kind": "result_envelope"
+          }
+        ]
+      },
+      "id": "critique",
+      "mode": "autonomous",
+      "onValidationFailure": {
+        "maxAttempts": 2,
+        "session": "resume",
+        "strategy": "repair"
+      },
+      "optional": false,
+      "overridable": [],
+      "profile": "sol-critic",
+      "reads": [
+        "artifacts.design.selected",
+        "decisions.architecture",
+        "task.current"
+      ],
+      "session": {
+        "policy": "fresh"
+      },
+      "type": "agent",
+      "writes": [
+        "artifacts.critique",
+        "decisions.critique_verdict"
+      ]
+    },
+    {
+      "id": "design",
+      "mode": "autonomous",
+      "optional": false,
+      "overridable": [],
+      "profile": "opus-designer",
+      "reads": [
+        "artifacts.understanding",
+        "task.current"
+      ],
+      "type": "agent",
+      "writes": [
+        "artifacts.design",
+        "decisions.architecture"
+      ]
+    },
+    {
+      "id": "publish",
+      "mode": "autonomous",
+      "optional": false,
+      "overridable": [],
+      "profile": "sol-publisher",
+      "reads": [
+        "artifacts.implementation"
+      ],
+      "type": "publish",
+      "writes": [
+        "artifacts.pull_request"
+      ]
+    },
+    {
+      "id": "repair",
+      "mode": "autonomous",
+      "optional": false,
+      "overridable": [],
+      "profile": "grok-builder",
+      "reads": [
+        "artifacts.verification"
+      ],
+      "type": "agent",
+      "writes": [
+        "artifacts.repair"
+      ]
+    },
+    {
+      "id": "understand",
+      "mode": "autonomous",
+      "optional": false,
+      "overridable": [],
+      "profile": "opus-planner",
+      "reads": [
+        "task.current"
+      ],
+      "type": "agent",
+      "writes": [
+        "artifacts.understanding"
+      ]
+    },
+    {
+      "completion": {
+        "require": [
+          {
+            "kind": "non_empty_diff"
+          },
+          {
+            "kind": "repository_state",
+            "state": "no_untracked_files"
+          }
+        ]
+      },
+      "id": "verify",
+      "mode": "autonomous",
+      "optional": false,
+      "overridable": [],
+      "profile": "sol-verifier",
+      "reads": [
+        "artifacts.implementation"
+      ],
+      "type": "verify",
+      "writes": [
+        "artifacts.verification"
+      ]
+    }
+  ]
+}

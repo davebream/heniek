@@ -5,8 +5,9 @@
 # Generated artifacts. linguist-generated collapses them in pull request review
 # and excludes them from language statistics. They are still produced by their
 # generators, never edited by hand.
-docs/backlog/revision-1/**         linguist-generated=true
-packages/contracts/generated/**    linguist-generated=true
+docs/backlog/revision-1/**            linguist-generated=true
+packages/contracts/generated/**       linguist-generated=true
+packages/pipeline/test/expected/**    linguist-generated=true
 
 # The lockfile additionally suppresses textual diffs: it is machine-resolved,
 # and a readable diff of it has no review value. The other generated artifacts

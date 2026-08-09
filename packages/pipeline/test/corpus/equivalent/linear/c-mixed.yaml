@@ -1,0 +1,33 @@
+# Same pipeline again: both edge spellings at once (the overlap collapses),
+# the inherited mode repeated on every stage, `optional: false` spelled out,
+# quoted scalars, flow collections, and comments between entries.
+schemaVersion: 1
+id: "linear"
+mode: "autonomous"
+
+stages:
+  - { id: "build", type: "agent", profile: "grok-builder", mode: "autonomous",
+      optional: false, needs: ["design"], reads: ["artifacts.design"],
+      writes: ["artifacts.implementation"] }
+
+  # Declared with `needs` here *and* as an explicit edge below.
+  - id: "verify"
+    needs: ["build"]
+    type: "verify"
+    optional: false
+    mode: "autonomous"
+    profile: "sol-verifier"
+    writes: ["artifacts.verification"]
+    reads: ["artifacts.implementation"]
+
+  - id: "design"
+    type: "agent"
+    mode: "autonomous"
+    optional: false
+    profile: "opus-designer"
+    writes: ["artifacts.design", "artifacts.design"]
+
+edges:
+  - { from: "build", to: "verify" }
+
+limits: { max_pipeline_duration: "3600s" }

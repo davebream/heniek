@@ -1,0 +1,51 @@
+# A command stage (§14.2) beside §14.4's subjective route: an evaluator
+# condition on an explicit edge, and a delegated repair policy (§19.6).
+schemaVersion: 1
+id: command-and-evaluator
+mode: hitl
+
+stages:
+  - id: checks
+    type: command
+    command:
+      argv: [pnpm, check]
+      cwd: .
+      env:
+        CI: "true"
+    writes:
+      - artifacts.check_report
+    completion:
+      require:
+        - command:
+            argv: [pnpm, check]
+            exit_code: 0
+        - schema_check: check-report
+        - sections: [summary, failures]
+
+  - id: triage
+    type: agent
+    profile: opus-arbiter
+    reads:
+      - artifacts.check_report
+    writes:
+      - decisions.triage
+    on_validation_failure:
+      strategy: delegate
+      delegate_to: sol-critic
+
+  - id: integrate
+    type: integration
+    reads:
+      - decisions.triage
+    writes:
+      - artifacts.integration
+
+edges:
+  - from: checks
+    to: triage
+  - from: triage
+    to: integrate
+    when:
+      evaluator: opus-arbiter
+      question: >
+        Is the finding local enough for repair, or does it invalidate the design?
