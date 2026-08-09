@@ -1,0 +1,30 @@
+{
+  "$id": "heniek://contract/NativeStagePollRequest/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "sessionId",
+    "sessionRevision"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "sessionId": {
+      "minLength": 1,
+      "description": "Opaque ParentSessionId.",
+      "type": "string"
+    },
+    "sessionRevision": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "maxDispatches": {
+      "minimum": 1,
+      "maximum": 16,
+      "type": "integer"
+    }
+  }
+}

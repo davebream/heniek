@@ -1,0 +1,58 @@
+{
+  "$id": "heniek://contract/NativeStageQuestionRequest/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "sessionId",
+    "sessionRevision",
+    "dispatchId",
+    "expectedDispatchRevision",
+    "runId",
+    "stageId",
+    "attemptId",
+    "interaction"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "sessionId": {
+      "minLength": 1,
+      "description": "Opaque ParentSessionId.",
+      "type": "string"
+    },
+    "sessionRevision": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "dispatchId": {
+      "minLength": 1,
+      "description": "Opaque NativeDispatchId.",
+      "type": "string"
+    },
+    "expectedDispatchRevision": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "runId": {
+      "minLength": 1,
+      "description": "Opaque RunId.",
+      "type": "string"
+    },
+    "stageId": {
+      "minLength": 1,
+      "description": "Opaque StageId.",
+      "type": "string"
+    },
+    "attemptId": {
+      "minLength": 1,
+      "description": "Opaque StageAttemptId.",
+      "type": "string"
+    },
+    "interaction": {
+      "$ref": "heniek://contract/PendingInteraction/v2"
+    }
+  }
+}

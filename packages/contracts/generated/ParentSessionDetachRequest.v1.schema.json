@@ -1,0 +1,57 @@
+{
+  "$id": "heniek://contract/ParentSessionDetachRequest/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "sessionId",
+    "sessionRevision",
+    "dispatches"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "sessionId": {
+      "minLength": 1,
+      "description": "Opaque ParentSessionId.",
+      "type": "string"
+    },
+    "sessionRevision": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "dispatches": {
+      "uniqueItems": true,
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "dispatchId",
+          "outcome"
+        ],
+        "properties": {
+          "dispatchId": {
+            "minLength": 1,
+            "description": "Opaque NativeDispatchId.",
+            "type": "string"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "const": "not_started",
+                "type": "string"
+              },
+              {
+                "const": "abandoned",
+                "type": "string"
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

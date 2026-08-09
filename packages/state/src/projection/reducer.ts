@@ -39,6 +39,32 @@ const RUN_SCOPED_TYPES = new Set([
   "interaction.answer_accepted",
   "interaction.cancelled",
   "interaction.answer_delivered",
+  /**
+   * Q023's native bridge (ADR 0021). `native-bridge/store.ts` appends these
+   * with the low-level `appendEvent`, the same way `interaction/store.ts`
+   * appends its own four types above — never through `commitStateChange`, so
+   * the transition can stay atomic with the native-only table writes that
+   * caused it. Their `applyEvent`/`eventScope` treatment is identical to the
+   * `interaction.*` group: bump `run_projection.revision`, touch nothing
+   * else. `native_stage_question`/`native_question_projection` are not part
+   * of `ProjectionState` at all — replayed and compared separately by
+   * `native-bridge/replay.ts`, exactly as `interaction/replay.ts` does for
+   * `pending_interaction_projection`, per this file's own standing
+   * obligation above.
+   */
+  "native_question.raised",
+  "native_question.answered",
+  "native_question.cancelled",
+  /**
+   * `native_question_projection`'s own causal-update trigger (migration 11)
+   * requires every update to advance `last_event_sequence` past a real
+   * journal event — mirroring `pending_interaction_projection`'s trigger
+   * exactly, since it was modeled on it. Delivery therefore needs its own
+   * event, the same way `interaction.answer_delivered` backs the equivalent
+   * transition for the external path, even though there is no outbox or
+   * external round-trip behind it to make durable.
+   */
+  "native_question.delivered",
 ]);
 
 /**
@@ -565,6 +591,10 @@ export function eventScope(event: StateEvent): ProjectionScope {
     case "interaction.answer_delivered":
     case "run.resume_requested":
     case "run.resume_delivered":
+    case "native_question.raised":
+    case "native_question.answered":
+    case "native_question.cancelled":
+    case "native_question.delivered":
       return {
         runs: [requireRunId(event, payload)],
         codebases: [],
@@ -762,7 +792,11 @@ export const applyEvent: Reducer = (state, event) => {
     case "interaction.cancelled":
     case "interaction.answer_delivered":
     case "run.resume_requested":
-    case "run.resume_delivered": {
+    case "run.resume_delivered":
+    case "native_question.raised":
+    case "native_question.answered":
+    case "native_question.cancelled":
+    case "native_question.delivered": {
       const runId = requireRunId(event, payload);
       const previous = state.runs[runId];
       if (previous === undefined) {

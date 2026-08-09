@@ -12,7 +12,7 @@ import {
   type StateDatabase,
 } from "../src/index.js";
 import { MIGRATIONS } from "../src/migrations/list.js";
-import { runMigrationList } from "../src/migrations/migrate.js";
+import { currentSchemaVersion, runMigrationList } from "../src/migrations/migrate.js";
 import type { Migration } from "../src/migrations/migration.js";
 import { createDeterministicIds, createFakeClock } from "./helpers/determinism.js";
 import { makeTempDbPath } from "./helpers/temp-db.js";
@@ -207,7 +207,7 @@ describe("Q020 migration 9", () => {
     ).toBe(3);
 
     runMigrations(db);
-    expect(db.schemaVersion).toBe(10);
+    expect(db.schemaVersion).toBe(currentSchemaVersion());
     expect(readRunInteractions(db, "run-m9")).toHaveLength(3);
     expect(compareInteractionProjectionToJournal(db).status).toBe("exact");
   });

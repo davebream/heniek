@@ -28,6 +28,7 @@
  * which no JSON-RPC client expects from a single connection.
  */
 
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import {
@@ -51,16 +52,29 @@ import {
   type DoctorReportV1,
   type ExecutionBackend,
   type ExecutionBackendV7,
+  ExecutionFailureV1,
+  ExternalStageResultV1,
   InteractionAnswerSetV1,
+  NativeStagePollRequestV1,
+  NativeStageQuestionRequestV1,
+  NativeStageSubmitRequestV1,
+  ParentSessionAttachRequestV1,
+  ParentSessionDetachRequestV1,
+  PendingInteractionV2,
   type ResolvedProfileChainV1,
   RunAnswerRequestV2,
   RunResumeRequestV2,
+  StageStartRequestV2,
 } from "@heniek/contracts";
 import { createFileSecretStore, createScopedSecretReader } from "@heniek/secrets";
 import {
+  findRegisteredExecutionContext,
   legacyAnswerSubmission,
   listInteractionInbox,
+  listNativeQuestionInbox,
   openStateDatabase,
+  readNativeStageAttempts,
+  readParentSession,
   readPendingInteractions,
   readRunInteractions,
   readRunProjection,
@@ -73,7 +87,7 @@ import {
   createWorkspaceStateStore,
   type WorkspaceService,
 } from "@heniek/workspace";
-import type { Static } from "@sinclair/typebox";
+import { FormatRegistry, type Static } from "@sinclair/typebox";
 import { Value } from "@sinclair/typebox/value";
 import { mintConnectionAuthState } from "../auth/challenge.js";
 import {
@@ -107,18 +121,27 @@ import {
   INBOX_LIST_V1_METHOD,
   type MethodHandler,
   type MethodRegistry,
+  NATIVE_STAGE_POLL_V1_METHOD,
+  NATIVE_STAGE_QUESTION_V1_METHOD,
+  NATIVE_STAGE_STATUS_V1_METHOD,
+  NATIVE_STAGE_SUBMIT_V1_METHOD,
+  PARENT_SESSION_ATTACH_V1_METHOD,
+  PARENT_SESSION_DETACH_V1_METHOD,
   RUN_ANSWER_V1_METHOD,
   RUN_ANSWER_V2_METHOD,
   RUN_CANCEL_V1_METHOD,
   RUN_RESULT_V1_METHOD,
   RUN_RESULT_V2_METHOD,
+  RUN_RESULT_V3_METHOD,
   RUN_RESUME_V1_METHOD,
   RUN_RESUME_V2_METHOD,
   RUN_STATUS_V1_METHOD,
   RUN_STATUS_V2_METHOD,
   RUN_STATUS_V3_METHOD,
+  RUN_STATUS_V4_METHOD,
   STAGE_START_V1_METHOD,
   STAGE_START_V2_METHOD,
+  STAGE_START_V3_METHOD,
 } from "../rpc/methods.js";
 import { createSystemClock } from "./clock.js";
 import {
@@ -131,6 +154,7 @@ import {
 import { createSystemHostWitness } from "./host-witness.js";
 import { createNodeLockFileSystem } from "./lock-filesystem.js";
 import { createHmacSha256MacProvider } from "./mac.js";
+import { createNativeBridgeService, type NativeBridgeService } from "./native-bridge-service.js";
 import { createSystemProcessLiveness } from "./process-liveness.js";
 import { createSystemRandomSource } from "./random-source.js";
 import { createSchedulingExecutionService } from "./scheduling-service.js";
@@ -139,6 +163,18 @@ import { createNodeSocketProbe } from "./socket-probe.js";
 import type { RawConnection } from "./socket-server.js";
 import { createNodeSocketBinder } from "./socket-server.js";
 import { createStderrTraceSink } from "./trace-sink.js";
+
+/**
+ * TypeBox's `Value.Check` does not validate `format: "date-time"` unless a
+ * checker is registered — unlike the Ajv instance `generate.ts` uses for
+ * contract-schema codegen, which ships `date-time` support out of the box.
+ * Q023's `nativeStage.question.v1`/`nativeStage.submit.v1` are the first
+ * `Value.Check`'d request schemas in this file to carry a date-time field
+ * (`PendingInteractionV2.requestedAt`); every well-formed request would
+ * otherwise be rejected as malformed. `Date.parse` matches the same
+ * leniency `native-bridge/store.ts`'s own `assertIso` already uses.
+ */
+FormatRegistry.Set("date-time", (value) => !Number.isNaN(Date.parse(value)));
 
 export interface ConnectionHandlerDeps {
   readonly randomSource: RandomSource;
@@ -307,6 +343,18 @@ export interface StartDaemonDeps {
       profileId: string,
     ) => Promise<Static<typeof ResolvedProfileChainV1>> | Static<typeof ResolvedProfileChainV1>;
   };
+  /**
+   * Q023 native Claude bridge. A dedicated resolver rather than reusing
+   * `scheduling.resolveProfileChain` (D1): a native profile has no account
+   * to capacity-check, so its resolution is a different, simpler operation
+   * than the scheduler's — sharing one function would force one of the two
+   * modes to tolerate the other's constraints.
+   */
+  readonly nativeBridge?: {
+    readonly resolveProfileChain: (
+      profileId: string,
+    ) => Promise<Static<typeof ResolvedProfileChainV1>> | Static<typeof ResolvedProfileChainV1>;
+  };
   /** Provider-neutral catalogue source. Raw Claudexor DTOs stay inside its adapter. */
   readonly capability?: {
     readonly source: CapabilityDiscoverySource;
@@ -388,6 +436,11 @@ const EMPTY_ARTIFACT_RECOVERY = {
   skippedIncoming: [] as readonly string[],
   unreferencedBlobs: [] as readonly string[],
 } as const;
+
+/** Matches `NativeStagePollRequestV1.maxDispatches`'s own `maximum: 16` — the advisory cap this daemon actually honours. */
+const NATIVE_MAX_DISPATCHES = 16;
+/** Advisory backoff hint echoed on every `nativeStage.poll.v1` response, accepted or rejected alike — not the background reap-sweep interval, which `NativeBridgeServiceOptions.pollMilliseconds` controls separately. */
+const NATIVE_STAGE_POLL_AFTER_MS = 3_000;
 
 /**
  * Starts one daemon instance end-to-end. Resolves once the outcome is known
@@ -530,6 +583,18 @@ export async function startDaemon(deps: StartDaemonDeps): Promise<StartDaemonOut
           createIdentifierReader: (identifiers) =>
             createScopedSecretReader(secretStore, identifiers),
         });
+  const nativeBridgeService: NativeBridgeService | undefined =
+    deps.nativeBridge === undefined
+      ? undefined
+      : createNativeBridgeService({
+          db: workspaceDatabase,
+          workspaceService,
+          artifactsDirectory: home.paths.artifactsDirectory,
+          instanceId,
+          ids,
+          clock,
+          resolveProfileChain: deps.nativeBridge.resolveProfileChain,
+        });
   const capabilityService =
     deps.capability === undefined
       ? undefined
@@ -541,6 +606,7 @@ export async function startDaemon(deps: StartDaemonDeps): Promise<StartDaemonOut
         });
   await executionService?.observeAll();
   await schedulingService?.reconcile();
+  nativeBridgeService?.reconcile();
   const startedAt = clock.nowIso();
   const reconciliation = reconcileResult?.reconciliation ?? EMPTY_RECONCILIATION;
   const artifactRecovery = reconcileResult?.artifactRecovery ?? EMPTY_ARTIFACT_RECOVERY;
@@ -579,6 +645,7 @@ export async function startDaemon(deps: StartDaemonDeps): Promise<StartDaemonOut
     await socket.close();
     executionService?.stop();
     schedulingService?.stop();
+    nativeBridgeService?.stop();
     workspaceDatabase.close();
     // Inode-verified: only unlinks if the path still carries this guard's
     // identity.
@@ -887,6 +954,33 @@ export async function startDaemon(deps: StartDaemonDeps): Promise<StartDaemonOut
         },
       ],
       [
+        RUN_STATUS_V4_METHOD,
+        async (params) => {
+          const runId = requiredParam(recordParams(params), "runId");
+          const payload = schedulingPayload(runId);
+          const projection = readRunProjection(workspaceDatabase, runId);
+          if (projection === undefined) throw new Error("run projection does not exist");
+          return {
+            schemaVersion: 4,
+            runId,
+            stageId: payload.snapshot.schedule.stageId,
+            status: payload.snapshot.status,
+            runRevision: projection.revision,
+            interactions: [
+              ...readRunInteractions(workspaceDatabase, runId),
+              ...schedulingService.interactions(runId),
+            ],
+            scheduling: payload.scheduling,
+            attempts: payload.attempts,
+            // `schedulingPayload`'s decisions are built once, shared with the
+            // still-registered v3 endpoint, and stamped `SchedulingDecision/v1`
+            // there — v4 references `SchedulingDecision/v2` instead (D8), so
+            // the stamp is overridden here rather than forking the mapper.
+            decisions: payload.decisions.map((decision) => ({ ...decision, schemaVersion: 2 })),
+          };
+        },
+      ],
+      [
         RUN_RESULT_V2_METHOD,
         async (params) => {
           const runId = requiredParam(recordParams(params), "runId");
@@ -913,9 +1007,44 @@ export async function startDaemon(deps: StartDaemonDeps): Promise<StartDaemonOut
         },
       ],
       [
+        RUN_RESULT_V3_METHOD,
+        async (params) => {
+          const runId = requiredParam(recordParams(params), "runId");
+          const payload = schedulingPayload(runId);
+          const result = schedulingService.result(runId);
+          return {
+            schemaVersion: 3,
+            runId,
+            stageId: payload.snapshot.schedule.stageId,
+            status: payload.snapshot.status,
+            ...(result?.summary === undefined ? {} : { summary: result.summary }),
+            ...(result?.sessionId === undefined ? {} : { sessionId: result.sessionId }),
+            artifacts: readStageArtifacts(workspaceDatabase, runId).map((artifact) => ({
+              name: artifact.name,
+              artifactId: artifact.artifactId,
+              mediaType: artifact.mediaType,
+              byteLength: artifact.byteLength,
+              sha256: artifact.contentHash,
+            })),
+            scheduling: payload.scheduling,
+            attempts: payload.attempts,
+            decisions: payload.decisions.map((decision) => ({ ...decision, schemaVersion: 2 })),
+          };
+        },
+      ],
+      [
         RUN_CANCEL_V1_METHOD,
         async (params) => {
           const runId = requiredParam(recordParams(params), "runId");
+          if (nativeBridgeService?.hasNativeStage(runId) === true) {
+            const current = nativeBridgeService.cancel(runId);
+            return {
+              schemaVersion: 1,
+              runId,
+              status: current?.status ?? "cancelled",
+              accepted: true,
+            };
+          }
           await schedulingService.cancel(runId);
           const current = schedulingService.status(runId);
           return {
@@ -933,6 +1062,24 @@ export async function startDaemon(deps: StartDaemonDeps): Promise<StartDaemonOut
           if (!Value.Check(RunAnswerRequestV2, input)) throw new Error("invalid answer request");
           if (context.authenticatedKeyId === undefined)
             throw new Error("authenticated key missing");
+          if (nativeBridgeService?.hasNativeStage(input.runId) === true) {
+            const accepted = nativeBridgeService.answer({
+              runId: input.runId,
+              submission: input.answer,
+              answeredByKeyId: context.authenticatedKeyId,
+            });
+            return {
+              schemaVersion: 2,
+              runId: input.runId,
+              status: accepted.status,
+              runRevision: accepted.runRevision,
+              interactionId: input.answer.interactionId,
+              interactionRevision: accepted.interactionRevision,
+              accepted: true,
+              operationId: ids.next("operation"),
+              deliveryState: "delivered",
+            };
+          }
           const accepted = await schedulingService.answer(
             input.runId,
             input.answer,
@@ -955,12 +1102,75 @@ export async function startDaemon(deps: StartDaemonDeps): Promise<StartDaemonOut
       ],
     );
   }
+  if (schedulingService !== undefined || nativeBridgeService !== undefined) {
+    entries.push([
+      STAGE_START_V3_METHOD,
+      async (params) => {
+        const input = withoutAuth(recordParams(params));
+        if (!Value.Check(StageStartRequestV2, input))
+          throw new Error("invalid stage start request");
+        const routingResolver =
+          deps.nativeBridge?.resolveProfileChain ?? deps.scheduling?.resolveProfileChain;
+        if (routingResolver === undefined) throw new Error("no execution routing is configured");
+        const chain = await routingResolver(input.profileId);
+        if (chain.primary.executionMode === "native") {
+          if (nativeBridgeService === undefined)
+            throw new Error("native execution is not configured");
+          const started = await nativeBridgeService.start({
+            currentDirectory: input.currentDirectory,
+            prompt: input.prompt,
+            artifactPath: input.artifactPath,
+            profileId: input.profileId,
+            requestedIdentifiers: input.requestedIdentifiers,
+            limits: input.limits,
+          });
+          const stageRevision = nativeBridgeService.status(started.runId)?.stage.revision;
+          return {
+            schemaVersion: 3,
+            runId: started.runId,
+            stageId: started.stageId,
+            status: started.status,
+            executionMode: "native",
+            ...(stageRevision === undefined ? {} : { stageRevision }),
+          };
+        }
+        if (schedulingService === undefined)
+          throw new Error("external execution is not configured");
+        const started = await schedulingService.start({
+          currentDirectory: input.currentDirectory,
+          prompt: input.prompt,
+          artifactPath: input.artifactPath,
+          profileId: input.profileId,
+          priority: input.priority,
+          requestedIdentifiers: input.requestedIdentifiers,
+          limits: input.limits,
+        });
+        const current = schedulingService.status(started.runId);
+        return {
+          schemaVersion: 3,
+          runId: started.runId,
+          stageId: started.stageId,
+          status: current?.status ?? "queued",
+          executionMode: chain.primary.executionMode,
+          schedulingRevision: started.schedulingRevision,
+        };
+      },
+    ]);
+  }
+  if (executionService !== undefined || nativeBridgeService !== undefined) {
+    entries.push([
+      INBOX_LIST_V1_METHOD,
+      async () => ({
+        schemaVersion: 1,
+        items: [
+          ...(executionService === undefined ? [] : listInteractionInbox(workspaceDatabase)),
+          ...(nativeBridgeService === undefined ? [] : listNativeQuestionInbox(workspaceDatabase)),
+        ],
+      }),
+    ]);
+  }
   if (executionService !== undefined) {
     entries.push(
-      [
-        INBOX_LIST_V1_METHOD,
-        async () => ({ schemaVersion: 1, items: listInteractionInbox(workspaceDatabase) }),
-      ],
       [
         STAGE_START_V1_METHOD,
         async (params) => {
@@ -1035,6 +1245,24 @@ export async function startDaemon(deps: StartDaemonDeps): Promise<StartDaemonOut
           if (!Value.Check(RunAnswerRequestV2, input)) throw new Error("invalid answer request");
           if (context.authenticatedKeyId === undefined)
             throw new Error("authenticated key missing");
+          if (nativeBridgeService?.hasNativeStage(input.runId) === true) {
+            const accepted = nativeBridgeService.answer({
+              runId: input.runId,
+              submission: input.answer,
+              answeredByKeyId: context.authenticatedKeyId,
+            });
+            return {
+              schemaVersion: 2,
+              runId: input.runId,
+              status: accepted.status,
+              runRevision: accepted.runRevision,
+              interactionId: input.answer.interactionId,
+              interactionRevision: accepted.interactionRevision,
+              accepted: true,
+              operationId: ids.next("operation"),
+              deliveryState: "delivered",
+            };
+          }
           if (schedulingService?.status(input.runId) !== undefined) {
             const accepted = await schedulingService.answer(
               input.runId,
@@ -1114,6 +1342,15 @@ export async function startDaemon(deps: StartDaemonDeps): Promise<StartDaemonOut
         RUN_CANCEL_V1_METHOD,
         async (params) => {
           const runId = requiredParam(recordParams(params), "runId");
+          if (nativeBridgeService?.hasNativeStage(runId) === true) {
+            const current = nativeBridgeService.cancel(runId);
+            return {
+              schemaVersion: 1,
+              runId,
+              status: current?.status ?? "cancelled",
+              accepted: true,
+            };
+          }
           if (schedulingService?.status(runId) !== undefined) {
             await schedulingService.cancel(runId);
             const current = schedulingService.status(runId);
@@ -1136,36 +1373,412 @@ export async function startDaemon(deps: StartDaemonDeps): Promise<StartDaemonOut
           return stageRunResult(workspaceDatabase, row);
         },
       ],
+    );
+  }
+  // Artifact retrieval reads the shared content-addressed store (D2/D7) —
+  // every execution mode publishes through it, so this is registered
+  // whenever any of them is configured, not only `executionService`.
+  if (
+    executionService !== undefined ||
+    schedulingService !== undefined ||
+    nativeBridgeService !== undefined
+  ) {
+    entries.push([
+      ARTIFACT_GET_V1_METHOD,
+      async (params) => {
+        const input = recordParams(params);
+        const artifactId = requiredParam(input, "artifactId");
+        const artifact = artifactResult(workspaceDatabase, artifactId);
+        if (artifact === undefined) throw new Error("artifact does not exist");
+        const bytes = await readFile(join(home.paths.artifactsDirectory, artifact.relativePath));
+        const requestedOffset = input.offset;
+        const offset =
+          requestedOffset === undefined
+            ? 0
+            : typeof requestedOffset === "number" &&
+                Number.isSafeInteger(requestedOffset) &&
+                requestedOffset >= 0
+              ? requestedOffset
+              : -1;
+        if (offset < 0 || offset > bytes.byteLength) throw new Error("artifact offset is invalid");
+        const chunk = bytes.subarray(offset, offset + 32 * 1024);
+        return {
+          schemaVersion: 1,
+          artifactId: artifact.artifactId,
+          name: artifact.name,
+          mediaType: artifact.mediaType,
+          byteLength: artifact.byteLength,
+          sha256: artifact.contentHash,
+          offset,
+          eof: offset + chunk.byteLength === bytes.byteLength,
+          contentBase64: chunk.toString("base64"),
+        };
+      },
+    ]);
+  }
+  if (nativeBridgeService !== undefined) {
+    const nativeBridge = nativeBridgeService;
+    entries.push(
       [
-        ARTIFACT_GET_V1_METHOD,
-        async (params) => {
-          const input = recordParams(params);
-          const artifactId = requiredParam(input, "artifactId");
-          const artifact = artifactResult(workspaceDatabase, artifactId);
-          if (artifact === undefined) throw new Error("artifact does not exist");
-          const bytes = await readFile(join(home.paths.artifactsDirectory, artifact.relativePath));
-          const requestedOffset = input.offset;
-          const offset =
-            requestedOffset === undefined
-              ? 0
-              : typeof requestedOffset === "number" &&
-                  Number.isSafeInteger(requestedOffset) &&
-                  requestedOffset >= 0
-                ? requestedOffset
-                : -1;
-          if (offset < 0 || offset > bytes.byteLength)
-            throw new Error("artifact offset is invalid");
-          const chunk = bytes.subarray(offset, offset + 32 * 1024);
+        PARENT_SESSION_ATTACH_V1_METHOD,
+        (params) => {
+          const input = withoutAuth(recordParams(params));
+          if (!Value.Check(ParentSessionAttachRequestV1, input))
+            throw new Error("invalid parent session attach request");
+          const context = findRegisteredExecutionContext(workspaceDatabase, input.currentDirectory);
+          if (context === undefined) throw new Error("current directory is not registered");
+          const outcome = nativeBridge.attach({
+            codebaseId: context.codebaseId,
+            ...(input.previousSessionId === undefined
+              ? {}
+              : { previousSessionId: input.previousSessionId }),
+            ...(input.previousSessionRevision === undefined
+              ? {}
+              : { previousSessionRevision: input.previousSessionRevision }),
+            resumeDispatchIds: input.resumeDispatchIds,
+          });
+          // `ParentSessionAttachmentV1` carries no `rejectionCode` field — a
+          // rebind mismatch here is treated as a genuine caller error, unlike
+          // poll/question/submit, which race against fencing as a matter of
+          // course.
+          if (!outcome.accepted) {
+            throw new Error(`parent session attach rejected: ${outcome.rejectionCode}`);
+          }
           return {
             schemaVersion: 1,
-            artifactId: artifact.artifactId,
-            name: artifact.name,
-            mediaType: artifact.mediaType,
-            byteLength: artifact.byteLength,
-            sha256: artifact.contentHash,
-            offset,
-            eof: offset + chunk.byteLength === bytes.byteLength,
-            contentBase64: chunk.toString("base64"),
+            sessionId: outcome.sessionId,
+            sessionRevision: outcome.sessionRevision,
+            codebaseId: context.codebaseId,
+            attachedAt: outcome.attachedAt,
+            expiresAt: outcome.expiresAt,
+            leaseTtlMs: outcome.leaseTtlMs,
+            maxDispatches: NATIVE_MAX_DISPATCHES,
+            pollAfterMs: NATIVE_STAGE_POLL_AFTER_MS,
+            resumedDispatchIds: outcome.resumedDispatchIds,
+            ...(outcome.supersededSessionId === null
+              ? {}
+              : { supersededSessionId: outcome.supersededSessionId }),
+          };
+        },
+      ],
+      [
+        PARENT_SESSION_DETACH_V1_METHOD,
+        (params) => {
+          const input = withoutAuth(recordParams(params));
+          if (!Value.Check(ParentSessionDetachRequestV1, input))
+            throw new Error("invalid parent session detach request");
+          const outcome = nativeBridge.detach(input);
+          return {
+            schemaVersion: 1,
+            accepted: outcome.accepted,
+            ...(outcome.accepted ? {} : { rejectionCode: outcome.rejectionCode }),
+            released: outcome.accepted ? outcome.released : [],
+          };
+        },
+      ],
+      [
+        NATIVE_STAGE_POLL_V1_METHOD,
+        async (params) => {
+          const input = withoutAuth(recordParams(params));
+          if (!Value.Check(NativeStagePollRequestV1, input))
+            throw new Error("invalid native stage poll request");
+          const maxDispatches = input.maxDispatches ?? NATIVE_MAX_DISPATCHES;
+          // The wire request carries no `codebaseId` — the session already
+          // pins one from `attach` — so it is resolved here rather than
+          // trusted from the caller.
+          const session = readParentSession(workspaceDatabase, input.sessionId);
+          if (session === undefined) {
+            return {
+              schemaVersion: 1,
+              accepted: false,
+              rejectionCode: "session_not_attached",
+              sessionRevision: input.sessionRevision,
+              expiresAt: clock.nowIso(),
+              pollAfterMs: NATIVE_STAGE_POLL_AFTER_MS,
+              dispatches: [],
+              resumes: [],
+              revocations: [],
+            };
+          }
+          const outcome = await nativeBridge.poll({
+            sessionId: input.sessionId,
+            sessionRevision: input.sessionRevision,
+            codebaseId: session.codebaseId,
+            maxDispatches,
+          });
+          if (!outcome.accepted) {
+            // Re-read rather than reuse `session` — `poll()` runs the reap
+            // sweep before this rejection can be produced, and may have
+            // reclassified the session's liveness in the meantime.
+            const current = readParentSession(workspaceDatabase, input.sessionId);
+            return {
+              schemaVersion: 1,
+              accepted: false,
+              rejectionCode: outcome.rejectionCode,
+              sessionRevision: current?.revision ?? input.sessionRevision,
+              expiresAt: current?.expiresAt ?? clock.nowIso(),
+              pollAfterMs: NATIVE_STAGE_POLL_AFTER_MS,
+              dispatches: [],
+              resumes: [],
+              revocations: [],
+            };
+          }
+          const dispatches = outcome.claimed.flatMap((claim) => {
+            const workingDirectory = outcome.workingDirectories.get(claim.dispatchId);
+            // No entry means workspace provisioning failed after the claim
+            // (`recordNativeAttemptWorkspaceFailure` already reverted the
+            // stage to `waiting_for_parent`) — nothing to dispatch for it.
+            if (workingDirectory === undefined) return [];
+            const attempt = readNativeStageAttempts(workspaceDatabase, claim.runId).find(
+              (candidate) => candidate.attemptId === claim.attemptId,
+            );
+            if (attempt?.workspaceId === undefined || attempt.workspaceId === null) return [];
+            return [
+              {
+                schemaVersion: 1,
+                dispatchId: claim.dispatchId,
+                dispatchRevision: claim.dispatchRevision,
+                runId: claim.runId,
+                stageId: claim.stageId,
+                attemptId: claim.attemptId,
+                attemptOrdinal: claim.attemptOrdinal,
+                workspaceId: attempt.workspaceId,
+                workingDirectory,
+                instructionsPath: claim.instructionsPath,
+                prompt: claim.prompt,
+                artifactPath: claim.artifactPath,
+                artifactContract: claim.artifactContract,
+                model: claim.model,
+                effort: claim.effort,
+                ...(claim.focus === null ? {} : { focus: claim.focus }),
+                questions: claim.questions,
+                permissions: JSON.parse(claim.permissionsJson),
+                limits: JSON.parse(claim.limitsJson),
+                issuedAt: claim.issuedAt,
+                expiresAt: claim.expiresAt,
+                ...(claim.hardDeadlineAt === null ? {} : { deadlineAt: claim.hardDeadlineAt }),
+              },
+            ];
+          });
+          return {
+            schemaVersion: 1,
+            accepted: true,
+            sessionRevision: outcome.sessionRevision,
+            expiresAt: outcome.expiresAt,
+            pollAfterMs: NATIVE_STAGE_POLL_AFTER_MS,
+            dispatches,
+            resumes: outcome.resumes.map((resume) => ({
+              dispatchId: resume.dispatchId,
+              dispatchRevision: resume.dispatchRevision,
+              interactionId: resume.interactionId,
+              interactionRevision: resume.interactionRevision,
+              answer: JSON.parse(resume.answerJson),
+            })),
+            revocations: outcome.revocations.map((revocation) => ({
+              dispatchId: revocation.dispatchId,
+              dispatchRevision: revocation.dispatchRevision,
+              reason: revocation.terminalReason,
+            })),
+          };
+        },
+      ],
+      [
+        NATIVE_STAGE_QUESTION_V1_METHOD,
+        (params) => {
+          const input = withoutAuth(recordParams(params));
+          // `NativeStageQuestionRequestV1.interaction` is a `Type.Ref` — Ajv's
+          // in-schema `$ref` resolves against the manifest at generate time,
+          // but TypeBox's own `Value.Check` needs the referenced schema
+          // passed explicitly to dereference it at runtime.
+          if (!Value.Check(NativeStageQuestionRequestV1, [PendingInteractionV2], input))
+            throw new Error("invalid native stage question request");
+          const outcome = nativeBridge.question({
+            sessionId: input.sessionId,
+            sessionRevision: input.sessionRevision,
+            dispatchId: input.dispatchId,
+            expectedDispatchRevision: input.expectedDispatchRevision,
+            runId: input.runId,
+            stageId: input.stageId,
+            attemptId: input.attemptId,
+            interaction: input.interaction as never,
+          });
+          if (!outcome.accepted) {
+            return { schemaVersion: 1, accepted: false, rejectionCode: outcome.rejectionCode };
+          }
+          return {
+            schemaVersion: 1,
+            accepted: true,
+            interactionId: outcome.interactionId,
+            interactionRevision: outcome.interactionRevision,
+            dispatchRevision: outcome.dispatchRevision,
+            status: outcome.status,
+          };
+        },
+      ],
+      [
+        NATIVE_STAGE_SUBMIT_V1_METHOD,
+        async (params) => {
+          const input = withoutAuth(recordParams(params));
+          // `result`/`failure` are each a `Type.Ref` — see the question
+          // handler's own comment on why the references must be explicit.
+          if (
+            !Value.Check(
+              NativeStageSubmitRequestV1,
+              [ExternalStageResultV1, ExecutionFailureV1],
+              input,
+            )
+          )
+            throw new Error("invalid native stage submit request");
+          // The wire request carries no digest — computing it here from the
+          // canonicalised payload, rather than trusting a client-supplied
+          // value, is what makes it an honest mismatch detector (D4): a
+          // retried submit with the same `submissionId` but different
+          // content changes this digest, and only that.
+          const submissionDigest = createHash("sha256")
+            .update(
+              JSON.stringify({
+                outcome: input.outcome,
+                result: input.result ?? null,
+                failure: input.failure ?? null,
+              }),
+            )
+            .digest("hex");
+          const outcome = await nativeBridge.submit({
+            sessionId: input.sessionId,
+            sessionRevision: input.sessionRevision,
+            dispatchId: input.dispatchId,
+            expectedDispatchRevision: input.expectedDispatchRevision,
+            runId: input.runId,
+            stageId: input.stageId,
+            attemptId: input.attemptId,
+            submissionId: input.submissionId,
+            submissionDigest,
+            outcome: input.outcome,
+            ...(input.result === undefined
+              ? {}
+              : {
+                  declaredSummary: input.result.summary,
+                  declaredArtifactPath: input.result.artifactPath,
+                }),
+            ...(input.failure === undefined ? {} : { failure: input.failure }),
+          });
+          const stageRevision = nativeBridge.status(input.runId)?.stage.revision ?? 1;
+          if (!outcome.accepted) {
+            const projection = readRunProjection(workspaceDatabase, input.runId);
+            return {
+              schemaVersion: 1,
+              accepted: false,
+              rejectionCode: outcome.rejectionCode,
+              idempotentReplay: false,
+              runId: input.runId,
+              stageId: input.stageId,
+              attemptId: input.attemptId,
+              status: projection?.status ?? "failed",
+              stageRevision,
+            };
+          }
+          return {
+            schemaVersion: 1,
+            accepted: true,
+            idempotentReplay: outcome.idempotentReplay,
+            runId: input.runId,
+            stageId: input.stageId,
+            attemptId: input.attemptId,
+            status: outcome.status,
+            stageRevision,
+          };
+        },
+      ],
+      [
+        NATIVE_STAGE_STATUS_V1_METHOD,
+        (params) => {
+          const runId = requiredParam(recordParams(params), "runId");
+          const snapshot = nativeBridge.status(runId);
+          if (snapshot === undefined) throw new Error("native stage does not exist");
+          const projection = readRunProjection(workspaceDatabase, runId);
+          if (projection === undefined) throw new Error("run projection does not exist");
+          return {
+            schemaVersion: 1,
+            runId,
+            stageId: snapshot.stage.stageId,
+            status: projection.status,
+            runRevision: snapshot.stage.runRevision,
+            stageState: snapshot.stage.state,
+            stageRevision: snapshot.stage.revision,
+            attemptCount: snapshot.stage.attemptCount,
+            ...(snapshot.stage.currentAttemptId === null
+              ? {}
+              : { currentAttemptId: snapshot.stage.currentAttemptId }),
+            ...(snapshot.stage.waitingSince === null
+              ? {}
+              : { waitingSince: snapshot.stage.waitingSince }),
+            attempts: snapshot.attempts.map((attempt) => ({
+              schemaVersion: 1,
+              attemptId: attempt.attemptId,
+              runId: attempt.runId,
+              stageId: attempt.stageId,
+              attemptOrdinal: attempt.attemptOrdinal,
+              ...(attempt.workspaceId === null ? {} : { workspaceId: attempt.workspaceId }),
+              status: attempt.status,
+              ...(attempt.failureJson === null ? {} : { failure: JSON.parse(attempt.failureJson) }),
+              ...(attempt.startedAt === null ? {} : { startedAt: attempt.startedAt }),
+              ...(attempt.finishedAt === null ? {} : { finishedAt: attempt.finishedAt }),
+            })),
+            interactions: snapshot.interactions.map((question) => question.canonical),
+          };
+        },
+      ],
+    );
+  }
+  // A daemon configured with only the native bridge (D1: it is a dedicated
+  // service, not a scheduling/execution adapter) still needs `run.answer.v2`
+  // and `run.cancel.v1` — otherwise a native-only deployment could raise a
+  // question but never answer it, or never cancel a run. Both methods are
+  // already registered above whenever `scheduling`/`executionService` is
+  // configured (with a native-first branch); this is the fallback for the
+  // one remaining case neither of those blocks runs at all.
+  if (
+    nativeBridgeService !== undefined &&
+    schedulingService === undefined &&
+    executionService === undefined
+  ) {
+    const nativeBridge = nativeBridgeService;
+    entries.push(
+      [
+        RUN_ANSWER_V2_METHOD,
+        async (params, context) => {
+          const input = withoutAuth(recordParams(params));
+          if (!Value.Check(RunAnswerRequestV2, input)) throw new Error("invalid answer request");
+          if (context.authenticatedKeyId === undefined)
+            throw new Error("authenticated key missing");
+          const accepted = nativeBridge.answer({
+            runId: input.runId,
+            submission: input.answer,
+            answeredByKeyId: context.authenticatedKeyId,
+          });
+          return {
+            schemaVersion: 2,
+            runId: input.runId,
+            status: accepted.status,
+            runRevision: accepted.runRevision,
+            interactionId: input.answer.interactionId,
+            interactionRevision: accepted.interactionRevision,
+            accepted: true,
+            operationId: ids.next("operation"),
+            deliveryState: "delivered",
+          };
+        },
+      ],
+      [
+        RUN_CANCEL_V1_METHOD,
+        async (params) => {
+          const runId = requiredParam(recordParams(params), "runId");
+          const current = nativeBridge.cancel(runId);
+          return {
+            schemaVersion: 1,
+            runId,
+            status: current?.status ?? "cancelled",
+            accepted: true,
           };
         },
       ],

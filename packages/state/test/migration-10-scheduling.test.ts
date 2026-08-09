@@ -12,7 +12,7 @@ import {
   updateStageExecutionStatus,
 } from "../src/index.js";
 import { MIGRATIONS } from "../src/migrations/list.js";
-import { runMigrationList } from "../src/migrations/migrate.js";
+import { currentSchemaVersion, runMigrationList } from "../src/migrations/migrate.js";
 import { createDeterministicIds, createFakeClock } from "./helpers/determinism.js";
 import { makeTempDbPath } from "./helpers/temp-db.js";
 
@@ -85,7 +85,10 @@ describe("Q021 migration 10", () => {
     assignBackendExecution(db, "run-m10", "backend-m10");
     updateStageExecutionStatus(db, "run-m10", "running");
 
-    expect(runMigrations(db)).toMatchObject({ fromVersion: 9, toVersion: 10 });
+    expect(runMigrations(db)).toMatchObject({
+      fromVersion: 9,
+      toVersion: currentSchemaVersion(),
+    });
     expect(readExecutionSchedule(db, "run-m10")).toMatchObject({
       state: "running",
       capacityPolicy: "queue",

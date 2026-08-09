@@ -368,6 +368,24 @@ export function completePendingArtifactImports(db: StateDatabase, runId: string)
   return Number(report.changes);
 }
 
+/**
+ * Finalization is one-shot.
+ *
+ * Until Q023 the `WHERE` clause was `run_id = ?` alone, with no `finalized`
+ * guard and no `changes` assertion — last writer wins. Two completions for
+ * the same run silently overwrote each other, so a run that had already been
+ * reported `succeeded` could be rewritten to `failed` (or the reverse) with
+ * nothing anywhere recording that it happened. That is not a hypothetical
+ * ordering: `observe`'s catch block finalizes as `failed` when
+ * `finalizeSuccess` throws, and `finalizeSuccess` finalizes as `succeeded`
+ * before its last statements run.
+ *
+ * `finalized = 0` in the `WHERE` makes the guard atomic rather than a
+ * read-then-write, and the `changes` assertion turns the second attempt into
+ * a loud typed error at the exact call that made it. The bridge's submit
+ * path leans on this as its backstop, but the hole predates the bridge and
+ * the guard belongs here regardless.
+ */
 export function markExecutionFinalized(
   db: StateDatabase,
   runId: string,
@@ -378,11 +396,12 @@ export function markExecutionFinalized(
     readonly error?: string;
   },
 ): void {
-  internalHandle(db)
+  const report = internalHandle(db)
     .prepare(
       `UPDATE stage_execution
           SET status = ?, summary = ?, session_id = ?, error = ?, finalized = 1, updated_at = ?
-        WHERE run_id = ?`,
+        WHERE run_id = ?
+          AND finalized = 0`,
     )
     .run(
       details.status,
@@ -392,6 +411,11 @@ export function markExecutionFinalized(
       internalClock(db).nowIso(),
       runId,
     );
+  if (toSafeInteger(report.changes, "stage execution changes") !== 1) {
+    throw new StateStoreError(
+      `stage execution is already finalized or missing: ${runId} (attempted ${details.status})`,
+    );
+  }
 }
 
 export function readArtifactRecord(

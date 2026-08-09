@@ -88,12 +88,32 @@ const EXPECTED_EXEMPTIONS: readonly string[] = [
   "runtime/host-witness.ts",
   "runtime/lock-filesystem.ts",
   "runtime/mac.ts",
+  /*
+   * The native bridge service (Q023). Genuinely ambient, unlike
+   * stage-completion.ts above: `execFile` to resolve the repository's git
+   * HEAD (mirrors scheduling-service.ts's own `repositoryHead`) and
+   * `node:fs/promises#readFile` to read a submitted artifact off disk —
+   * exactly the class of filesystem/process work `src/runtime/**` exists to
+   * confine, not a borderline case.
+   */
+  "runtime/native-bridge-service.ts",
   "runtime/process-liveness.ts",
   "runtime/random-source.ts",
   "runtime/scheduling-service.ts",
   "runtime/signals.ts",
   "runtime/socket-probe.ts",
   "runtime/socket-server.ts",
+  /*
+   * Q023's shared terminal path. It trips the pattern only on `node:crypto`,
+   * and only to sha256 bytes it was handed — content addressing, not a
+   * secret operation and not an ambient source: same input, same digest,
+   * no clock, no entropy, no socket. It is listed here because assertion 3
+   * is directory membership, so every file under `src/runtime/` must appear
+   * whether or not its ambient-ness is real, and because the alternative —
+   * moving it out of `src/runtime/` — would make assertion 1 flag it as an
+   * unauthorised offender for the same blunt `node:crypto` match.
+   */
+  "runtime/stage-completion.ts",
   "runtime/trace-sink.ts",
 ];
 
@@ -103,7 +123,7 @@ const EXPECTED_EXEMPTIONS: readonly string[] = [
  * of Phase 5, the eleven `src/runtime/**` adapters included. A scan whose
  * `srcRoot` were wrong would list zero files and otherwise pass silently.
  */
-const MINIMUM_SCANNED_FILES = 31;
+const MINIMUM_SCANNED_FILES = 39;
 
 async function listTypeScriptFiles(root: string): Promise<string[]> {
   const entries = await readdir(root, { recursive: true, withFileTypes: true });

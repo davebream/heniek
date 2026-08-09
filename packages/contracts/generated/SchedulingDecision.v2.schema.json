@@ -1,0 +1,132 @@
+{
+  "$id": "heniek://contract/SchedulingDecision/v2",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "decisionId",
+    "runId",
+    "stageId",
+    "kind",
+    "reasonCode",
+    "recordedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 2,
+      "type": "number"
+    },
+    "decisionId": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "runId": {
+      "minLength": 1,
+      "description": "Opaque RunId.",
+      "type": "string"
+    },
+    "stageId": {
+      "minLength": 1,
+      "description": "Opaque StageId.",
+      "type": "string"
+    },
+    "candidateIndex": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "profileId": {
+      "minLength": 1,
+      "description": "Opaque ProfileId.",
+      "type": "string"
+    },
+    "accountId": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "kind": {
+      "anyOf": [
+        {
+          "const": "enqueued",
+          "type": "string"
+        },
+        {
+          "const": "capacity_rejected",
+          "type": "string"
+        },
+        {
+          "const": "compatibility_rejected",
+          "type": "string"
+        },
+        {
+          "const": "candidate_selected",
+          "type": "string"
+        },
+        {
+          "const": "lease_acquired",
+          "type": "string"
+        },
+        {
+          "const": "lease_renewed",
+          "type": "string"
+        },
+        {
+          "const": "lease_released",
+          "type": "string"
+        },
+        {
+          "const": "lease_expired",
+          "type": "string"
+        },
+        {
+          "const": "capacity_question_created",
+          "type": "string"
+        },
+        {
+          "const": "capacity_answered",
+          "type": "string"
+        },
+        {
+          "const": "attempt_started",
+          "type": "string"
+        },
+        {
+          "const": "attempt_succeeded",
+          "type": "string"
+        },
+        {
+          "const": "attempt_cancelled",
+          "type": "string"
+        },
+        {
+          "const": "attempt_failed",
+          "type": "string"
+        },
+        {
+          "const": "attempt_recovery_required",
+          "type": "string"
+        },
+        {
+          "const": "fallback_selected",
+          "type": "string"
+        },
+        {
+          "const": "fallback_exhausted",
+          "type": "string"
+        },
+        {
+          "const": "user_choice",
+          "type": "string"
+        }
+      ]
+    },
+    "reasonCode": {
+      "minLength": 1,
+      "maxLength": 128,
+      "type": "string"
+    },
+    "recordedAt": {
+      "format": "date-time",
+      "type": "string"
+    }
+  }
+}

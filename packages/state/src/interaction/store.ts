@@ -478,7 +478,16 @@ export function listInteractionInbox(db: StateDatabase): readonly InteractionInb
     });
 }
 
-function validateAnswer(interaction: Interaction, submission: AnswerSubmission): BackendAnswer {
+/**
+ * Exported for `native-bridge/store.ts`: native questions validate answers
+ * against the exact same `InteractionV2`/`InteractionAnswerSubmissionV2`
+ * shapes, so this is reused rather than re-implemented — one place decides
+ * what a well-formed answer looks like, for both interaction kinds.
+ */
+export function validateAnswer(
+  interaction: Interaction,
+  submission: AnswerSubmission,
+): BackendAnswer {
   const byQuestion = new Map(submission.answers.map((answer) => [answer.questionId, answer]));
   if (
     byQuestion.size !== submission.answers.length ||

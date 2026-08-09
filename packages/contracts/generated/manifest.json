@@ -308,6 +308,84 @@
       "path": "generated/InteractionInboxResult.v1.schema.json"
     },
     {
+      "schemaId": "heniek://contract/NativeStageAttempt/v1",
+      "schemaVersion": 1,
+      "sha256": "880390d4691d583ccabbc6acfd8afd2946d440ee0f68412ba390c20173f0e8b3",
+      "path": "generated/NativeStageAttempt.v1.schema.json"
+    },
+    {
+      "schemaId": "heniek://contract/NativeStageDispatch/v1",
+      "schemaVersion": 1,
+      "sha256": "db90744ffaae8e6bbf66ccac8ad19b415f0528d6a3da717179f1660e24d1f19f",
+      "path": "generated/NativeStageDispatch.v1.schema.json"
+    },
+    {
+      "schemaId": "heniek://contract/NativeStagePollRequest/v1",
+      "schemaVersion": 1,
+      "sha256": "064ea588ce653f32bbe150e87a903ff002ff27eeb275047c9b1f6978f564fb53",
+      "path": "generated/NativeStagePollRequest.v1.schema.json"
+    },
+    {
+      "schemaId": "heniek://contract/NativeStagePollResult/v1",
+      "schemaVersion": 1,
+      "sha256": "0e87c1f1fe5605faf0a1e1abf866c5771c3874234156bb11383e015019988e15",
+      "path": "generated/NativeStagePollResult.v1.schema.json"
+    },
+    {
+      "schemaId": "heniek://contract/NativeStageQuestionRequest/v1",
+      "schemaVersion": 1,
+      "sha256": "d399c78a652f319453744d2a3ef77a6507838fdfaaf0bc8f23bcab416c1196af",
+      "path": "generated/NativeStageQuestionRequest.v1.schema.json"
+    },
+    {
+      "schemaId": "heniek://contract/NativeStageQuestionResult/v1",
+      "schemaVersion": 1,
+      "sha256": "04594a8c6786a0b580bcbe23bd5d961cd472ed1e7b05caff3c21f6474748b3be",
+      "path": "generated/NativeStageQuestionResult.v1.schema.json"
+    },
+    {
+      "schemaId": "heniek://contract/NativeStageStatusResult/v1",
+      "schemaVersion": 1,
+      "sha256": "18900c67f5cc173368e22f630e8f468ea7d98b834ad1997bd6ed8f8ce22bfa82",
+      "path": "generated/NativeStageStatusResult.v1.schema.json"
+    },
+    {
+      "schemaId": "heniek://contract/NativeStageSubmitRequest/v1",
+      "schemaVersion": 1,
+      "sha256": "a7b3c52a475804355b684cdb21aee58956402e46cacacf83ec8363afeb387eb8",
+      "path": "generated/NativeStageSubmitRequest.v1.schema.json"
+    },
+    {
+      "schemaId": "heniek://contract/NativeStageSubmitResult/v1",
+      "schemaVersion": 1,
+      "sha256": "1acbf78f9cd4d1db91efab9ebef1f36afbba99609e096ce82d5fa315031483c5",
+      "path": "generated/NativeStageSubmitResult.v1.schema.json"
+    },
+    {
+      "schemaId": "heniek://contract/ParentSessionAttachment/v1",
+      "schemaVersion": 1,
+      "sha256": "bdfc12500ea76159d46d9da097dc41569cbc0004df2dc55daa58088bcb2fc555",
+      "path": "generated/ParentSessionAttachment.v1.schema.json"
+    },
+    {
+      "schemaId": "heniek://contract/ParentSessionAttachRequest/v1",
+      "schemaVersion": 1,
+      "sha256": "0e155c67065c6d053e6ff80ab57f0ae7a0f865e6e0ddf0d684407a7b3451e4a6",
+      "path": "generated/ParentSessionAttachRequest.v1.schema.json"
+    },
+    {
+      "schemaId": "heniek://contract/ParentSessionDetachRequest/v1",
+      "schemaVersion": 1,
+      "sha256": "b979417cde98955b6241465b9ebad0c720226b9ba2cc1b2e2bd5d506c347a0ed",
+      "path": "generated/ParentSessionDetachRequest.v1.schema.json"
+    },
+    {
+      "schemaId": "heniek://contract/ParentSessionDetachResult/v1",
+      "schemaVersion": 1,
+      "sha256": "a945c521166ae607a61052dcc1b3d93824dc327d2badf18546fea108dc1f90d1",
+      "path": "generated/ParentSessionDetachResult.v1.schema.json"
+    },
+    {
       "schemaId": "heniek://contract/PendingInteraction/v1",
       "schemaVersion": 1,
       "sha256": "18105638d2b12bdaeddd18b51e23d60b5e60ebdc9d0fe1f59dd831a86364ced9",
@@ -440,6 +518,12 @@
       "path": "generated/SchedulingDecision.v1.schema.json"
     },
     {
+      "schemaId": "heniek://contract/SchedulingDecision/v2",
+      "schemaVersion": 2,
+      "sha256": "27b87dbe1727aab276a0db642c2511942bfba9bc1da7c52ca4c7d68ee20d8049",
+      "path": "generated/SchedulingDecision.v2.schema.json"
+    },
+    {
       "schemaId": "heniek://contract/StageRunAnswerResult/v2",
       "schemaVersion": 2,
       "sha256": "f2a8f8fc1020ec5371e769db12fe0aeaca865caa669077d7c35167a29efc265c",
@@ -462,6 +546,12 @@
       "schemaVersion": 2,
       "sha256": "046a7e45967777b4ebb50bfb734207a8a369b90d50002768891e3e6d50f715d9",
       "path": "generated/StageRunResult.v2.schema.json"
+    },
+    {
+      "schemaId": "heniek://contract/StageRunResult/v3",
+      "schemaVersion": 3,
+      "sha256": "0bcc4f412bf6574a4f75f26b77979fa6c56963497e8a16efc886bfd119959557",
+      "path": "generated/StageRunResult.v3.schema.json"
     },
     {
       "schemaId": "heniek://contract/StageRunResumeResult/v2",
@@ -488,6 +578,12 @@
       "path": "generated/StageRunStatusResult.v3.schema.json"
     },
     {
+      "schemaId": "heniek://contract/StageRunStatusResult/v4",
+      "schemaVersion": 4,
+      "sha256": "448d39bcafb560b28c47b04c07ae649e2053d7674e6ca6bd15d8ac448fd6ef09",
+      "path": "generated/StageRunStatusResult.v4.schema.json"
+    },
+    {
       "schemaId": "heniek://contract/StageStartRequest/v2",
       "schemaVersion": 2,
       "sha256": "8b8ed13a64c711cb9c6700a13b291b8a770e9347a1652d84c77f0cbc8f7efcaf",
@@ -504,6 +600,12 @@
       "schemaVersion": 2,
       "sha256": "f3b5fc903ec2b65c6541b16c753974f7dabd77c44eee941317cec492bd3be6cd",
       "path": "generated/StageStartResult.v2.schema.json"
+    },
+    {
+      "schemaId": "heniek://contract/StageStartResult/v3",
+      "schemaVersion": 3,
+      "sha256": "d5af71ad48d08b715ebf38715e04186466414c1eb4723e13664244439c989715",
+      "path": "generated/StageStartResult.v3.schema.json"
     },
     {
       "schemaId": "heniek://contract/TaskContext/v1",

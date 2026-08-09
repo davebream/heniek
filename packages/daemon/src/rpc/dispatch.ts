@@ -25,6 +25,18 @@ import {
   DOCTOR_SCHEMA_SHA256,
   INBOX_LIST_SCHEMA_ID,
   INBOX_LIST_SCHEMA_SHA256,
+  NATIVE_STAGE_POLL_SCHEMA_ID,
+  NATIVE_STAGE_POLL_SCHEMA_SHA256,
+  NATIVE_STAGE_QUESTION_SCHEMA_ID,
+  NATIVE_STAGE_QUESTION_SCHEMA_SHA256,
+  NATIVE_STAGE_STATUS_SCHEMA_ID,
+  NATIVE_STAGE_STATUS_SCHEMA_SHA256,
+  NATIVE_STAGE_SUBMIT_SCHEMA_ID,
+  NATIVE_STAGE_SUBMIT_SCHEMA_SHA256,
+  PARENT_SESSION_ATTACH_SCHEMA_ID,
+  PARENT_SESSION_ATTACH_SCHEMA_SHA256,
+  PARENT_SESSION_DETACH_SCHEMA_ID,
+  PARENT_SESSION_DETACH_SCHEMA_SHA256,
   REGISTERED_CODEBASE_SCHEMA_ID,
   REGISTERED_CODEBASE_SCHEMA_SHA256,
   RUN_ANSWER_V2_SCHEMA_ID,
@@ -35,6 +47,8 @@ import {
   RUN_RESULT_SCHEMA_SHA256,
   RUN_RESULT_V2_SCHEMA_ID,
   RUN_RESULT_V2_SCHEMA_SHA256,
+  RUN_RESULT_V3_SCHEMA_ID,
+  RUN_RESULT_V3_SCHEMA_SHA256,
   RUN_RESUME_V2_SCHEMA_ID,
   RUN_RESUME_V2_SCHEMA_SHA256,
   RUN_STATUS_SCHEMA_ID,
@@ -43,10 +57,14 @@ import {
   RUN_STATUS_V2_SCHEMA_SHA256,
   RUN_STATUS_V3_SCHEMA_ID,
   RUN_STATUS_V3_SCHEMA_SHA256,
+  RUN_STATUS_V4_SCHEMA_ID,
+  RUN_STATUS_V4_SCHEMA_SHA256,
   STAGE_START_SCHEMA_ID,
   STAGE_START_SCHEMA_SHA256,
   STAGE_START_V2_SCHEMA_ID,
   STAGE_START_V2_SCHEMA_SHA256,
+  STAGE_START_V3_SCHEMA_ID,
+  STAGE_START_V3_SCHEMA_SHA256,
 } from "@heniek/protocol";
 import type { ConnectionAuthState } from "../auth/challenge.js";
 import { UNAUTHORIZED_MESSAGE } from "../auth/errors.js";
@@ -74,19 +92,28 @@ import {
   INBOX_LIST_V1_METHOD,
   type MethodContext,
   type MethodRegistry,
+  NATIVE_STAGE_POLL_V1_METHOD,
+  NATIVE_STAGE_QUESTION_V1_METHOD,
+  NATIVE_STAGE_STATUS_V1_METHOD,
+  NATIVE_STAGE_SUBMIT_V1_METHOD,
+  PARENT_SESSION_ATTACH_V1_METHOD,
+  PARENT_SESSION_DETACH_V1_METHOD,
   RPC_CANCEL_METHOD,
   RUN_ANSWER_V1_METHOD,
   RUN_ANSWER_V2_METHOD,
   RUN_CANCEL_V1_METHOD,
   RUN_RESULT_V1_METHOD,
   RUN_RESULT_V2_METHOD,
+  RUN_RESULT_V3_METHOD,
   RUN_RESUME_V1_METHOD,
   RUN_RESUME_V2_METHOD,
   RUN_STATUS_V1_METHOD,
   RUN_STATUS_V2_METHOD,
   RUN_STATUS_V3_METHOD,
+  RUN_STATUS_V4_METHOD,
   STAGE_START_V1_METHOD,
   STAGE_START_V2_METHOD,
+  STAGE_START_V3_METHOD,
 } from "./methods.js";
 
 const STATUS_SCHEMA_ID = "heniek://contract/DaemonStatus/v1";
@@ -242,6 +269,12 @@ function negotiateResult(params: Record<string, unknown>) {
     ],
     "stage.start": [
       {
+        methodVersion: 3,
+        schemaId: STAGE_START_V3_SCHEMA_ID,
+        sha256: STAGE_START_V3_SCHEMA_SHA256,
+        wireMethod: STAGE_START_V3_METHOD,
+      },
+      {
         methodVersion: 2,
         schemaId: STAGE_START_V2_SCHEMA_ID,
         sha256: STAGE_START_V2_SCHEMA_SHA256,
@@ -255,6 +288,12 @@ function negotiateResult(params: Record<string, unknown>) {
       },
     ],
     "run.status": [
+      {
+        methodVersion: 4,
+        schemaId: RUN_STATUS_V4_SCHEMA_ID,
+        sha256: RUN_STATUS_V4_SCHEMA_SHA256,
+        wireMethod: RUN_STATUS_V4_METHOD,
+      },
       {
         methodVersion: 3,
         schemaId: RUN_STATUS_V3_SCHEMA_ID,
@@ -320,6 +359,12 @@ function negotiateResult(params: Record<string, unknown>) {
     ],
     "run.result": [
       {
+        methodVersion: 3,
+        schemaId: RUN_RESULT_V3_SCHEMA_ID,
+        sha256: RUN_RESULT_V3_SCHEMA_SHA256,
+        wireMethod: RUN_RESULT_V3_METHOD,
+      },
+      {
         methodVersion: 2,
         schemaId: RUN_RESULT_V2_SCHEMA_ID,
         sha256: RUN_RESULT_V2_SCHEMA_SHA256,
@@ -330,6 +375,54 @@ function negotiateResult(params: Record<string, unknown>) {
         schemaId: RUN_RESULT_SCHEMA_ID,
         sha256: RUN_RESULT_SCHEMA_SHA256,
         wireMethod: RUN_RESULT_V1_METHOD,
+      },
+    ],
+    "parentSession.attach": [
+      {
+        methodVersion: 1,
+        schemaId: PARENT_SESSION_ATTACH_SCHEMA_ID,
+        sha256: PARENT_SESSION_ATTACH_SCHEMA_SHA256,
+        wireMethod: PARENT_SESSION_ATTACH_V1_METHOD,
+      },
+    ],
+    "parentSession.detach": [
+      {
+        methodVersion: 1,
+        schemaId: PARENT_SESSION_DETACH_SCHEMA_ID,
+        sha256: PARENT_SESSION_DETACH_SCHEMA_SHA256,
+        wireMethod: PARENT_SESSION_DETACH_V1_METHOD,
+      },
+    ],
+    "nativeStage.poll": [
+      {
+        methodVersion: 1,
+        schemaId: NATIVE_STAGE_POLL_SCHEMA_ID,
+        sha256: NATIVE_STAGE_POLL_SCHEMA_SHA256,
+        wireMethod: NATIVE_STAGE_POLL_V1_METHOD,
+      },
+    ],
+    "nativeStage.question": [
+      {
+        methodVersion: 1,
+        schemaId: NATIVE_STAGE_QUESTION_SCHEMA_ID,
+        sha256: NATIVE_STAGE_QUESTION_SCHEMA_SHA256,
+        wireMethod: NATIVE_STAGE_QUESTION_V1_METHOD,
+      },
+    ],
+    "nativeStage.submit": [
+      {
+        methodVersion: 1,
+        schemaId: NATIVE_STAGE_SUBMIT_SCHEMA_ID,
+        sha256: NATIVE_STAGE_SUBMIT_SCHEMA_SHA256,
+        wireMethod: NATIVE_STAGE_SUBMIT_V1_METHOD,
+      },
+    ],
+    "nativeStage.status": [
+      {
+        methodVersion: 1,
+        schemaId: NATIVE_STAGE_STATUS_SCHEMA_ID,
+        sha256: NATIVE_STAGE_STATUS_SCHEMA_SHA256,
+        wireMethod: NATIVE_STAGE_STATUS_V1_METHOD,
       },
     ],
     "artifact.get": [

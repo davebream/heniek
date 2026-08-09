@@ -17,10 +17,12 @@ export const CODEBASE_REGISTER_V1_METHOD = "codebase.register.v1";
 export const STAGE_START_METHOD = "stage.start";
 export const STAGE_START_V1_METHOD = "stage.start.v1";
 export const STAGE_START_V2_METHOD = "stage.start.v2";
+export const STAGE_START_V3_METHOD = "stage.start.v3";
 export const RUN_STATUS_METHOD = "run.status";
 export const RUN_STATUS_V1_METHOD = "run.status.v1";
 export const RUN_STATUS_V2_METHOD = "run.status.v2";
 export const RUN_STATUS_V3_METHOD = "run.status.v3";
+export const RUN_STATUS_V4_METHOD = "run.status.v4";
 export const RUN_ANSWER_METHOD = "run.answer";
 export const RUN_ANSWER_V1_METHOD = "run.answer.v1";
 export const RUN_ANSWER_V2_METHOD = "run.answer.v2";
@@ -34,6 +36,27 @@ export const RUN_CANCEL_V1_METHOD = "run.cancel.v1";
 export const RUN_RESULT_METHOD = "run.result";
 export const RUN_RESULT_V1_METHOD = "run.result.v1";
 export const RUN_RESULT_V2_METHOD = "run.result.v2";
+export const RUN_RESULT_V3_METHOD = "run.result.v3";
+
+/**
+ * Q023's native bridge. Two families on purpose: `parentSession.*` is
+ * connection identity, called once per attached session; `nativeStage.*` is
+ * per-dispatch work, called continuously. Collapsing them would lose that
+ * distinction without saving anything — negotiation is per-connection over
+ * the set of required methods regardless of how they are named.
+ */
+export const PARENT_SESSION_ATTACH_METHOD = "parentSession.attach";
+export const PARENT_SESSION_ATTACH_V1_METHOD = "parentSession.attach.v1";
+export const PARENT_SESSION_DETACH_METHOD = "parentSession.detach";
+export const PARENT_SESSION_DETACH_V1_METHOD = "parentSession.detach.v1";
+export const NATIVE_STAGE_POLL_METHOD = "nativeStage.poll";
+export const NATIVE_STAGE_POLL_V1_METHOD = "nativeStage.poll.v1";
+export const NATIVE_STAGE_QUESTION_METHOD = "nativeStage.question";
+export const NATIVE_STAGE_QUESTION_V1_METHOD = "nativeStage.question.v1";
+export const NATIVE_STAGE_SUBMIT_METHOD = "nativeStage.submit";
+export const NATIVE_STAGE_SUBMIT_V1_METHOD = "nativeStage.submit.v1";
+export const NATIVE_STAGE_STATUS_METHOD = "nativeStage.status";
+export const NATIVE_STAGE_STATUS_V1_METHOD = "nativeStage.status.v1";
 export const ARTIFACT_GET_METHOD = "artifact.get";
 export const ARTIFACT_GET_V1_METHOD = "artifact.get.v1";
 export const DOCTOR_METHOD = "doctor";
@@ -130,6 +153,40 @@ export const DOCTOR_SCHEMA_SHA256 =
 export const CAPABILITY_CATALOGUE_SCHEMA_ID = "heniek://contract/CapabilityCatalogue/v1";
 export const CAPABILITY_CATALOGUE_SCHEMA_SHA256 =
   "5fe61be4e0fb222028c0078740e0b407250dddb911855a5dc14e15ed3a55a54c";
+
+/**
+ * Q023 additions. `StageRunStatusResult/v4` and `StageRunResult/v3` exist
+ * only because `SchedulingDecision/v1` could not express four decision kinds
+ * the scheduler has always written; v2/v3 stay pinned above and remain
+ * selectable for any client that negotiated them.
+ */
+export const STAGE_START_V3_SCHEMA_ID = "heniek://contract/StageStartResult/v3";
+export const STAGE_START_V3_SCHEMA_SHA256 =
+  "d5af71ad48d08b715ebf38715e04186466414c1eb4723e13664244439c989715";
+export const RUN_STATUS_V4_SCHEMA_ID = "heniek://contract/StageRunStatusResult/v4";
+export const RUN_STATUS_V4_SCHEMA_SHA256 =
+  "448d39bcafb560b28c47b04c07ae649e2053d7674e6ca6bd15d8ac448fd6ef09";
+export const RUN_RESULT_V3_SCHEMA_ID = "heniek://contract/StageRunResult/v3";
+export const RUN_RESULT_V3_SCHEMA_SHA256 =
+  "0bcc4f412bf6574a4f75f26b77979fa6c56963497e8a16efc886bfd119959557";
+export const PARENT_SESSION_ATTACH_SCHEMA_ID = "heniek://contract/ParentSessionAttachment/v1";
+export const PARENT_SESSION_ATTACH_SCHEMA_SHA256 =
+  "bdfc12500ea76159d46d9da097dc41569cbc0004df2dc55daa58088bcb2fc555";
+export const PARENT_SESSION_DETACH_SCHEMA_ID = "heniek://contract/ParentSessionDetachResult/v1";
+export const PARENT_SESSION_DETACH_SCHEMA_SHA256 =
+  "a945c521166ae607a61052dcc1b3d93824dc327d2badf18546fea108dc1f90d1";
+export const NATIVE_STAGE_POLL_SCHEMA_ID = "heniek://contract/NativeStagePollResult/v1";
+export const NATIVE_STAGE_POLL_SCHEMA_SHA256 =
+  "0e87c1f1fe5605faf0a1e1abf866c5771c3874234156bb11383e015019988e15";
+export const NATIVE_STAGE_QUESTION_SCHEMA_ID = "heniek://contract/NativeStageQuestionResult/v1";
+export const NATIVE_STAGE_QUESTION_SCHEMA_SHA256 =
+  "04594a8c6786a0b580bcbe23bd5d961cd472ed1e7b05caff3c21f6474748b3be";
+export const NATIVE_STAGE_SUBMIT_SCHEMA_ID = "heniek://contract/NativeStageSubmitResult/v1";
+export const NATIVE_STAGE_SUBMIT_SCHEMA_SHA256 =
+  "1acbf78f9cd4d1db91efab9ebef1f36afbba99609e096ce82d5fa315031483c5";
+export const NATIVE_STAGE_STATUS_SCHEMA_ID = "heniek://contract/NativeStageStatusResult/v1";
+export const NATIVE_STAGE_STATUS_SCHEMA_SHA256 =
+  "18900c67f5cc173368e22f630e8f468ea7d98b834ad1997bd6ed8f8ce22bfa82";
 
 function hex(bytes: Uint8Array): string {
   return Buffer.from(bytes).toString("hex");

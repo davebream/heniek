@@ -1,3 +1,4 @@
+import type { SchedulingDecisionKind } from "@heniek/contracts";
 import {
   internalClock,
   internalHandle,
@@ -180,6 +181,17 @@ function transaction<T>(db: StateDatabase, operation: () => T): T {
   }
 }
 
+/**
+ * `kind` is typed against the published vocabulary rather than left as a
+ * bare `string`. It was a `string` until Q023, which is how four kinds this
+ * function writes — `attempt_succeeded`, `attempt_cancelled`,
+ * `attempt_recovery_required` and `user_choice` — came to be missing from
+ * `SchedulingDecision/v1` without anything failing: the column has no CHECK
+ * and outgoing results are never validated against their own schema, so the
+ * daemon could serve a `decisions` array that violated its published
+ * contract. Narrowing the parameter makes the next such omission a
+ * compile error instead of a wire-format lie.
+ */
 function recordDecision(
   db: StateDatabase,
   input: {
@@ -188,7 +200,7 @@ function recordDecision(
     readonly candidateIndex?: number;
     readonly profileId?: string;
     readonly accountId?: string;
-    readonly kind: string;
+    readonly kind: SchedulingDecisionKind;
     readonly reasonCode: string;
     readonly now: string;
   },
