@@ -1,0 +1,97 @@
+# Bundled `fast` pipeline (Product Spec §30.1), adapted to the published
+# PipelineDefinition/v1 surface:
+# - `produces` → `writes` under the artifacts namespace
+# - `resume-if-compatible` → `session.policy: resume`
+# - stage-level `when` → a conditional edge (schema has no stage `when`)
+# - verify requires a public profile id under current validation rules
+# Ordering follows §30.1 (risk review before verify); see ADR 0028 for the
+# §14.6 narrative discrepancy.
+schemaVersion: 1
+id: fast
+name: Fast
+description: >
+  Shared deliberation, build with one bounded repair, optional fresh risk
+  review, deterministic verification, then publish.
+# Repair budget is 2 so one identical-signature validation repair is allowed
+# under ADR 0026 (unchanged-signature ceiling uses >= budget).
+mode: autonomous
+
+limits:
+  max_repair_attempts: 2
+
+stages:
+  - id: deliberate
+    type: agent
+    profile: task-owner
+    reads:
+      - task.current
+    writes:
+      - artifacts.understanding
+      - artifacts.design
+      - artifacts.plan
+    completion:
+      require:
+        - valid_result_envelope
+        - artifact: understanding
+        - artifact: design
+        - artifact: plan
+
+  - id: build
+    type: agent
+    profile: task-owner
+    needs: [deliberate]
+    session:
+      policy: resume
+    reads:
+      - task.current
+      - artifacts.understanding
+      - artifacts.design
+      - artifacts.plan
+    writes:
+      - artifacts.implementation
+    completion:
+      require:
+        - valid_result_envelope
+        - non_empty_diff
+    on_validation_failure:
+      strategy: repair
+      session: resume
+      max_attempts: 2
+
+  - id: risk-review
+    type: agent
+    profile: reviewer
+    session:
+      policy: fresh
+    reads:
+      - artifacts.implementation
+    writes:
+      - artifacts.risk_review
+    completion:
+      require:
+        - valid_result_envelope
+        - artifact: risk_review
+
+  - id: verify
+    type: verify
+    profile: task-owner
+    needs: [build, risk-review]
+    reads:
+      - artifacts.implementation
+    writes:
+      - artifacts.verification
+
+  - id: publish
+    type: publish
+    needs: [verify]
+    reads:
+      - artifacts.implementation
+      - artifacts.verification
+    writes:
+      - artifacts.publication
+
+edges:
+  - from: build
+    to: risk-review
+    when:
+      expression: risk.requiresFreshReview == true

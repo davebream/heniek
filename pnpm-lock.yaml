@@ -131,6 +131,9 @@ importers:
       '@heniek/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@heniek/secrets':
+        specifier: workspace:*
+        version: link:../secrets
       '@heniek/state':
         specifier: workspace:*
         version: link:../state

@@ -446,12 +446,16 @@ export function createVerifyStageRunner(deps: VerifyStageRunnerDeps = {}): Stage
           detail: result.verdict,
           payload: result,
         });
-        outputs.push({
-          schemaVersion: 1,
-          reference: "verify.result",
-          kind: "value",
-          value: result,
-        });
+        const writeRefs = state.writes.length > 0 ? state.writes : (["verify.result"] as const);
+        for (const reference of writeRefs) {
+          if (outputs.some((binding) => binding.reference === reference)) continue;
+          outputs.push({
+            schemaVersion: 1,
+            reference,
+            kind: "value",
+            value: result,
+          });
+        }
       }
 
       state.snapshot.evidence = evidence;

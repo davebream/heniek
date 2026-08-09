@@ -107,6 +107,13 @@ async function sleep(ms: number): Promise<void> {
   });
 }
 
+/** Map artifact paths like `artifacts/design.md` onto completion names (`design`). */
+function artifactEvidenceRequirement(path: string): string {
+  const stripped = path.replace(/^artifacts\//, "");
+  const dot = stripped.lastIndexOf(".");
+  return dot > 0 ? stripped.slice(0, dot) : stripped;
+}
+
 const TERMINAL = new Set<ExecutionStatus>(["succeeded", "failed", "cancelled"]);
 
 export function createAgentStageRunner(deps: AgentStageRunnerDeps): StageRunner {
@@ -528,7 +535,7 @@ export function createAgentStageRunner(deps: AgentStageRunnerDeps): StageRunner 
             kind: "artifact",
             satisfied: false,
             recordedAt: now,
-            requirement: artifact.path,
+            requirement: artifactEvidenceRequirement(artifact.path),
             detail: "artifact digest mismatch",
             payload: { declared: artifact.sha256, actual: digest },
           });
@@ -539,7 +546,7 @@ export function createAgentStageRunner(deps: AgentStageRunnerDeps): StageRunner 
           kind: "artifact",
           satisfied: true,
           recordedAt: now,
-          requirement: artifact.path,
+          requirement: artifactEvidenceRequirement(artifact.path),
           payload: { artifactId: artifact.id, contentHash: digest },
         });
         for (const write of state.writes) {
@@ -695,7 +702,9 @@ export function createAgentStageRunner(deps: AgentStageRunnerDeps): StageRunner 
         phase: "finalize" as const,
         code: classification,
         message: redactFailureMessage(validation.detail ?? "agent stage failed"),
-        retryable: classification === "timeout",
+        // Validation failures must remain runner-retryable so §19.6
+        // on_validation_failure repair strategies can apply (ADR 0026 D2/D4).
+        retryable: classification === "timeout" || classification === "validation_failed",
         recovery: state.snapshot.recovery,
       }) as StageRunnerFailure;
 

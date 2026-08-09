@@ -14,6 +14,10 @@ export const CODEBASE_DETECT_METHOD = "codebase.detect";
 export const CODEBASE_DETECT_V1_METHOD = "codebase.detect.v1";
 export const CODEBASE_REGISTER_METHOD = "codebase.register";
 export const CODEBASE_REGISTER_V1_METHOD = "codebase.register.v1";
+export const CODEBASE_ONBOARD_PROPOSE_METHOD = "codebase.onboard.propose";
+export const CODEBASE_ONBOARD_PROPOSE_V1_METHOD = "codebase.onboard.propose.v1";
+export const CODEBASE_ONBOARD_APPLY_METHOD = "codebase.onboard.apply";
+export const CODEBASE_ONBOARD_APPLY_V1_METHOD = "codebase.onboard.apply.v1";
 export const STAGE_START_METHOD = "stage.start";
 export const STAGE_START_V1_METHOD = "stage.start.v1";
 export const STAGE_START_V2_METHOD = "stage.start.v2";
@@ -111,6 +115,14 @@ export const CODEBASE_DETECTION_SCHEMA_SHA256 =
 export const REGISTERED_CODEBASE_SCHEMA_ID = "heniek://contract/RegisteredCodebase/v1";
 export const REGISTERED_CODEBASE_SCHEMA_SHA256 =
   "46aaf927a7b496d3da5b4c438c2f49ab7c6638363384cb0d6aca61fa0258b10f";
+export const CODEBASE_ONBOARD_PROPOSE_RESULT_SCHEMA_ID =
+  "heniek://contract/CodebaseOnboardProposeResult/v1";
+export const CODEBASE_ONBOARD_PROPOSE_RESULT_SCHEMA_SHA256 =
+  "a9e39c12bb7ca60bf6b1c7f758ea5067ca1d131d6dbd0274bbb6666399a85af9";
+export const CODEBASE_ONBOARD_APPLY_RESULT_SCHEMA_ID =
+  "heniek://contract/CodebaseOnboardApplyResult/v1";
+export const CODEBASE_ONBOARD_APPLY_RESULT_SCHEMA_SHA256 =
+  "33083526dd9864eb2cbe4338bfe3e460d2390c7de12480a070a41479f898606a";
 export const STAGE_START_SCHEMA_ID = "heniek://contract/StageStartResult/v1";
 export const STAGE_START_SCHEMA_SHA256 =
   "35776620780b4a150ab249801125096c4edfd9bfb8713c5c3e57e3d41c616341";

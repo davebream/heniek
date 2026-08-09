@@ -1,0 +1,189 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`bundled fast.v1 > parses with public profiles and pins normalized graph JSON 1`] = `
+"{
+  "context": {},
+  "description": "Shared deliberation, build with one bounded repair, optional fresh risk review, deterministic verification, then publish.\\n",
+  "edges": [
+    {
+      "condition": {
+        "kind": "expression",
+        "nodes": [
+          {
+            "kind": "path",
+            "path": [
+              "risk",
+              "requiresFreshReview"
+            ]
+          },
+          {
+            "kind": "literal",
+            "value": true
+          },
+          {
+            "kind": "compare",
+            "left": 0,
+            "operator": "eq",
+            "right": 1
+          }
+        ],
+        "root": 2
+      },
+      "from": "build",
+      "to": "risk-review"
+    },
+    {
+      "from": "build",
+      "to": "verify"
+    },
+    {
+      "from": "deliberate",
+      "to": "build"
+    },
+    {
+      "from": "risk-review",
+      "to": "verify"
+    },
+    {
+      "from": "verify",
+      "to": "publish"
+    }
+  ],
+  "limits": {
+    "maxRepairAttempts": 2
+  },
+  "mode": "autonomous",
+  "name": "Fast",
+  "pipelineId": "fast",
+  "schemaVersion": 1,
+  "stages": [
+    {
+      "completion": {
+        "require": [
+          {
+            "kind": "non_empty_diff"
+          },
+          {
+            "kind": "result_envelope"
+          }
+        ]
+      },
+      "id": "build",
+      "mode": "autonomous",
+      "onValidationFailure": {
+        "maxAttempts": 2,
+        "session": "resume",
+        "strategy": "repair"
+      },
+      "optional": false,
+      "overridable": [],
+      "profile": "task-owner",
+      "reads": [
+        "artifacts.design",
+        "artifacts.plan",
+        "artifacts.understanding",
+        "task.current"
+      ],
+      "session": {
+        "policy": "resume"
+      },
+      "type": "agent",
+      "writes": [
+        "artifacts.implementation"
+      ]
+    },
+    {
+      "completion": {
+        "require": [
+          {
+            "kind": "artifact",
+            "name": "design"
+          },
+          {
+            "kind": "artifact",
+            "name": "plan"
+          },
+          {
+            "kind": "artifact",
+            "name": "understanding"
+          },
+          {
+            "kind": "result_envelope"
+          }
+        ]
+      },
+      "id": "deliberate",
+      "mode": "autonomous",
+      "optional": false,
+      "overridable": [],
+      "profile": "task-owner",
+      "reads": [
+        "task.current"
+      ],
+      "type": "agent",
+      "writes": [
+        "artifacts.design",
+        "artifacts.plan",
+        "artifacts.understanding"
+      ]
+    },
+    {
+      "id": "publish",
+      "mode": "autonomous",
+      "optional": false,
+      "overridable": [],
+      "reads": [
+        "artifacts.implementation",
+        "artifacts.verification"
+      ],
+      "type": "publish",
+      "writes": [
+        "artifacts.publication"
+      ]
+    },
+    {
+      "completion": {
+        "require": [
+          {
+            "kind": "artifact",
+            "name": "risk_review"
+          },
+          {
+            "kind": "result_envelope"
+          }
+        ]
+      },
+      "id": "risk-review",
+      "mode": "autonomous",
+      "optional": false,
+      "overridable": [],
+      "profile": "reviewer",
+      "reads": [
+        "artifacts.implementation"
+      ],
+      "session": {
+        "policy": "fresh"
+      },
+      "type": "agent",
+      "writes": [
+        "artifacts.risk_review"
+      ]
+    },
+    {
+      "id": "verify",
+      "mode": "autonomous",
+      "optional": false,
+      "overridable": [],
+      "profile": "task-owner",
+      "reads": [
+        "artifacts.implementation"
+      ],
+      "type": "verify",
+      "writes": [
+        "artifacts.verification"
+      ]
+    }
+  ]
+}
+"
+`;

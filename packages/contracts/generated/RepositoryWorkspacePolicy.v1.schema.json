@@ -1,0 +1,101 @@
+{
+  "$id": "heniek://contract/RepositoryWorkspacePolicy/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "codebaseId",
+    "repositoryId",
+    "topologySha256",
+    "configurationBasisSha256",
+    "files",
+    "scripts",
+    "proposalId",
+    "proposalDigest",
+    "appliedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "codebaseId": {
+      "minLength": 1,
+      "description": "Opaque CodebaseId.",
+      "type": "string"
+    },
+    "repositoryId": {
+      "minLength": 1,
+      "description": "Opaque RepositoryId.",
+      "type": "string"
+    },
+    "topologySha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "configurationBasisSha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "files": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "copy"
+      ],
+      "properties": {
+        "copy": {
+          "uniqueItems": true,
+          "type": "array",
+          "items": {
+            "minLength": 1,
+            "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\u0000).+$",
+            "type": "string"
+          }
+        }
+      }
+    },
+    "scripts": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "setup",
+        "verify"
+      ],
+      "properties": {
+        "setup": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "maxLength": 65536,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "verify": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "$ref": "heniek://contract/VerifyCheck/v1"
+          }
+        }
+      }
+    },
+    "proposalId": {
+      "minLength": 1,
+      "maxLength": 128,
+      "type": "string"
+    },
+    "proposalDigest": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "appliedAt": {
+      "format": "date-time",
+      "type": "string"
+    }
+  }
+}

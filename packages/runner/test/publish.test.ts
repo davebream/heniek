@@ -223,4 +223,30 @@ describe("publish stage runner", () => {
     const finalized = await runner.finalize("att_1");
     expect(finalized.result.failure?.classification).toBe("forge_failed");
   });
+
+  it("binds declared writes to the publish result value", async () => {
+    const runtime = await tempRoot();
+    const forge = fakeForge();
+    const runner = createPublishStageRunner({ forge });
+    const stage = {
+      ...publishStage(),
+      writes: ["artifacts.publication"],
+    };
+    await runner.prepare({
+      ...basePrepare(runtime, request()),
+      stage,
+    });
+    await runner.start("att_1");
+    await drain(runner);
+    await runner.collect("att_1");
+    const validation = await runner.validate("att_1");
+    expect(validation.valid).toBe(true);
+    expect(validation.missingWrites).toEqual([]);
+    const finalized = await runner.finalize("att_1");
+    expect(finalized.result.outcome).toBe("succeeded");
+    expect(finalized.result.outputs.some((o) => o.reference === "artifacts.publication")).toBe(
+      true,
+    );
+    expect(finalized.result.outputs.some((o) => o.reference === "publish.result")).toBe(false);
+  });
 });

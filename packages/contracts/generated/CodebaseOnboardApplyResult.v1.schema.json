@@ -1,0 +1,44 @@
+{
+  "$id": "heniek://contract/CodebaseOnboardApplyResult/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "proposalId",
+    "proposalDigest",
+    "codebaseId",
+    "policies",
+    "appliedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "proposalId": {
+      "minLength": 1,
+      "maxLength": 128,
+      "type": "string"
+    },
+    "proposalDigest": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "codebaseId": {
+      "minLength": 1,
+      "description": "Opaque CodebaseId.",
+      "type": "string"
+    },
+    "policies": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "$ref": "heniek://contract/RepositoryWorkspacePolicy/v1"
+      }
+    },
+    "appliedAt": {
+      "format": "date-time",
+      "type": "string"
+    }
+  }
+}

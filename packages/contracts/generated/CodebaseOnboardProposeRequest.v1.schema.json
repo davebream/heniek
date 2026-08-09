@@ -1,0 +1,33 @@
+{
+  "$id": "heniek://contract/CodebaseOnboardProposeRequest/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "codebaseId",
+    "profileId"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "codebaseId": {
+      "minLength": 1,
+      "description": "Opaque CodebaseId.",
+      "type": "string"
+    },
+    "profileId": {
+      "anyOf": [
+        {
+          "minLength": 1,
+          "maxLength": 128,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  }
+}

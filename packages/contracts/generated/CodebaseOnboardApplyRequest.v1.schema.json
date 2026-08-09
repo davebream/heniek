@@ -1,0 +1,25 @@
+{
+  "$id": "heniek://contract/CodebaseOnboardApplyRequest/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "proposalId",
+    "expectedSha256"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "proposalId": {
+      "minLength": 1,
+      "maxLength": 128,
+      "type": "string"
+    },
+    "expectedSha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    }
+  }
+}
