@@ -22,6 +22,7 @@
     "@sinclair/typebox": "catalog:"
   },
   "devDependencies": {
+    "@heniek/client": "workspace:*",
     "@heniek/execution-claudexor": "workspace:*",
     "tsx": "catalog:",
     "vitest": "catalog:"

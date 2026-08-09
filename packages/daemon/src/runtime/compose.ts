@@ -52,12 +52,15 @@ import {
   type DoctorReportV1,
   type ExecutionBackend,
   type ExecutionBackendV7,
+  ExecutionFailureV1,
+  ExternalStageResultV1,
   InteractionAnswerSetV1,
   NativeStagePollRequestV1,
   NativeStageQuestionRequestV1,
   NativeStageSubmitRequestV1,
   ParentSessionAttachRequestV1,
   ParentSessionDetachRequestV1,
+  PendingInteractionV2,
   type ResolvedProfileChainV1,
   RunAnswerRequestV2,
   RunResumeRequestV2,
@@ -84,7 +87,7 @@ import {
   createWorkspaceStateStore,
   type WorkspaceService,
 } from "@heniek/workspace";
-import type { Static } from "@sinclair/typebox";
+import { FormatRegistry, type Static } from "@sinclair/typebox";
 import { Value } from "@sinclair/typebox/value";
 import { mintConnectionAuthState } from "../auth/challenge.js";
 import {
@@ -160,6 +163,18 @@ import { createNodeSocketProbe } from "./socket-probe.js";
 import type { RawConnection } from "./socket-server.js";
 import { createNodeSocketBinder } from "./socket-server.js";
 import { createStderrTraceSink } from "./trace-sink.js";
+
+/**
+ * TypeBox's `Value.Check` does not validate `format: "date-time"` unless a
+ * checker is registered — unlike the Ajv instance `generate.ts` uses for
+ * contract-schema codegen, which ships `date-time` support out of the box.
+ * Q023's `nativeStage.question.v1`/`nativeStage.submit.v1` are the first
+ * `Value.Check`'d request schemas in this file to carry a date-time field
+ * (`PendingInteractionV2.requestedAt`); every well-formed request would
+ * otherwise be rejected as malformed. `Date.parse` matches the same
+ * leniency `native-bridge/store.ts`'s own `assertIso` already uses.
+ */
+FormatRegistry.Set("date-time", (value) => !Number.isNaN(Date.parse(value)));
 
 export interface ConnectionHandlerDeps {
   readonly randomSource: RandomSource;
@@ -1142,20 +1157,20 @@ export async function startDaemon(deps: StartDaemonDeps): Promise<StartDaemonOut
       },
     ]);
   }
+  if (executionService !== undefined || nativeBridgeService !== undefined) {
+    entries.push([
+      INBOX_LIST_V1_METHOD,
+      async () => ({
+        schemaVersion: 1,
+        items: [
+          ...(executionService === undefined ? [] : listInteractionInbox(workspaceDatabase)),
+          ...(nativeBridgeService === undefined ? [] : listNativeQuestionInbox(workspaceDatabase)),
+        ],
+      }),
+    ]);
+  }
   if (executionService !== undefined) {
     entries.push(
-      [
-        INBOX_LIST_V1_METHOD,
-        async () => ({
-          schemaVersion: 1,
-          items: [
-            ...listInteractionInbox(workspaceDatabase),
-            ...(nativeBridgeService === undefined
-              ? []
-              : listNativeQuestionInbox(workspaceDatabase)),
-          ],
-        }),
-      ],
       [
         STAGE_START_V1_METHOD,
         async (params) => {
@@ -1358,40 +1373,48 @@ export async function startDaemon(deps: StartDaemonDeps): Promise<StartDaemonOut
           return stageRunResult(workspaceDatabase, row);
         },
       ],
-      [
-        ARTIFACT_GET_V1_METHOD,
-        async (params) => {
-          const input = recordParams(params);
-          const artifactId = requiredParam(input, "artifactId");
-          const artifact = artifactResult(workspaceDatabase, artifactId);
-          if (artifact === undefined) throw new Error("artifact does not exist");
-          const bytes = await readFile(join(home.paths.artifactsDirectory, artifact.relativePath));
-          const requestedOffset = input.offset;
-          const offset =
-            requestedOffset === undefined
-              ? 0
-              : typeof requestedOffset === "number" &&
-                  Number.isSafeInteger(requestedOffset) &&
-                  requestedOffset >= 0
-                ? requestedOffset
-                : -1;
-          if (offset < 0 || offset > bytes.byteLength)
-            throw new Error("artifact offset is invalid");
-          const chunk = bytes.subarray(offset, offset + 32 * 1024);
-          return {
-            schemaVersion: 1,
-            artifactId: artifact.artifactId,
-            name: artifact.name,
-            mediaType: artifact.mediaType,
-            byteLength: artifact.byteLength,
-            sha256: artifact.contentHash,
-            offset,
-            eof: offset + chunk.byteLength === bytes.byteLength,
-            contentBase64: chunk.toString("base64"),
-          };
-        },
-      ],
     );
+  }
+  // Artifact retrieval reads the shared content-addressed store (D2/D7) —
+  // every execution mode publishes through it, so this is registered
+  // whenever any of them is configured, not only `executionService`.
+  if (
+    executionService !== undefined ||
+    schedulingService !== undefined ||
+    nativeBridgeService !== undefined
+  ) {
+    entries.push([
+      ARTIFACT_GET_V1_METHOD,
+      async (params) => {
+        const input = recordParams(params);
+        const artifactId = requiredParam(input, "artifactId");
+        const artifact = artifactResult(workspaceDatabase, artifactId);
+        if (artifact === undefined) throw new Error("artifact does not exist");
+        const bytes = await readFile(join(home.paths.artifactsDirectory, artifact.relativePath));
+        const requestedOffset = input.offset;
+        const offset =
+          requestedOffset === undefined
+            ? 0
+            : typeof requestedOffset === "number" &&
+                Number.isSafeInteger(requestedOffset) &&
+                requestedOffset >= 0
+              ? requestedOffset
+              : -1;
+        if (offset < 0 || offset > bytes.byteLength) throw new Error("artifact offset is invalid");
+        const chunk = bytes.subarray(offset, offset + 32 * 1024);
+        return {
+          schemaVersion: 1,
+          artifactId: artifact.artifactId,
+          name: artifact.name,
+          mediaType: artifact.mediaType,
+          byteLength: artifact.byteLength,
+          sha256: artifact.contentHash,
+          offset,
+          eof: offset + chunk.byteLength === bytes.byteLength,
+          contentBase64: chunk.toString("base64"),
+        };
+      },
+    ]);
   }
   if (nativeBridgeService !== undefined) {
     const nativeBridge = nativeBridgeService;
@@ -1563,7 +1586,11 @@ export async function startDaemon(deps: StartDaemonDeps): Promise<StartDaemonOut
         NATIVE_STAGE_QUESTION_V1_METHOD,
         (params) => {
           const input = withoutAuth(recordParams(params));
-          if (!Value.Check(NativeStageQuestionRequestV1, input))
+          // `NativeStageQuestionRequestV1.interaction` is a `Type.Ref` — Ajv's
+          // in-schema `$ref` resolves against the manifest at generate time,
+          // but TypeBox's own `Value.Check` needs the referenced schema
+          // passed explicitly to dereference it at runtime.
+          if (!Value.Check(NativeStageQuestionRequestV1, [PendingInteractionV2], input))
             throw new Error("invalid native stage question request");
           const outcome = nativeBridge.question({
             sessionId: input.sessionId,
@@ -1592,7 +1619,15 @@ export async function startDaemon(deps: StartDaemonDeps): Promise<StartDaemonOut
         NATIVE_STAGE_SUBMIT_V1_METHOD,
         async (params) => {
           const input = withoutAuth(recordParams(params));
-          if (!Value.Check(NativeStageSubmitRequestV1, input))
+          // `result`/`failure` are each a `Type.Ref` — see the question
+          // handler's own comment on why the references must be explicit.
+          if (
+            !Value.Check(
+              NativeStageSubmitRequestV1,
+              [ExternalStageResultV1, ExecutionFailureV1],
+              input,
+            )
+          )
             throw new Error("invalid native stage submit request");
           // The wire request carries no digest — computing it here from the
           // canonicalised payload, rather than trusting a client-supplied
@@ -1690,6 +1725,60 @@ export async function startDaemon(deps: StartDaemonDeps): Promise<StartDaemonOut
               ...(attempt.finishedAt === null ? {} : { finishedAt: attempt.finishedAt }),
             })),
             interactions: snapshot.interactions.map((question) => question.canonical),
+          };
+        },
+      ],
+    );
+  }
+  // A daemon configured with only the native bridge (D1: it is a dedicated
+  // service, not a scheduling/execution adapter) still needs `run.answer.v2`
+  // and `run.cancel.v1` — otherwise a native-only deployment could raise a
+  // question but never answer it, or never cancel a run. Both methods are
+  // already registered above whenever `scheduling`/`executionService` is
+  // configured (with a native-first branch); this is the fallback for the
+  // one remaining case neither of those blocks runs at all.
+  if (
+    nativeBridgeService !== undefined &&
+    schedulingService === undefined &&
+    executionService === undefined
+  ) {
+    const nativeBridge = nativeBridgeService;
+    entries.push(
+      [
+        RUN_ANSWER_V2_METHOD,
+        async (params, context) => {
+          const input = withoutAuth(recordParams(params));
+          if (!Value.Check(RunAnswerRequestV2, input)) throw new Error("invalid answer request");
+          if (context.authenticatedKeyId === undefined)
+            throw new Error("authenticated key missing");
+          const accepted = nativeBridge.answer({
+            runId: input.runId,
+            submission: input.answer,
+            answeredByKeyId: context.authenticatedKeyId,
+          });
+          return {
+            schemaVersion: 2,
+            runId: input.runId,
+            status: accepted.status,
+            runRevision: accepted.runRevision,
+            interactionId: input.answer.interactionId,
+            interactionRevision: accepted.interactionRevision,
+            accepted: true,
+            operationId: ids.next("operation"),
+            deliveryState: "delivered",
+          };
+        },
+      ],
+      [
+        RUN_CANCEL_V1_METHOD,
+        async (params) => {
+          const runId = requiredParam(recordParams(params), "runId");
+          const current = nativeBridge.cancel(runId);
+          return {
+            schemaVersion: 1,
+            runId,
+            status: current?.status ?? "cancelled",
+            accepted: true,
           };
         },
       ],
