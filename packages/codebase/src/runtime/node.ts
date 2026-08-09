@@ -73,7 +73,9 @@ export function createSystemClock(): ClockPort {
 }
 
 export function createRandomIdPort(): IdPort {
-  return { next: (prefix) => `${prefix}-${randomBytes(16).toString("hex")}` };
+  return {
+    next: (prefix: "cb" | "repo" | "proposal") => `${prefix}-${randomBytes(16).toString("hex")}`,
+  };
 }
 
 export function createNodeGitPort(): GitPort {

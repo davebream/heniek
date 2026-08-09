@@ -292,6 +292,36 @@ const EXPECTED_SCHEMAS: readonly {
     path: "generated/CodebaseDetectRequest.v1.schema.json",
   },
   {
+    schemaId: "heniek://contract/CodebaseOnboardApplyRequest/v1",
+    schemaVersion: 1,
+    sha256: "f6b33d3bf7b30bf841a55c6ddb5da275e1b55ef0b50a6558437c2130d5c2eebd",
+    path: "generated/CodebaseOnboardApplyRequest.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/CodebaseOnboardApplyResult/v1",
+    schemaVersion: 1,
+    sha256: "33083526dd9864eb2cbe4338bfe3e460d2390c7de12480a070a41479f898606a",
+    path: "generated/CodebaseOnboardApplyResult.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/CodebaseOnboardingProposal/v1",
+    schemaVersion: 1,
+    sha256: "1105291b5971a6f353d6f4f45121c63fa8ddfcf7280db7fc274ab20ef15023c7",
+    path: "generated/CodebaseOnboardingProposal.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/CodebaseOnboardProposeRequest/v1",
+    schemaVersion: 1,
+    sha256: "00aa6490cd316c30ec445212c14bdd6158c75b860907e5dce40a8bae67a75e5c",
+    path: "generated/CodebaseOnboardProposeRequest.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/CodebaseOnboardProposeResult/v1",
+    schemaVersion: 1,
+    sha256: "a9e39c12bb7ca60bf6b1c7f758ea5067ca1d131d6dbd0274bbb6666399a85af9",
+    path: "generated/CodebaseOnboardProposeResult.v1.schema.json",
+  },
+  {
     schemaId: "heniek://contract/CodebaseRegisterRequest/v1",
     schemaVersion: 1,
     sha256: "51d590a381a19ee162a13ccdd55b47b3baf37d3372ebd2a6e7c14fa19780bf2e",
@@ -814,6 +844,12 @@ const EXPECTED_SCHEMAS: readonly {
     path: "generated/RegisteredCodebase.v1.schema.json",
   },
   {
+    schemaId: "heniek://contract/RepositoryWorkspacePolicy/v1",
+    schemaVersion: 1,
+    sha256: "5cf03fd921bc9cece3ae33d6866b69db566784db22e547a5fd5e19e3c85cefe2",
+    path: "generated/RepositoryWorkspacePolicy.v1.schema.json",
+  },
+  {
     schemaId: "heniek://contract/ResolvedConfiguration/v1",
     schemaVersion: 1,
     sha256: "ab0ae9b99bb0e98c56e93665a92f049d86c3f43949f02764b0501b45e563fbd1",
@@ -1108,6 +1144,12 @@ const EXPECTED_SCHEMAS: readonly {
     path: "generated/WorkspaceConfiguration.v1.schema.json",
   },
   {
+    schemaId: "heniek://contract/WorkspaceConfiguration/v2",
+    schemaVersion: 2,
+    sha256: "1378a7c998e5bd5d2d392aac6e0ce282256b329817c1046c2afd16047552c8e9",
+    path: "generated/WorkspaceConfiguration.v2.schema.json",
+  },
+  {
     schemaId: "heniek://contract/WorkspaceProvisioningManifest/v1",
     schemaVersion: 1,
     sha256: "0d69e2a405e4c7b65cb9da6da833c502fdb83b21f102e212b86abcb43e742b54",
@@ -1128,7 +1170,7 @@ const EXPECTED_SCHEMAS: readonly {
 ];
 
 describe("packages/contracts generated manifest is unchanged (AC4)", () => {
-  it("manifest.json lists exactly the 157 known schemas with their recorded sha256", async () => {
+  it("manifest.json lists exactly the 164 known schemas with their recorded sha256", async () => {
     const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
     expect(manifest).toEqual({
       schemaVersion: "heniek.contracts-manifest.v1",

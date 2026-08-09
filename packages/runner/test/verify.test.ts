@@ -258,4 +258,48 @@ describe("verify stage runner", () => {
       backendStatus: "succeeded",
     });
   });
+
+  it("binds declared writes to the verify result value", async () => {
+    const checkout = await tempRoot();
+    const runtime = join(checkout, ".runtime");
+    const spawn = vi.fn(async () => ({
+      pid: 21,
+      processGroupId: 21,
+      child: { pid: 21 } as never,
+      exit: Promise.resolve({ code: 0, signal: null }),
+    }));
+    const runner = createVerifyStageRunner({ spawn });
+    const stage = {
+      ...verifyStage(),
+      writes: ["artifacts.verification"],
+    };
+    await runner.prepare({
+      ...basePrepare(
+        checkout,
+        runtime,
+        request([
+          {
+            schemaVersion: 1,
+            checkId: "unit",
+            argv: ["/bin/true"],
+            expectedExitCode: 0,
+            required: true,
+          },
+        ]),
+      ),
+      stage,
+    });
+    await runner.start("att_1");
+    await drain(runner);
+    await runner.collect("att_1");
+    const validation = await runner.validate("att_1");
+    expect(validation.valid).toBe(true);
+    expect(validation.missingWrites).toEqual([]);
+    const finalized = await runner.finalize("att_1");
+    expect(finalized.result.outcome).toBe("succeeded");
+    expect(finalized.result.outputs.some((o) => o.reference === "artifacts.verification")).toBe(
+      true,
+    );
+    expect(finalized.result.outputs.some((o) => o.reference === "verify.result")).toBe(false);
+  });
 });

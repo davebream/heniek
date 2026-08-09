@@ -35,7 +35,7 @@ export interface ClockPort {
 }
 
 export interface IdPort {
-  next(prefix: "cb" | "repo"): string;
+  next(prefix: "cb" | "repo" | "proposal"): string;
 }
 
 export interface GitRemoteObservation {

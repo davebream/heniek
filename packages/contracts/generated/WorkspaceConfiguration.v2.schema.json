@@ -1,0 +1,130 @@
+{
+  "$id": "heniek://contract/WorkspaceConfiguration/v2",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "strategy",
+    "base",
+    "synchronization",
+    "files",
+    "scripts",
+    "lease"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 2,
+      "type": "number"
+    },
+    "strategy": {
+      "const": "managed-worktree",
+      "type": "string"
+    },
+    "base": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "remote",
+        "branch"
+      ],
+      "properties": {
+        "remote": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "branch": {
+          "minLength": 1,
+          "type": "string"
+        }
+      }
+    },
+    "synchronization": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "strategy"
+      ],
+      "properties": {
+        "strategy": {
+          "anyOf": [
+            {
+              "const": "notify",
+              "type": "string"
+            },
+            {
+              "const": "rebase-before-build",
+              "type": "string"
+            },
+            {
+              "const": "recreate-before-build",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    "files": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "copy"
+      ],
+      "properties": {
+        "copy": {
+          "uniqueItems": true,
+          "type": "array",
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          }
+        }
+      }
+    },
+    "scripts": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "setup",
+        "verify"
+      ],
+      "properties": {
+        "setup": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "verify": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "$ref": "heniek://contract/VerifyCheck/v1"
+          }
+        }
+      }
+    },
+    "lease": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "ttlMilliseconds",
+        "renewEveryMilliseconds"
+      ],
+      "properties": {
+        "ttlMilliseconds": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "renewEveryMilliseconds": {
+          "minimum": 1,
+          "type": "integer"
+        }
+      }
+    }
+  }
+}

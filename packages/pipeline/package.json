@@ -8,6 +8,8 @@
     ".": "./src/index.ts"
   },
   "scripts": {
+    "generate": "tsx scripts/generate-bundled.ts",
+    "generate:check": "tsx scripts/generate-bundled.ts --check",
     "test": "vitest run"
   },
   "dependencies": {

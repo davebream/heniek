@@ -1,0 +1,182 @@
+{
+  "$id": "heniek://contract/CodebaseOnboardingProposal/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "proposalId",
+    "codebaseId",
+    "profileId",
+    "topologySha256",
+    "configurationBasisSha256",
+    "repositories",
+    "digest",
+    "createdAt",
+    "repairAttempt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "proposalId": {
+      "minLength": 1,
+      "maxLength": 128,
+      "type": "string"
+    },
+    "codebaseId": {
+      "minLength": 1,
+      "description": "Opaque CodebaseId.",
+      "type": "string"
+    },
+    "profileId": {
+      "minLength": 1,
+      "maxLength": 128,
+      "type": "string"
+    },
+    "topologySha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "configurationBasisSha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "repositories": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "repositoryId",
+          "files",
+          "scripts",
+          "rationale",
+          "evidence"
+        ],
+        "properties": {
+          "repositoryId": {
+            "minLength": 1,
+            "description": "Opaque RepositoryId.",
+            "type": "string"
+          },
+          "files": {
+            "additionalProperties": false,
+            "type": "object",
+            "required": [
+              "copy"
+            ],
+            "properties": {
+              "copy": {
+                "uniqueItems": true,
+                "type": "array",
+                "items": {
+                  "minLength": 1,
+                  "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\u0000).+$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "scripts": {
+            "additionalProperties": false,
+            "type": "object",
+            "required": [
+              "setup",
+              "verify"
+            ],
+            "properties": {
+              "setup": {
+                "anyOf": [
+                  {
+                    "minLength": 1,
+                    "maxLength": 65536,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "verify": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "$ref": "heniek://contract/VerifyCheck/v1"
+                }
+              }
+            }
+          },
+          "rationale": {
+            "minLength": 1,
+            "maxLength": 8192,
+            "type": "string"
+          },
+          "evidence": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "additionalProperties": false,
+              "type": "object",
+              "required": [
+                "kind",
+                "path",
+                "detail"
+              ],
+              "properties": {
+                "kind": {
+                  "anyOf": [
+                    {
+                      "const": "instruction",
+                      "type": "string"
+                    },
+                    {
+                      "const": "manifest",
+                      "type": "string"
+                    },
+                    {
+                      "const": "lockfile",
+                      "type": "string"
+                    },
+                    {
+                      "const": "ci",
+                      "type": "string"
+                    },
+                    {
+                      "const": "other",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "path": {
+                  "minLength": 1,
+                  "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\u0000).+$",
+                  "type": "string"
+                },
+                "detail": {
+                  "minLength": 1,
+                  "maxLength": 1024,
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "digest": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "createdAt": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "repairAttempt": {
+      "minimum": 0,
+      "maximum": 1,
+      "type": "integer"
+    }
+  }
+}

@@ -3,6 +3,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { createInterface } from "node:readline/promises";
 import {
   answerRunViaDaemon,
+  applyCodebaseOnboardingViaDaemon,
   type CodebaseDetectionResult,
   cancelRunViaDaemon,
   detectCodebaseViaDaemon,
@@ -13,6 +14,7 @@ import {
   fetchRunResultViaDaemon,
   fetchRunStatusViaDaemon,
   HeniekClientError,
+  proposeCodebaseOnboardingViaDaemon,
   registerCodebaseViaDaemon,
   resumeRunViaDaemon,
   startStageV2ViaDaemon,
@@ -52,7 +54,7 @@ interface CliError {
 }
 
 function usage(): string {
-  return "Usage: heniek status [--json]\n       heniek codebase detect [ROOT...] [--json]\n       heniek codebase register [ROOT...] [--confirm-registration] [--json]\n       heniek stage start --task-file PATH --artifact-path PATH --profile PROFILE [--priority 0-9] [--secret ID...] [--json]\n       heniek run status RUN_ID [--json]\n       heniek run answer RUN_ID INTERACTION_ID --answers-json JSON [--json]\n       heniek run resume RUN_ID [--input-artifact ARTIFACT_ID...] [--json]\n       heniek run cancel RUN_ID [--json]\n       heniek run result RUN_ID [--json]\n       heniek artifact get ARTIFACT_ID [--output PATH] [--json]\n       heniek engine list [--refresh] [--json]\n       heniek runtime list [--json]\n       heniek runtime install claudexor VERSION [--json]\n       heniek runtime activate claudexor VERSION [--json]\n       heniek runtime upgrade claudexor VERSION [--json]\n       heniek runtime rollback claudexor [--json]\n       heniek runtime adopt claudexor --entry ABSOLUTE_PATH [--json]\n       heniek doctor [--json]\n       heniek --help\n       heniek --version";
+  return "Usage: heniek status [--json]\n       heniek codebase detect [ROOT...] [--json]\n       heniek codebase register [ROOT...] [--confirm-registration] [--json]\n       heniek codebase onboard propose <codebase-id> [--profile task-owner] [--json]\n       heniek codebase onboard apply <proposal-id> --expected-sha256 <sha256> [--json]\n       heniek stage start --task-file PATH --artifact-path PATH --profile PROFILE [--priority 0-9] [--secret ID...] [--json]\n       heniek run status RUN_ID [--json]\n       heniek run answer RUN_ID INTERACTION_ID --answers-json JSON [--json]\n       heniek run resume RUN_ID [--input-artifact ARTIFACT_ID...] [--json]\n       heniek run cancel RUN_ID [--json]\n       heniek run result RUN_ID [--json]\n       heniek artifact get ARTIFACT_ID [--output PATH] [--json]\n       heniek engine list [--refresh] [--json]\n       heniek runtime list [--json]\n       heniek runtime install claudexor VERSION [--json]\n       heniek runtime activate claudexor VERSION [--json]\n       heniek runtime upgrade claudexor VERSION [--json]\n       heniek runtime rollback claudexor [--json]\n       heniek runtime adopt claudexor --entry ABSOLUTE_PATH [--json]\n       heniek doctor [--json]\n       heniek --help\n       heniek --version";
 }
 
 function exitCode(code: ErrorCode): number {
@@ -329,6 +331,48 @@ async function runCodebaseRegister(
     );
     return exitCode(failure.code);
   }
+}
+
+async function runCodebaseOnboardPropose(
+  codebaseId: string,
+  profileId: string | undefined,
+  json: boolean,
+): Promise<number> {
+  return domainCommand(
+    "codebase.onboard.propose",
+    json,
+    () =>
+      proposeCodebaseOnboardingViaDaemon(applicationHome(), {
+        codebaseId,
+        profileId: profileId ?? null,
+      }),
+    (result) => {
+      process.stdout.write(
+        `Proposal: ${result.proposal.proposalId}\nDigest:   ${result.proposal.digest}\nProfile:  ${result.proposal.profileId}\nRepaired: ${result.repaired ? "yes" : "no"}\nRepositories: ${result.proposal.repositories.length}\n`,
+      );
+    },
+  );
+}
+
+async function runCodebaseOnboardApply(
+  proposalId: string,
+  expectedSha256: string,
+  json: boolean,
+): Promise<number> {
+  return domainCommand(
+    "codebase.onboard.apply",
+    json,
+    () =>
+      applyCodebaseOnboardingViaDaemon(applicationHome(), {
+        proposalId,
+        expectedSha256,
+      }),
+    (result) => {
+      process.stdout.write(
+        `Applied:  ${result.proposalId}\nDigest:   ${result.proposalDigest}\nCodebase: ${result.codebaseId}\nPolicies: ${result.policies.length}\n`,
+      );
+    },
+  );
 }
 
 async function runStatus(json: boolean): Promise<number> {
@@ -673,6 +717,49 @@ async function main(argv: readonly string[]): Promise<number> {
 
   if (argv[0] === "doctor" && (argv.length === 1 || (argv.length === 2 && json))) {
     return runDoctor(json);
+  }
+
+  if (argv[0] === "codebase" && argv[1] === "onboard" && argv[2] === "propose") {
+    const codebaseId = argv[3];
+    const profileId = optionValue(argv, "--profile");
+    const rest = argv.slice(4);
+    const flags = rest.filter((argument) => argument === "--json" || argument === "--profile");
+    const unknowns = rest.filter((argument) =>
+      argument.startsWith("--")
+        ? argument !== "--json" && argument !== "--profile"
+        : argument !== profileId,
+    );
+    if (
+      codebaseId !== undefined &&
+      !codebaseId.startsWith("--") &&
+      unknowns.length === 0 &&
+      new Set(flags).size === flags.length
+    ) {
+      return runCodebaseOnboardPropose(codebaseId, profileId, json);
+    }
+  }
+
+  if (argv[0] === "codebase" && argv[1] === "onboard" && argv[2] === "apply") {
+    const proposalId = argv[3];
+    const expectedSha256 = optionValue(argv, "--expected-sha256");
+    const rest = argv.slice(4);
+    const flags = rest.filter(
+      (argument) => argument === "--json" || argument === "--expected-sha256",
+    );
+    const unknowns = rest.filter((argument) =>
+      argument.startsWith("--")
+        ? argument !== "--json" && argument !== "--expected-sha256"
+        : argument !== expectedSha256,
+    );
+    if (
+      proposalId !== undefined &&
+      !proposalId.startsWith("--") &&
+      expectedSha256 !== undefined &&
+      unknowns.length === 0 &&
+      new Set(flags).size === flags.length
+    ) {
+      return runCodebaseOnboardApply(proposalId, expectedSha256, json);
+    }
   }
 
   if (argv[0] === "codebase" && (argv[1] === "detect" || argv[1] === "register")) {

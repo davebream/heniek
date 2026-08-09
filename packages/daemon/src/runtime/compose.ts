@@ -38,13 +38,18 @@ import {
   createStateCapabilitySnapshotStore,
 } from "@heniek/capability";
 import {
+  type AnalyzeRepository,
+  applyCodebaseOnboarding,
   createNodeFileSystem as createCodebaseFileSystem,
   createNodeGitPort,
   createNodeHashPort,
   createRegistrationStatePort,
   detectCodebase,
   loadRegistrations,
+  loadRepositoryPolicy,
+  proposeCodebaseOnboarding,
   registerCodebase,
+  resolveVerifyChecksFromPolicy,
 } from "@heniek/codebase";
 import type { ApplicationHome } from "@heniek/config";
 import {
@@ -111,6 +116,8 @@ import { dispatchFrame } from "../rpc/dispatch.js";
 import {
   ARTIFACT_GET_V1_METHOD,
   CODEBASE_DETECT_V1_METHOD,
+  CODEBASE_ONBOARD_APPLY_V1_METHOD,
+  CODEBASE_ONBOARD_PROPOSE_V1_METHOD,
   CODEBASE_REGISTER_V1_METHOD,
   createMethodRegistry,
   DAEMON_RECOVERY_METHOD,
@@ -352,7 +359,8 @@ export interface StartDaemonDeps {
    * Q026/Q027 pipeline stage runners. Reuses the V7 backend and profile
    * resolver; requires an explicit codebase-context callback because pipeline
    * schedules are not bound to a single `currentDirectory` start. Optional
-   * `forge` enables publish stages.
+   * `forge` enables publish stages. When repository workspace policy exists
+   * under application home, verify stages resolve argv checks from it (Q030).
    */
   readonly pipelineRunner?: {
     readonly backend: ExecutionBackendV7;
@@ -378,6 +386,13 @@ export interface StartDaemonDeps {
     readonly resolveProfileChain: (
       profileId: string,
     ) => Promise<Static<typeof ResolvedProfileChainV1>> | Static<typeof ResolvedProfileChainV1>;
+  };
+  /**
+   * Q030 agent-guided onboarding analyzer. When omitted, propose rejects with a
+   * typed blocker so apply/policy paths stay usable without a live provider.
+   */
+  readonly onboarding?: {
+    readonly analyzeRepository: AnalyzeRepository;
   };
   /** Provider-neutral catalogue source. Raw Claudexor DTOs stay inside its adapter. */
   readonly capability?: {
@@ -624,6 +639,47 @@ export async function startDaemon(deps: StartDaemonDeps): Promise<StartDaemonOut
           createIdentifierReader: (identifiers) =>
             createScopedSecretReader(secretStore, identifiers),
           ...(deps.pipelineRunner.forge === undefined ? {} : { forge: deps.pipelineRunner.forge }),
+          resolveVerifyRequest: async ({ runId, stage, payload }) => {
+            const context = deps.pipelineRunner!.resolveCodebaseContext(runId);
+            const policy = await loadRepositoryPolicy(
+              {
+                fs: createCodebaseFileSystem(),
+                codebasesDirectory: home.paths.codebasesDirectory,
+              },
+              context.codebaseId,
+              context.repositoryId,
+            );
+            if (policy !== undefined) {
+              return {
+                schemaVersion: 1 as const,
+                checks: resolveVerifyChecksFromPolicy(policy),
+              };
+            }
+            if (payload.verifyRequest !== undefined) {
+              return payload.verifyRequest as {
+                readonly schemaVersion: 1;
+                readonly checks: ReturnType<typeof resolveVerifyChecksFromPolicy>;
+              };
+            }
+            const checks = (stage.completion?.require ?? [])
+              .filter(
+                (requirement): requirement is Extract<typeof requirement, { kind: "command" }> =>
+                  requirement.kind === "command",
+              )
+              .map((requirement, index) => ({
+                schemaVersion: 1 as const,
+                checkId: `check-${index + 1}`,
+                argv: [...requirement.argv],
+                expectedExitCode: requirement.exitCode ?? 0,
+                required: true,
+              }));
+            if (checks.length === 0) {
+              throw new Error(
+                `verify stage ${stage.id} has no repository policy and no command completion requirements`,
+              );
+            }
+            return { schemaVersion: 1 as const, checks };
+          },
         });
 
   async function tryAnswerPipelineApproval(
@@ -881,6 +937,44 @@ export async function startDaemon(deps: StartDaemonDeps): Promise<StartDaemonOut
       database.close();
     }
   };
+  const onboardProposeHandler = async (params: unknown) => {
+    const input = recordParams(params);
+    const codebaseId = requiredParam(withoutAuth(input), "codebaseId");
+    const profileRaw = withoutAuth(input).profileId;
+    const profileId =
+      profileRaw === null || profileRaw === undefined
+        ? null
+        : typeof profileRaw === "string"
+          ? profileRaw
+          : (() => {
+              throw new Error("invalid profileId");
+            })();
+    const analyzeRepository = deps.onboarding?.analyzeRepository;
+    if (analyzeRepository === undefined) {
+      throw new Error("codebase onboarding analyzer is not configured");
+    }
+    return proposeCodebaseOnboarding(
+      {
+        ...codebaseDeps,
+        codebasesDirectory: home.paths.codebasesDirectory,
+        ids,
+        analyzeRepository,
+      },
+      { codebaseId, profileId },
+    );
+  };
+  const onboardApplyHandler = async (params: unknown) => {
+    const input = withoutAuth(recordParams(params));
+    const proposalId = requiredParam(input, "proposalId");
+    const expectedSha256 = requiredParam(input, "expectedSha256");
+    return applyCodebaseOnboarding(
+      {
+        ...codebaseDeps,
+        codebasesDirectory: home.paths.codebasesDirectory,
+      },
+      { proposalId, expectedSha256 },
+    );
+  };
   const recordParams = (params: unknown): Record<string, unknown> => {
     if (typeof params !== "object" || params === null || Array.isArray(params)) {
       throw new Error("invalid params");
@@ -941,6 +1035,8 @@ export async function startDaemon(deps: StartDaemonDeps): Promise<StartDaemonOut
     [DAEMON_RECOVERY_V1_METHOD, recoveryHandler],
     [CODEBASE_DETECT_V1_METHOD, detectHandler],
     [CODEBASE_REGISTER_V1_METHOD, registerHandler],
+    [CODEBASE_ONBOARD_PROPOSE_V1_METHOD, onboardProposeHandler],
+    [CODEBASE_ONBOARD_APPLY_V1_METHOD, onboardApplyHandler],
     [DOCTOR_V1_METHOD, doctorHandler],
   ];
   if (capabilityService !== undefined) {

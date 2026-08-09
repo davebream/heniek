@@ -11,6 +11,7 @@
       "!docs/backlog/revision-1/issues",
       "!packages/contracts/generated",
       "!packages/conformance/generated",
+      "!packages/pipeline/src/bundled/manifest.generated.ts",
       "!packages/pipeline/test/expected"
     ]
   },

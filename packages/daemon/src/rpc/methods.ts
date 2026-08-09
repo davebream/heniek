@@ -17,6 +17,8 @@ export const DAEMON_RECOVERY_V1_METHOD = "daemon.recovery.v1";
 export {
   ARTIFACT_GET_V1_METHOD,
   CODEBASE_DETECT_V1_METHOD,
+  CODEBASE_ONBOARD_APPLY_V1_METHOD,
+  CODEBASE_ONBOARD_PROPOSE_V1_METHOD,
   CODEBASE_REGISTER_V1_METHOD,
   DOCTOR_V1_METHOD,
   ENGINE_CATALOGUE_V1_METHOD,
@@ -57,6 +59,8 @@ export const AUTHENTICATED_METHODS = [
   DAEMON_RECOVERY_METHOD,
   "codebase.detect",
   "codebase.register",
+  "codebase.onboard.propose",
+  "codebase.onboard.apply",
   "stage.start",
   "run.status",
   "inbox.list",

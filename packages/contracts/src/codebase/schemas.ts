@@ -1,8 +1,14 @@
 import { type Static, Type } from "@sinclair/typebox";
 import { versioned } from "../kernel/index.js";
+import { VerifyCheckV1 } from "../pipeline/operations.js";
 import { CodebaseId, RepositoryId } from "../run/ids.js";
 
 const Sha256 = Type.String({ pattern: "^[0-9a-f]{64}$" });
+const IsoDateTime = Type.String({ format: "date-time" });
+const SafeRelativePath = Type.String({
+  minLength: 1,
+  pattern: "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\u0000).+$",
+});
 
 export const InstructionSourceLocation = Type.Object(
   {
@@ -159,7 +165,106 @@ export const CodebaseRegisterRequestV1 = versioned("CodebaseRegisterRequest", 1,
   confirmed: Type.Literal(true),
 });
 
+const OnboardingEvidence = Type.Object(
+  {
+    kind: Type.Union([
+      Type.Literal("instruction"),
+      Type.Literal("manifest"),
+      Type.Literal("lockfile"),
+      Type.Literal("ci"),
+      Type.Literal("other"),
+    ]),
+    path: SafeRelativePath,
+    detail: Type.String({ minLength: 1, maxLength: 1024 }),
+  },
+  { additionalProperties: false },
+);
+
+const RepositoryOnboardingProposal = Type.Object(
+  {
+    repositoryId: RepositoryId,
+    files: Type.Object(
+      { copy: Type.Array(SafeRelativePath, { uniqueItems: true }) },
+      { additionalProperties: false },
+    ),
+    scripts: Type.Object(
+      {
+        setup: Type.Union([Type.String({ minLength: 1, maxLength: 65536 }), Type.Null()]),
+        verify: Type.Array(Type.Ref(VerifyCheckV1), { minItems: 1 }),
+      },
+      { additionalProperties: false },
+    ),
+    rationale: Type.String({ minLength: 1, maxLength: 8192 }),
+    evidence: Type.Array(OnboardingEvidence, { minItems: 1 }),
+  },
+  { additionalProperties: false },
+);
+
+/** Reviewed per-repository workspace policy stored under application home. */
+export const RepositoryWorkspacePolicyV1 = versioned("RepositoryWorkspacePolicy", 1, {
+  codebaseId: CodebaseId,
+  repositoryId: RepositoryId,
+  topologySha256: Sha256,
+  configurationBasisSha256: Sha256,
+  files: Type.Object(
+    { copy: Type.Array(SafeRelativePath, { uniqueItems: true }) },
+    { additionalProperties: false },
+  ),
+  scripts: Type.Object(
+    {
+      setup: Type.Union([Type.String({ minLength: 1, maxLength: 65536 }), Type.Null()]),
+      verify: Type.Array(Type.Ref(VerifyCheckV1), { minItems: 1 }),
+    },
+    { additionalProperties: false },
+  ),
+  proposalId: Type.String({ minLength: 1, maxLength: 128 }),
+  proposalDigest: Sha256,
+  appliedAt: IsoDateTime,
+});
+
+/** Agent-produced onboarding proposal awaiting explicit apply. */
+export const CodebaseOnboardingProposalV1 = versioned("CodebaseOnboardingProposal", 1, {
+  proposalId: Type.String({ minLength: 1, maxLength: 128 }),
+  codebaseId: CodebaseId,
+  profileId: Type.String({ minLength: 1, maxLength: 128 }),
+  topologySha256: Sha256,
+  configurationBasisSha256: Sha256,
+  repositories: Type.Array(RepositoryOnboardingProposal, { minItems: 1 }),
+  digest: Sha256,
+  createdAt: IsoDateTime,
+  repairAttempt: Type.Integer({ minimum: 0, maximum: 1 }),
+});
+
+export const CodebaseOnboardProposeRequestV1 = versioned("CodebaseOnboardProposeRequest", 1, {
+  codebaseId: CodebaseId,
+  profileId: Type.Union([Type.String({ minLength: 1, maxLength: 128 }), Type.Null()]),
+});
+
+export const CodebaseOnboardProposeResultV1 = versioned("CodebaseOnboardProposeResult", 1, {
+  proposal: Type.Ref(CodebaseOnboardingProposalV1),
+  repaired: Type.Boolean(),
+});
+
+export const CodebaseOnboardApplyRequestV1 = versioned("CodebaseOnboardApplyRequest", 1, {
+  proposalId: Type.String({ minLength: 1, maxLength: 128 }),
+  expectedSha256: Sha256,
+});
+
+export const CodebaseOnboardApplyResultV1 = versioned("CodebaseOnboardApplyResult", 1, {
+  proposalId: Type.String({ minLength: 1, maxLength: 128 }),
+  proposalDigest: Sha256,
+  codebaseId: CodebaseId,
+  policies: Type.Array(Type.Ref(RepositoryWorkspacePolicyV1), { minItems: 1 }),
+  appliedAt: IsoDateTime,
+});
+
 export type CodebaseDetectionResult = Static<typeof CodebaseDetectionResultV1>;
 export type RegisteredCodebase = Static<typeof RegisteredCodebaseV1>;
 export type InstructionSnapshot = Static<typeof InstructionSnapshotV1>;
 export type InstructionDiagnostic = Static<typeof InstructionDiagnosticV1>;
+export type RepositoryWorkspacePolicy = Static<typeof RepositoryWorkspacePolicyV1>;
+export type CodebaseOnboardingProposal = Static<typeof CodebaseOnboardingProposalV1>;
+export type CodebaseOnboardProposeRequest = Static<typeof CodebaseOnboardProposeRequestV1>;
+export type CodebaseOnboardProposeResult = Static<typeof CodebaseOnboardProposeResultV1>;
+export type CodebaseOnboardApplyRequest = Static<typeof CodebaseOnboardApplyRequestV1>;
+export type CodebaseOnboardApplyResult = Static<typeof CodebaseOnboardApplyResultV1>;

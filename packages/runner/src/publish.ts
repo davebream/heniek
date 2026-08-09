@@ -415,12 +415,16 @@ export function createPublishStageRunner(deps: PublishStageRunnerDeps): StageRun
           detail: result.outcome,
           payload: result,
         });
-        outputs.push({
-          schemaVersion: 1,
-          reference: "publish.result",
-          kind: "value",
-          value: result,
-        });
+        const writeRefs = state.writes.length > 0 ? state.writes : (["publish.result"] as const);
+        for (const reference of writeRefs) {
+          if (outputs.some((binding) => binding.reference === reference)) continue;
+          outputs.push({
+            schemaVersion: 1,
+            reference,
+            kind: "value",
+            value: result,
+          });
+        }
       }
 
       state.snapshot.evidence = evidence;

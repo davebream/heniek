@@ -16,7 +16,7 @@
     "conformance:check": "pnpm --filter @heniek/conformance generate:check",
     "format": "biome check --write .",
     "format:check": "biome ci .",
-    "generate:check": "pnpm --filter @heniek/contracts generate:check",
+    "generate:check": "pnpm --filter @heniek/contracts generate:check && pnpm --filter @heniek/pipeline generate:check",
     "test": "vitest run --passWithNoTests",
     "typecheck": "tsc --noEmit"
   },

@@ -1,5 +1,6 @@
 import { type Static, Type } from "@sinclair/typebox";
 import { versioned } from "../kernel/index.js";
+import { VerifyCheckV1 } from "../pipeline/operations.js";
 import { CodebaseId, RepositoryId, WorkspaceId } from "../run/index.js";
 
 const Sha256 = Type.String({ pattern: "^[0-9a-f]{64}$" });
@@ -11,34 +12,61 @@ export const WorkspaceSynchronizationStrategy = Type.Union([
   Type.Literal("recreate-before-build"),
 ]);
 
+const WorkspaceBase = Type.Object(
+  {
+    remote: Type.String({ minLength: 1 }),
+    branch: Type.String({ minLength: 1 }),
+  },
+  { additionalProperties: false },
+);
+
+const WorkspaceSynchronization = Type.Object(
+  { strategy: WorkspaceSynchronizationStrategy },
+  { additionalProperties: false },
+);
+
+const WorkspaceFiles = Type.Object(
+  { copy: Type.Array(Type.String({ minLength: 1 }), { uniqueItems: true }) },
+  { additionalProperties: false },
+);
+
+const WorkspaceLease = Type.Object(
+  {
+    ttlMilliseconds: Type.Integer({ minimum: 1 }),
+    renewEveryMilliseconds: Type.Integer({ minimum: 1 }),
+  },
+  { additionalProperties: false },
+);
+
 export const WorkspaceConfigurationV1 = versioned("WorkspaceConfiguration", 1, {
   strategy: Type.Literal("managed-worktree"),
-  base: Type.Object(
-    {
-      remote: Type.String({ minLength: 1 }),
-      branch: Type.String({ minLength: 1 }),
-    },
-    { additionalProperties: false },
-  ),
-  synchronization: Type.Object(
-    { strategy: WorkspaceSynchronizationStrategy },
-    { additionalProperties: false },
-  ),
-  files: Type.Object(
-    { copy: Type.Array(Type.String({ minLength: 1 }), { uniqueItems: true }) },
-    { additionalProperties: false },
-  ),
+  base: WorkspaceBase,
+  synchronization: WorkspaceSynchronization,
+  files: WorkspaceFiles,
   scripts: Type.Object(
     { setup: Type.Union([Type.String({ minLength: 1 }), Type.Null()]) },
     { additionalProperties: false },
   ),
-  lease: Type.Object(
+  lease: WorkspaceLease,
+});
+
+/**
+ * Q030 adds ordered argv verification checks. V1 stays frozen for existing
+ * consumers; V2 is the deliberate addition with `scripts.verify`.
+ */
+export const WorkspaceConfigurationV2 = versioned("WorkspaceConfiguration", 2, {
+  strategy: Type.Literal("managed-worktree"),
+  base: WorkspaceBase,
+  synchronization: WorkspaceSynchronization,
+  files: WorkspaceFiles,
+  scripts: Type.Object(
     {
-      ttlMilliseconds: Type.Integer({ minimum: 1 }),
-      renewEveryMilliseconds: Type.Integer({ minimum: 1 }),
+      setup: Type.Union([Type.String({ minLength: 1 }), Type.Null()]),
+      verify: Type.Array(Type.Ref(VerifyCheckV1), { minItems: 1 }),
     },
     { additionalProperties: false },
   ),
+  lease: WorkspaceLease,
 });
 
 const CleanlinessEntry = Type.Object(
@@ -179,7 +207,10 @@ export const WorkspaceSynchronizationResultV1 = versioned("WorkspaceSynchronizat
   recordedAt: IsoDateTime,
 });
 
-export type WorkspaceConfiguration = Static<typeof WorkspaceConfigurationV1>;
+export type WorkspaceConfigurationV1 = Static<typeof WorkspaceConfigurationV1>;
+export type WorkspaceConfigurationV2 = Static<typeof WorkspaceConfigurationV2>;
+/** @deprecated Prefer an explicit V1/V2 alias; retained as V1 for existing call sites. */
+export type WorkspaceConfiguration = WorkspaceConfigurationV1;
 export type WorkspaceProvisioningManifest = Static<typeof WorkspaceProvisioningManifestV1>;
 export type WorkspaceWriterLease = Static<typeof WorkspaceWriterLeaseV1>;
 export type WorkspaceSynchronizationResult = Static<typeof WorkspaceSynchronizationResultV1>;

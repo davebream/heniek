@@ -13,6 +13,7 @@
   "dependencies": {
     "@heniek/config": "workspace:*",
     "@heniek/contracts": "workspace:*",
+    "@heniek/secrets": "workspace:*",
     "@heniek/state": "workspace:*",
     "@sinclair/typebox": "catalog:",
     "yaml": "catalog:"

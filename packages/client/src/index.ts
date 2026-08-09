@@ -6,6 +6,8 @@ import type {
   ArtifactId,
   CapabilityCatalogueV1,
   CodebaseDetectionResult,
+  CodebaseOnboardApplyResult,
+  CodebaseOnboardProposeResult,
   DoctorReportV1,
   ExecutionFailureV1,
   ExternalStageResultV1,
@@ -46,6 +48,14 @@ import {
   CODEBASE_DETECT_V1_METHOD,
   CODEBASE_DETECTION_SCHEMA_ID,
   CODEBASE_DETECTION_SCHEMA_SHA256,
+  CODEBASE_ONBOARD_APPLY_METHOD,
+  CODEBASE_ONBOARD_APPLY_RESULT_SCHEMA_ID,
+  CODEBASE_ONBOARD_APPLY_RESULT_SCHEMA_SHA256,
+  CODEBASE_ONBOARD_APPLY_V1_METHOD,
+  CODEBASE_ONBOARD_PROPOSE_METHOD,
+  CODEBASE_ONBOARD_PROPOSE_RESULT_SCHEMA_ID,
+  CODEBASE_ONBOARD_PROPOSE_RESULT_SCHEMA_SHA256,
+  CODEBASE_ONBOARD_PROPOSE_V1_METHOD,
   CODEBASE_REGISTER_METHOD,
   CODEBASE_REGISTER_V1_METHOD,
   credentialFromPersisted,
@@ -186,7 +196,12 @@ export interface StatusSnapshot {
   readonly schemaCompatibility: "exact" | "incompatible";
 }
 
-export type { CodebaseDetectionResult, RegisteredCodebase } from "@heniek/contracts";
+export type {
+  CodebaseDetectionResult,
+  CodebaseOnboardApplyResult,
+  CodebaseOnboardProposeResult,
+  RegisteredCodebase,
+} from "@heniek/contracts";
 
 interface RpcRequirement {
   readonly name: string;
@@ -411,6 +426,20 @@ const REGISTER_REQUIREMENT: RpcRequirement = {
   wireMethod: CODEBASE_REGISTER_V1_METHOD,
   schemaId: REGISTERED_CODEBASE_SCHEMA_ID,
   sha256: REGISTERED_CODEBASE_SCHEMA_SHA256,
+};
+
+const ONBOARD_PROPOSE_REQUIREMENT: RpcRequirement = {
+  name: CODEBASE_ONBOARD_PROPOSE_METHOD,
+  wireMethod: CODEBASE_ONBOARD_PROPOSE_V1_METHOD,
+  schemaId: CODEBASE_ONBOARD_PROPOSE_RESULT_SCHEMA_ID,
+  sha256: CODEBASE_ONBOARD_PROPOSE_RESULT_SCHEMA_SHA256,
+};
+
+const ONBOARD_APPLY_REQUIREMENT: RpcRequirement = {
+  name: CODEBASE_ONBOARD_APPLY_METHOD,
+  wireMethod: CODEBASE_ONBOARD_APPLY_V1_METHOD,
+  schemaId: CODEBASE_ONBOARD_APPLY_RESULT_SCHEMA_ID,
+  sha256: CODEBASE_ONBOARD_APPLY_RESULT_SCHEMA_SHA256,
 };
 
 const STAGE_START_REQUIREMENT: RpcRequirement = {
@@ -999,6 +1028,48 @@ export async function registerCodebaseViaDaemon(
     );
     return response.result;
   });
+}
+
+export async function proposeCodebaseOnboardingViaDaemon(
+  home: ApplicationHome,
+  input: {
+    readonly codebaseId: string;
+    readonly profileId?: string | null;
+  },
+  options: { readonly signal?: AbortSignal } = {},
+): Promise<CodebaseOnboardProposeResult> {
+  return domainCall(
+    home,
+    ONBOARD_PROPOSE_REQUIREMENT,
+    {
+      schemaVersion: 1,
+      codebaseId: input.codebaseId,
+      profileId: input.profileId ?? null,
+    },
+    "Codebase onboarding proposal",
+    options.signal,
+  );
+}
+
+export async function applyCodebaseOnboardingViaDaemon(
+  home: ApplicationHome,
+  input: {
+    readonly proposalId: string;
+    readonly expectedSha256: string;
+  },
+  options: { readonly signal?: AbortSignal } = {},
+): Promise<CodebaseOnboardApplyResult> {
+  return domainCall(
+    home,
+    ONBOARD_APPLY_REQUIREMENT,
+    {
+      schemaVersion: 1,
+      proposalId: input.proposalId,
+      expectedSha256: input.expectedSha256,
+    },
+    "Codebase onboarding apply",
+    options.signal,
+  );
 }
 
 async function domainCall<T>(
