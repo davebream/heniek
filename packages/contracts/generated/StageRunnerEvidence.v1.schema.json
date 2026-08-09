@@ -1,0 +1,79 @@
+{
+  "$id": "heniek://contract/StageRunnerEvidence/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "kind",
+    "satisfied",
+    "recordedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "kind": {
+      "anyOf": [
+        {
+          "const": "result_envelope",
+          "type": "string"
+        },
+        {
+          "const": "non_empty_diff",
+          "type": "string"
+        },
+        {
+          "const": "artifact",
+          "type": "string"
+        },
+        {
+          "const": "schema_check",
+          "type": "string"
+        },
+        {
+          "const": "sections",
+          "type": "string"
+        },
+        {
+          "const": "command",
+          "type": "string"
+        },
+        {
+          "const": "repository_state",
+          "type": "string"
+        },
+        {
+          "const": "verdict",
+          "type": "string"
+        },
+        {
+          "const": "process_cleanup",
+          "type": "string"
+        },
+        {
+          "const": "exit_code",
+          "type": "string"
+        }
+      ]
+    },
+    "requirement": {
+      "minLength": 1,
+      "maxLength": 256,
+      "type": "string"
+    },
+    "satisfied": {
+      "type": "boolean"
+    },
+    "detail": {
+      "minLength": 1,
+      "maxLength": 1024,
+      "type": "string"
+    },
+    "recordedAt": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "payload": {}
+  }
+}

@@ -231,9 +231,15 @@ importers:
       '@heniek/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@heniek/pipeline':
+        specifier: workspace:*
+        version: link:../pipeline
       '@heniek/protocol':
         specifier: workspace:*
         version: link:../protocol
+      '@heniek/runner':
+        specifier: workspace:*
+        version: link:../runner
       '@heniek/secrets':
         specifier: workspace:*
         version: link:../secrets
@@ -316,6 +322,28 @@ importers:
         specifier: workspace:*
         version: link:../contracts
     devDependencies:
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.10(@types/node@24.10.1)(vite@8.1.5(@types/node@24.10.1)(esbuild@0.28.1)(tsx@4.23.1)(yaml@2.9.0))
+
+  packages/runner:
+    dependencies:
+      '@heniek/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@heniek/workspace':
+        specifier: workspace:*
+        version: link:../workspace
+      '@sinclair/typebox':
+        specifier: 'catalog:'
+        version: 0.34.52
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.10.1
+      tsx:
+        specifier: 'catalog:'
+        version: 4.23.1
       vitest:
         specifier: 'catalog:'
         version: 4.1.10(@types/node@24.10.1)(vite@8.1.5(@types/node@24.10.1)(esbuild@0.28.1)(tsx@4.23.1)(yaml@2.9.0))

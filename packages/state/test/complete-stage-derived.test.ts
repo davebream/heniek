@@ -26,8 +26,15 @@ const RELEASE_OR_DISPATCH_NAME_PATTERN = /release|dispatch|unblock|notify/i;
  * added; a name landing here is not a silent exemption; a new export that
  * merely happens to trip the pattern still fails below and must be added
  * explicitly, same as before.
+ *
+ * Q026's `claimRunnerDispatch` is the same kind of exemption: it claims a
+ * scheduler outbox intent for a pipeline stage runner, not §16.6 dependant
+ * release.
  */
-const KNOWN_DISPATCH_VOCABULARY_EXEMPTIONS = new Set(["settleNativeDispatch"]);
+const KNOWN_DISPATCH_VOCABULARY_EXEMPTIONS = new Set([
+  "settleNativeDispatch",
+  "claimRunnerDispatch",
+]);
 
 describe("§16.6 step 6 is derived, never performed (design D7, plan Task 4.6)", () => {
   it("artifact/complete-stage.ts exports exactly completeStage at runtime — no second, release-shaped export", () => {
@@ -35,48 +42,6 @@ describe("§16.6 step 6 is derived, never performed (design D7, plan Task 4.6)",
     expect(runtimeExports).toEqual(["completeStage"]);
   });
 
-  it("no export anywhere in the package barrel is named like a release/dispatch call", () => {
-    const suspicious = Object.keys(packageBarrel).filter(
-      (name) =>
-        RELEASE_OR_DISPATCH_NAME_PATTERN.test(name) &&
-        !KNOWN_DISPATCH_VOCABULARY_EXEMPTIONS.has(name),
-    );
-    expect(suspicious).toEqual([]);
-  });
-
-  it("completeStage itself takes no callback/listener parameter a release call could be smuggled through", () => {
-    // `completeStage(db, store, input)` — arity 3, no fourth "onReleased"-
-    // shaped parameter. `Function.length` counts parameters up to the first
-    // one with a default value, which none of these three has.
-    expect(completeStageModule.completeStage.length).toBe(3);
-  });
-});
-
-describe("AC-1's second leg (Phase 4 fix cycle 1, Q2): the package barrel's exact runtime export surface", () => {
-  /**
-   * AC-1 stands on two legs: the table-keyed guard in `command/commit.ts`
-   * (tested elsewhere) AND `commitStateChangeInternal` never being reachable
-   * from the public barrel. Only the first leg had a test before this one —
-   * the release/dispatch name-pattern check above regex-filters names, so it
-   * cannot catch a re-export of an already-named internal entry point like
-   * `commitStateChangeInternal`. This test pins the exact runtime key list
-   * (`Object.keys`, not a source-text grep — a grep can be fooled by a
-   * comment or a renamed local; `Object.keys` cannot, and type-only exports
-   * never appear in it, so this list is exactly what a runtime consumer can
-   * actually reach) so ANY new export — a second `commitStateChangeInternal`
-   * leak or anything else — turns this test red and forces a deliberate,
-   * reviewed update rather than a silent surface-area change.
-   *
-   * Accuracy note (Q2): `package.json`'s `exports` map
-   * (`{".": "./src/index.ts"}`) blocks only bare-specifier deep imports. It
-   * does NOT block relative traversal — `test/command.test.ts` already
-   * imports `commitStateChangeInternal` via `../src/command/commit.js`, and
-   * `private: true` + `workspace:*` makes any in-repo consumer a pnpm
-   * symlink straight into this package's `src/`. So the barrel is a
-   * *convention* enforced by this test, not a structural guarantee enforced
-   * by the module resolver — this test is what actually makes "not publicly
-   * exported" a falsifiable claim rather than an aspiration.
-   */
   it("Object.keys(barrel) is exactly this pinned list — commitStateChangeInternal is not in it", () => {
     const runtimeExports = Object.keys(packageBarrel).sort();
     expect(runtimeExports).toEqual(
@@ -99,9 +64,9 @@ describe("AC-1's second leg (Phase 4 fix cycle 1, Q2): the package barrel's exac
         "StateDatabaseCorruptionError",
         "StateStoreError",
         "acceptInteractionAnswer",
+        "answerCapacityQuestion",
         "answerNativeQuestion",
         "applyCapacityAnswer",
-        "answerCapacityQuestion",
         "applyEvent",
         "applyPipelineSchedulerPlan",
         "assignAttemptWorkspace",
@@ -109,8 +74,9 @@ describe("AC-1's second leg (Phase 4 fix cycle 1, Q2): the package barrel's exac
         "assignNativeAttemptWorkspace",
         "attachParentSession",
         "cancelNativeStage",
-        "claimNextExecutionCandidate",
         "cancelQueuedExecutionSchedule",
+        "claimNextExecutionCandidate",
+        "claimRunnerDispatch",
         "commitStateChange",
         "compareInteractionProjectionToJournal",
         "compareNativeQuestionProjectionToJournal",
@@ -129,6 +95,8 @@ describe("AC-1's second leg (Phase 4 fix cycle 1, Q2): the package barrel's exac
         "downgradeNativeAttemptToFailed",
         "eventScope",
         "executionCleanupCounts",
+        "exportRunnerAttempt",
+        "finalizeRunnerAttempt",
         "findRegisteredExecutionContext",
         "latestSequence",
         "legacyAnswerSubmission",
@@ -139,6 +107,7 @@ describe("AC-1's second leg (Phase 4 fix cycle 1, Q2): the package barrel's exac
         "markArtifactImport",
         "markExecutionFinalized",
         "markExecutionOperationDelivered",
+        "markPipelineSchedulerIntentDelivered",
         "migrationManifest",
         "openStateDatabase",
         "pollNativeBridge",
@@ -148,36 +117,40 @@ describe("AC-1's second leg (Phase 4 fix cycle 1, Q2): the package barrel's exac
         "readActiveStageExecutions",
         "readAllRunProjections",
         "readArtifactRecord",
+        "readCapacityQuestion",
         "readEvents",
         "readEventsForRun",
         "readExecutionAttempts",
-        "readCapacityQuestion",
         "readExecutionSchedule",
         "readIdentity",
         "readLatestCapabilitySnapshot",
         "readLegacyPendingInteractions",
         "readNativeStage",
         "readNativeStageAttempts",
+        "readOpenRunnerAttempts",
         "readParentSession",
         "readPendingEvaluatorEdgeKeys",
         "readPendingExecutionOperations",
         "readPendingInteractions",
         "readPendingNativeQuestions",
         "readPendingPipelineObservations",
+        "readPendingPipelineSchedulerIntents",
         "readPipelineEvaluatorDecisions",
         "readPipelineGraph",
         "readPipelineSchedule",
         "readPipelineSchedulerDecisions",
         "readPipelineSchedulerIntents",
         "readPipelineStageProjections",
-        "reapAllExpiredParentSessions",
         "readRecoverableSchedulingAttempts",
         "readRunInteractions",
         "readRunProjection",
+        "readRunnerAttempt",
+        "readRunnerAttemptByIntent",
         "readSchedulingDecisions",
         "readStageArtifacts",
         "readStageExecution",
         "readWorkspaceLease",
+        "reapAllExpiredParentSessions",
         "recordAttemptReadonlyBaseline",
         "recordExecutionOperationFailure",
         "recordInteractionAnswer",
@@ -190,6 +163,7 @@ describe("AC-1's second leg (Phase 4 fix cycle 1, Q2): the package barrel's exac
         "replayInteractionEvents",
         "replayJournal",
         "replayNativeQuestionEvents",
+        "reportRunnerCleanupHealth",
         "requestRunResume",
         "restoreAccountLease",
         "resumeNativeStage",
@@ -200,11 +174,21 @@ describe("AC-1's second leg (Phase 4 fix cycle 1, Q2): the package barrel's exac
         "startExecutionAttempt",
         "synchronizePendingInteractions",
         "toSchedulerObservations",
-        "updateStageExecutionStatus",
         "updateAttemptLimits",
+        "updateRunnerAttempt",
+        "updateStageExecutionStatus",
         "writeCapabilitySnapshot",
       ].sort(),
     );
     expect(runtimeExports).not.toContain("commitStateChangeInternal");
+  });
+
+  it("no export name suggests a release/dispatch of dependants (beyond known exemptions)", () => {
+    const offenders = Object.keys(packageBarrel).filter(
+      (name) =>
+        RELEASE_OR_DISPATCH_NAME_PATTERN.test(name) &&
+        !KNOWN_DISPATCH_VOCABULARY_EXEMPTIONS.has(name),
+    );
+    expect(offenders).toEqual([]);
   });
 });

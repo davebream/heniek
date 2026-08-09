@@ -1,0 +1,68 @@
+{
+  "$id": "heniek://contract/StageRunnerCleanupReport/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "attemptId",
+    "signalSequence",
+    "descendantsRemaining",
+    "gracePeriodMs",
+    "cleaned",
+    "recordedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "attemptId": {
+      "minLength": 1,
+      "description": "Opaque PipelineAttemptId.",
+      "type": "string"
+    },
+    "processGroupId": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "signalSequence": {
+      "type": "array",
+      "items": {
+        "anyOf": [
+          {
+            "const": "SIGTERM",
+            "type": "string"
+          },
+          {
+            "const": "SIGKILL",
+            "type": "string"
+          },
+          {
+            "const": "backend_cancel",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    "descendantsRemaining": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "gracePeriodMs": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "cleaned": {
+      "type": "boolean"
+    },
+    "recordedAt": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "detail": {
+      "minLength": 1,
+      "maxLength": 512,
+      "type": "string"
+    }
+  }
+}

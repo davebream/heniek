@@ -144,6 +144,10 @@ const manifestPath = resolve(packageRoot, "../contracts/generated/manifest.json"
  * observations/plans, and terminal outcomes. All 109 prior hashes remain
  * byte-identical.
  *
+ * Q026 raises the count 118 → 125 by pure addition: stage-runner attempt,
+ * result, evidence, failure, output-binding, cleanup, and validation-report
+ * contracts. All 118 prior hashes remain byte-identical.
+ *
  * Q024 raises the count 106 → 109 by pure addition again: `PipelineDefinition/v1`
  * (the authored YAML document), `PipelineGraph/v1` (its normalized form), and
  * `PipelineValidationResult/v1` (graph plus diagnostics). All 106 prior hashes
@@ -772,6 +776,48 @@ const EXPECTED_SCHEMAS: readonly {
     path: "generated/StageRunMutationResult.v1.schema.json",
   },
   {
+    schemaId: "heniek://contract/StageRunnerAttempt/v1",
+    schemaVersion: 1,
+    sha256: "ab1571a13ead88a053c4f306da73a6ec3cc82a0e33cb04284d844e89949ab6cc",
+    path: "generated/StageRunnerAttempt.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/StageRunnerCleanupReport/v1",
+    schemaVersion: 1,
+    sha256: "758ced5a5e0420fce684e0c0db8dc5db5b26b35ec606bc8dfbd2ce964a231cb2",
+    path: "generated/StageRunnerCleanupReport.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/StageRunnerEvidence/v1",
+    schemaVersion: 1,
+    sha256: "c956b4036e5e694143e2d065c5737b4d9caecb46c97348d4b0bdc500cecbb7a4",
+    path: "generated/StageRunnerEvidence.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/StageRunnerFailure/v1",
+    schemaVersion: 1,
+    sha256: "54a662499ffd7fca7a3c759de202654de6730c9fce472c4b2c41821230394445",
+    path: "generated/StageRunnerFailure.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/StageRunnerOutputBinding/v1",
+    schemaVersion: 1,
+    sha256: "0c83997fc9b6c9c6a666636126be0d9cd98b7e025e009a33ca7a7f2116378e6d",
+    path: "generated/StageRunnerOutputBinding.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/StageRunnerResult/v1",
+    schemaVersion: 1,
+    sha256: "04f14137e47e8428d5c5b39e35ff569abbead1b2a838f61f6acce29758057948",
+    path: "generated/StageRunnerResult.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/StageRunnerValidationReport/v1",
+    schemaVersion: 1,
+    sha256: "2df094eabff37623b983997fa45a011a0d4abaf76a45d0dfa0551407de60373c",
+    path: "generated/StageRunnerValidationReport.v1.schema.json",
+  },
+  {
     schemaId: "heniek://contract/StageRunResult/v1",
     schemaVersion: 1,
     sha256: "8f0faffeabe166f355b7033e9a45b6cf2bae829d1ab64ab10f086fce501fc8fa",
@@ -876,7 +922,7 @@ const EXPECTED_SCHEMAS: readonly {
 ];
 
 describe("packages/contracts generated manifest is unchanged (AC4)", () => {
-  it("manifest.json lists exactly the 118 known schemas with their recorded sha256", async () => {
+  it("manifest.json lists exactly the 125 known schemas with their recorded sha256", async () => {
     const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
     expect(manifest).toEqual({
       schemaVersion: "heniek.contracts-manifest.v1",
