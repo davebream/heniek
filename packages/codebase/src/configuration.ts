@@ -14,11 +14,16 @@ import {
 } from "@heniek/config";
 import type {
   CodebaseConfiguration,
+  CodebaseConfigurationV2,
   RepositoryBasePin,
   RepositoryProvisioningConfiguration,
   ResolvedCodebaseSnapshot,
+  ResolvedCodebaseSnapshotV2,
 } from "@heniek/contracts";
-import { CodebaseConfigurationV1 } from "@heniek/contracts";
+import {
+  CodebaseConfigurationV1,
+  CodebaseConfigurationV2 as CodebaseConfigurationV2Schema,
+} from "@heniek/contracts";
 import { LineCounter, parseDocument } from "yaml";
 import { normalizeRemoteUrl } from "./remote.js";
 import type { ClockPort, HashPort, RegisteredCodebase } from "./types.js";
@@ -26,6 +31,9 @@ import type { ClockPort, HashPort, RegisteredCodebase } from "./types.js";
 const CONFIGURATION_FIELDS = [
   "expectedPath",
   "setup",
+  "setup/command",
+  "setup/dependsOn",
+  "setup/timeoutMilliseconds",
   "provisioning/strategy",
   "provisioning/remote",
   "provisioning/requestedRef",
@@ -53,7 +61,7 @@ export interface ResolveCodebaseConfigurationInput {
 }
 
 export type ResolveCodebaseConfigurationResult =
-  | { readonly ok: true; readonly snapshot: ResolvedCodebaseSnapshot }
+  | { readonly ok: true; readonly snapshot: ResolvedCodebaseSnapshot | ResolvedCodebaseSnapshotV2 }
   | { readonly ok: false; readonly diagnostics: readonly Diagnostic[] };
 
 export interface ResolveCodebaseConfigurationDeps {
@@ -69,6 +77,76 @@ export interface LoadCodebaseConfigurationDeps extends ResolveCodebaseConfigurat
 
 function sha256(value: string): string {
   return createHash("sha256").update(value).digest("hex");
+}
+
+function isSetupPolicy(
+  value: unknown,
+): value is CodebaseConfigurationV2["repositories"][string]["setup"] {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
+  const candidate = value as Record<string, unknown>;
+  return (
+    (candidate.command === null ||
+      (typeof candidate.command === "string" && candidate.command !== "")) &&
+    Array.isArray(candidate.dependsOn) &&
+    candidate.dependsOn.every((entry) => typeof entry === "string" && entry !== "") &&
+    new Set(candidate.dependsOn).size === candidate.dependsOn.length &&
+    Number.isInteger(candidate.timeoutMilliseconds) &&
+    (candidate.timeoutMilliseconds as number) >= 1000 &&
+    (candidate.timeoutMilliseconds as number) <= 86400000
+  );
+}
+
+function setupGraphDiagnostics(
+  setupByRepository: ReadonlyMap<string, CodebaseConfigurationV2["repositories"][string]["setup"]>,
+  provenance: readonly ConfigurationProvenance[],
+  sourceTexts: Readonly<Record<string, string>>,
+): Diagnostic[] {
+  const diagnostics: Diagnostic[] = [];
+  for (const [repositoryId, setup] of setupByRepository) {
+    for (const dependency of setup.dependsOn) {
+      const pointer = `/repositories/${repositoryId}/setup/dependsOn`;
+      if (dependency === repositoryId || !setupByRepository.has(dependency)) {
+        diagnostics.push(
+          diagnosticAt(
+            dependency === repositoryId
+              ? "codebase.setup-self-dependency"
+              : "codebase.setup-dependency-missing",
+            dependency === repositoryId
+              ? "Repository setup cannot depend on itself."
+              : "Repository setup dependency is not configured in this Codebase.",
+            pointer,
+            provenance,
+            sourceTexts,
+          ),
+        );
+      }
+    }
+  }
+  const visiting = new Set<string>();
+  const visited = new Set<string>();
+  const visit = (repositoryId: string): void => {
+    if (visited.has(repositoryId)) return;
+    if (visiting.has(repositoryId)) {
+      diagnostics.push(
+        diagnosticAt(
+          "codebase.setup-dependency-cycle",
+          "Repository setup dependencies must form an acyclic graph.",
+          `/repositories/${repositoryId}/setup/dependsOn`,
+          provenance,
+          sourceTexts,
+        ),
+      );
+      return;
+    }
+    visiting.add(repositoryId);
+    for (const dependency of setupByRepository.get(repositoryId)?.dependsOn ?? []) {
+      if (setupByRepository.has(dependency)) visit(dependency);
+    }
+    visiting.delete(repositoryId);
+    visited.add(repositoryId);
+  };
+  for (const repositoryId of [...setupByRepository.keys()].sort()) visit(repositoryId);
+  return diagnostics;
 }
 
 function canonicalValue(value: unknown): unknown {
@@ -312,8 +390,12 @@ export async function resolveCodebaseConfiguration(
   });
   const diagnostics: Diagnostic[] = [...resolved.diagnostics];
   const value = resolved.values as Record<string, unknown>;
+  const configurationVersion = value.schemaVersion;
   const repositoriesValue = isObject(value.repositories) ? value.repositories : {};
-  if (value.schemaVersion !== 1 || value.codebaseId !== input.registration.codebaseId) {
+  if (
+    (configurationVersion !== 1 && configurationVersion !== 2) ||
+    value.codebaseId !== input.registration.codebaseId
+  ) {
     diagnostics.push(
       diagnosticAt(
         "codebase.configuration-identity-mismatch",
@@ -356,7 +438,7 @@ export async function resolveCodebaseConfiguration(
   const effective: {
     repository: RegisteredCodebase["repositories"][number];
     provisioning: RepositoryProvisioningConfiguration;
-    setup: string | null;
+    setup: string | null | CodebaseConfigurationV2["repositories"][string]["setup"];
     provenance: ResolvedCodebaseSnapshot["repositories"][number]["provenance"];
   }[] = [];
   const remoteOwners = new Map<string, string>();
@@ -391,7 +473,11 @@ export async function resolveCodebaseConfiguration(
     }
     const provisioning = configured.provisioning;
     const setup = configured.setup;
-    if (!(setup === null || (typeof setup === "string" && setup !== ""))) {
+    const setupValid =
+      configurationVersion === 1
+        ? setup === null || (typeof setup === "string" && setup !== "")
+        : isSetupPolicy(setup);
+    if (!setupValid) {
       diagnostics.push(
         diagnosticAt(
           "codebase.setup-invalid",
@@ -453,9 +539,19 @@ export async function resolveCodebaseConfiguration(
     effective.push({
       repository,
       provisioning,
-      setup,
+      setup: setup as string | null | CodebaseConfigurationV2["repositories"][string]["setup"],
       provenance: repositoryProvenance,
     });
+  }
+
+  if (configurationVersion === 2) {
+    const setupByRepository = new Map(
+      effective.map((entry) => [
+        entry.repository.repositoryId as string,
+        entry.setup as CodebaseConfigurationV2["repositories"][string]["setup"],
+      ]),
+    );
+    diagnostics.push(...setupGraphDiagnostics(setupByRepository, resolved.provenance, sourceTexts));
   }
 
   if (diagnostics.some((diagnostic) => diagnostic.severity === "error")) {
@@ -507,12 +603,14 @@ export async function resolveCodebaseConfiguration(
     .map(({ pin }) => pin as RepositoryBasePin)
     .sort((left, right) => left.repositoryId.localeCompare(right.repositoryId));
   const hash = deps.hash?.sha256 ?? sha256;
-  const configuration = resolved.values as unknown as CodebaseConfiguration;
+  const configuration = resolved.values as unknown as
+    | CodebaseConfiguration
+    | CodebaseConfigurationV2;
   const resolvedAt = deps.clock.nowIso();
   return {
     ok: true,
     snapshot: {
-      schemaVersion: 1,
+      schemaVersion: configurationVersion as 1 | 2,
       codebaseId: input.registration.codebaseId,
       registrationSha256: input.registration.configurationSha256,
       configurationSha256: hash(JSON.stringify(canonicalValue(configuration))),
@@ -530,7 +628,7 @@ export async function resolveCodebaseConfiguration(
         }))
         .sort((left, right) => left.repositoryId.localeCompare(right.repositoryId)),
       basePins,
-    },
+    } as ResolvedCodebaseSnapshot | ResolvedCodebaseSnapshotV2,
   };
 }
 
@@ -570,9 +668,12 @@ export async function loadAndResolveCodebaseConfiguration(
     };
   }
   const source = await deps.fs.readText(path);
-  const parsed = loadRestrictedYamlDocument<CodebaseConfiguration>(
+  const selector = parseDocument(source).toJS() as { schemaVersion?: unknown } | null;
+  const schema =
+    selector?.schemaVersion === 2 ? CodebaseConfigurationV2Schema : CodebaseConfigurationV1;
+  const parsed = loadRestrictedYamlDocument<CodebaseConfiguration | CodebaseConfigurationV2>(
     source,
-    CodebaseConfigurationV1,
+    schema,
     { sourcePath: path },
   );
   if (!parsed.ok) return { ok: false, diagnostics: parsed.diagnostics };
