@@ -1,0 +1,144 @@
+{
+  "$id": "heniek://contract/NativeStageDispatch/v2",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "dispatchId",
+    "dispatchRevision",
+    "runId",
+    "stageId",
+    "attemptId",
+    "attemptOrdinal",
+    "workspaceId",
+    "workingDirectory",
+    "instructionsPath",
+    "prompt",
+    "artifactPath",
+    "artifactContract",
+    "model",
+    "effort",
+    "questions",
+    "permissions",
+    "limits",
+    "issuedAt",
+    "expiresAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 2,
+      "type": "number"
+    },
+    "dispatchId": {
+      "minLength": 1,
+      "description": "Opaque NativeDispatchId.",
+      "type": "string"
+    },
+    "dispatchRevision": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "runId": {
+      "minLength": 1,
+      "description": "Opaque RunId.",
+      "type": "string"
+    },
+    "stageId": {
+      "minLength": 1,
+      "description": "Opaque StageId.",
+      "type": "string"
+    },
+    "attemptId": {
+      "minLength": 1,
+      "description": "Opaque StageAttemptId.",
+      "type": "string"
+    },
+    "attemptOrdinal": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "workspaceId": {
+      "minLength": 1,
+      "description": "Opaque WorkspaceId.",
+      "type": "string"
+    },
+    "workingDirectory": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "instructionsPath": {
+      "minLength": 1,
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\u0000).+$",
+      "type": "string"
+    },
+    "prompt": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "artifactPath": {
+      "minLength": 1,
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\u0000).+$",
+      "type": "string"
+    },
+    "artifactContract": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "model": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "effort": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "focus": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "questions": {
+      "anyOf": [
+        {
+          "const": "parent-mediated",
+          "type": "string"
+        },
+        {
+          "const": "direct",
+          "type": "string"
+        }
+      ]
+    },
+    "permissions": {
+      "$ref": "heniek://contract/ExecutionPermissionEnvelope/v1"
+    },
+    "limits": {
+      "additionalProperties": false,
+      "type": "object",
+      "properties": {
+        "maxDurationMs": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "maxTurns": {
+          "minimum": 1,
+          "type": "integer"
+        }
+      }
+    },
+    "issuedAt": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "expiresAt": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "deadlineAt": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "capabilityDelta": {
+      "$ref": "heniek://contract/CapabilityDelta/v1"
+    }
+  }
+}

@@ -1,5 +1,6 @@
 import { Type } from "@sinclair/typebox";
 import { ArtifactId } from "../artifact/index.js";
+import { CapabilityDeltaV1 } from "../capability/schemas.js";
 import { ResolvedProfileSchema, ResolvedProfileSchemaV2 } from "../configuration/index.js";
 import { InteractionId, InteractionQuestionId } from "../interaction/index.js";
 import { SCHEMA_REGISTRY, versioned } from "../kernel/index.js";
@@ -180,6 +181,25 @@ export const ExecutionRequestV4 = versioned("ExecutionRequest", 4, {
   limits: ExecutionLimits,
   profile: ResolvedProfileSchemaV2,
   permissions: Type.Ref(ExecutionPermissionEnvelopeV1),
+});
+
+/**
+ * Carries an optional provider-neutral capability degradation into the
+ * execution backend so the stage can adapt. V4 remains frozen for older
+ * backends.
+ */
+export const ExecutionRequestV5 = versioned("ExecutionRequest", 5, {
+  runId: Type.String({ minLength: 1 }),
+  stageId: StageId,
+  workspaceId: WorkspaceId,
+  workingDirectory: Type.String({ minLength: 1 }),
+  prompt: Type.String({ minLength: 1 }),
+  artifactPath: Type.String({ minLength: 1 }),
+  inputArtifactRefs: Type.Array(ArtifactId),
+  limits: ExecutionLimits,
+  profile: ResolvedProfileSchemaV2,
+  permissions: Type.Ref(ExecutionPermissionEnvelopeV1),
+  capabilityDelta: Type.Optional(Type.Ref(CapabilityDeltaV1)),
 });
 
 export const BackendExecutionHandleV1 = versioned("BackendExecutionHandle", 1, {

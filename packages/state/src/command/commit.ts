@@ -23,7 +23,7 @@ import {
   internalIds,
   type StateDatabase,
 } from "../database/open.js";
-import { toSafeInteger } from "../database/pragma.js";
+import { readUserVersion, toSafeInteger } from "../database/pragma.js";
 import {
   ArtifactCountExceededError,
   CausalityViolationError,
@@ -35,6 +35,7 @@ import { asCorrelationId } from "../journal/brand.js";
 import type { CausationEventId, CorrelationId, EventId, EventSequence } from "../journal/event.js";
 import { readEventById } from "../journal/read.js";
 import type { JsonValue } from "../json.js";
+import { CAPABILITY_LANDING_SCHEMA_VERSION } from "../migrations/capability-landing.js";
 import { applyEvent, eventScope } from "../projection/reducer.js";
 import {
   diffProjectionState,
@@ -293,39 +294,79 @@ interface TableSql {
   readonly updateKeyColumns: readonly string[];
 }
 
+const RUN_PROJECTION_SQL: TableSql = {
+  insert:
+    "INSERT INTO run_projection" +
+    " (run_id, status, revision, last_event_sequence, codebase_id, updated_at, workspace_id," +
+    " instruction_snapshot_sha256, instruction_snapshot_json, capability_landing_json)" +
+    " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+  insertColumns: [
+    "run_id",
+    "status",
+    "revision",
+    "last_event_sequence",
+    "codebase_id",
+    "updated_at",
+    "workspace_id",
+    "instruction_snapshot_sha256",
+    "instruction_snapshot_json",
+    "capability_landing_json",
+  ],
+  update:
+    "UPDATE run_projection SET status = ?, revision = ?, last_event_sequence = ?," +
+    " codebase_id = ?, updated_at = ?, workspace_id = ?, instruction_snapshot_sha256 = ?," +
+    " instruction_snapshot_json = ?, capability_landing_json = ?" +
+    " WHERE run_id = ? AND revision = ?",
+  updateColumns: [
+    "status",
+    "revision",
+    "last_event_sequence",
+    "codebase_id",
+    "updated_at",
+    "workspace_id",
+    "instruction_snapshot_sha256",
+    "instruction_snapshot_json",
+    "capability_landing_json",
+  ],
+  updateKeyColumns: ["run_id"],
+};
+
+/** Pre-migration-19 writers — used by intermediate migration tests that seed via commit. */
+const RUN_PROJECTION_SQL_BEFORE_LANDING: TableSql = {
+  insert:
+    "INSERT INTO run_projection" +
+    " (run_id, status, revision, last_event_sequence, codebase_id, updated_at, workspace_id," +
+    " instruction_snapshot_sha256, instruction_snapshot_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+  insertColumns: [
+    "run_id",
+    "status",
+    "revision",
+    "last_event_sequence",
+    "codebase_id",
+    "updated_at",
+    "workspace_id",
+    "instruction_snapshot_sha256",
+    "instruction_snapshot_json",
+  ],
+  update:
+    "UPDATE run_projection SET status = ?, revision = ?, last_event_sequence = ?," +
+    " codebase_id = ?, updated_at = ?, workspace_id = ?, instruction_snapshot_sha256 = ?," +
+    " instruction_snapshot_json = ? WHERE run_id = ? AND revision = ?",
+  updateColumns: [
+    "status",
+    "revision",
+    "last_event_sequence",
+    "codebase_id",
+    "updated_at",
+    "workspace_id",
+    "instruction_snapshot_sha256",
+    "instruction_snapshot_json",
+  ],
+  updateKeyColumns: ["run_id"],
+};
+
 const TABLE_SQL: Readonly<Record<ProjectionTable, TableSql>> = {
-  run_projection: {
-    insert:
-      "INSERT INTO run_projection" +
-      " (run_id, status, revision, last_event_sequence, codebase_id, updated_at, workspace_id," +
-      " instruction_snapshot_sha256, instruction_snapshot_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-    insertColumns: [
-      "run_id",
-      "status",
-      "revision",
-      "last_event_sequence",
-      "codebase_id",
-      "updated_at",
-      "workspace_id",
-      "instruction_snapshot_sha256",
-      "instruction_snapshot_json",
-    ],
-    update:
-      "UPDATE run_projection SET status = ?, revision = ?, last_event_sequence = ?," +
-      " codebase_id = ?, updated_at = ?, workspace_id = ?, instruction_snapshot_sha256 = ?," +
-      " instruction_snapshot_json = ? WHERE run_id = ? AND revision = ?",
-    updateColumns: [
-      "status",
-      "revision",
-      "last_event_sequence",
-      "codebase_id",
-      "updated_at",
-      "workspace_id",
-      "instruction_snapshot_sha256",
-      "instruction_snapshot_json",
-    ],
-    updateKeyColumns: ["run_id"],
-  },
+  run_projection: RUN_PROJECTION_SQL,
   codebase: {
     insert:
       "INSERT INTO codebase (codebase_id, revision, last_event_sequence, updated_at, name, root_path," +
@@ -552,6 +593,13 @@ const TABLE_SQL: Readonly<Record<ProjectionTable, TableSql>> = {
   },
 };
 
+function tableSql(table: ProjectionTable, schemaVersion: number): TableSql {
+  if (table === "run_projection" && schemaVersion < CAPABILITY_LANDING_SCHEMA_VERSION) {
+    return RUN_PROJECTION_SQL_BEFORE_LANDING;
+  }
+  return TABLE_SQL[table];
+}
+
 function boundValues(
   write: ProjectionWrite,
   columns: readonly string[],
@@ -685,8 +733,9 @@ export function commitStateChangeInternal(
     assertGuardedWritesAreVerified(writes, after, assertedRelativePaths);
 
     const reported: { table: ProjectionTable; key: string; revision: number }[] = [];
+    const schemaVersion = readUserVersion(handle);
     for (const write of writes) {
-      const sql = TABLE_SQL[write.table];
+      const sql = tableSql(write.table, schemaVersion);
       const revision = writtenRevision(write);
       if (write.previousRevision === null) {
         handle.prepare(sql.insert).run(...boundValues(write, sql.insertColumns));

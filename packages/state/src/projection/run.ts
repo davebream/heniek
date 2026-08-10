@@ -18,8 +18,9 @@
 
 import { RunStatus } from "@heniek/contracts";
 import { internalHandle, type StateDatabase } from "../database/open.js";
-import { toNullableText, toSafeInteger, toText } from "../database/pragma.js";
+import { readUserVersion, toNullableText, toSafeInteger, toText } from "../database/pragma.js";
 import { StateDatabaseCorruptionError } from "../errors.js";
+import { CAPABILITY_LANDING_SCHEMA_VERSION } from "../migrations/capability-landing.js";
 
 export interface RunProjectionRow {
   readonly runId: string;
@@ -32,11 +33,26 @@ export interface RunProjectionRow {
   readonly updatedAt: string;
   readonly instructionSnapshotSha256: string | null;
   readonly instructionSnapshotJson: string | null;
+  readonly capabilityLandingJson: string | null;
 }
 
-const RUN_PROJECTION_COLUMNS =
+const RUN_PROJECTION_COLUMNS_BEFORE_LANDING =
   "run_id, status, revision, last_event_sequence, workspace_id, codebase_id, updated_at," +
   " instruction_snapshot_sha256, instruction_snapshot_json";
+
+const RUN_PROJECTION_COLUMNS = RUN_PROJECTION_COLUMNS_BEFORE_LANDING + ", capability_landing_json";
+
+/**
+ * Column list for `run_projection` SELECTs. Intermediate migration tests seed
+ * via `commitStateChange` on pre-19 databases; omitting the landing column
+ * until migration 19 keeps those writers working without version forks of
+ * every seed helper.
+ */
+export function runProjectionSelectColumns(schemaVersion: number): string {
+  return schemaVersion >= CAPABILITY_LANDING_SCHEMA_VERSION
+    ? RUN_PROJECTION_COLUMNS
+    : RUN_PROJECTION_COLUMNS_BEFORE_LANDING;
+}
 
 /**
  * `RunStatus.values` is a `readonly string[]` at the type level, so
@@ -82,19 +98,24 @@ export function toRunProjectionRow(raw: Record<string, unknown>): RunProjectionR
       raw.instruction_snapshot_json,
       "run_projection.instruction_snapshot_json",
     ),
+    // Absent when SELECT omitted the column on a pre-migration-19 schema.
+    capabilityLandingJson:
+      raw.capability_landing_json === undefined
+        ? null
+        : toNullableText(raw.capability_landing_json, "run_projection.capability_landing_json"),
   };
 }
 
 export function readRunProjection(db: StateDatabase, runId: string): RunProjectionRow | undefined {
-  const row = internalHandle(db)
-    .prepare(`SELECT ${RUN_PROJECTION_COLUMNS} FROM run_projection WHERE run_id = ?`)
-    .get(runId);
+  const handle = internalHandle(db);
+  const columns = runProjectionSelectColumns(readUserVersion(handle));
+  const row = handle.prepare(`SELECT ${columns} FROM run_projection WHERE run_id = ?`).get(runId);
   return row === undefined ? undefined : toRunProjectionRow(row);
 }
 
 export function readAllRunProjections(db: StateDatabase): readonly RunProjectionRow[] {
-  const rows = internalHandle(db)
-    .prepare(`SELECT ${RUN_PROJECTION_COLUMNS} FROM run_projection ORDER BY run_id`)
-    .all();
+  const handle = internalHandle(db);
+  const columns = runProjectionSelectColumns(readUserVersion(handle));
+  const rows = handle.prepare(`SELECT ${columns} FROM run_projection ORDER BY run_id`).all();
   return rows.map((row) => toRunProjectionRow(row));
 }

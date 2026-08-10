@@ -1,0 +1,498 @@
+{
+  "$id": "heniek://contract/CapabilityResolutionBlocker/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "reason",
+    "pinnedAxes",
+    "candidates"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "reason": {
+      "const": "pinned_capability_unavailable",
+      "type": "string"
+    },
+    "pinnedAxes": {
+      "minItems": 1,
+      "uniqueItems": true,
+      "type": "array",
+      "items": {
+        "anyOf": [
+          {
+            "const": "engine",
+            "type": "string"
+          },
+          {
+            "const": "account",
+            "type": "string"
+          },
+          {
+            "const": "billing",
+            "type": "string"
+          },
+          {
+            "const": "model",
+            "type": "string"
+          },
+          {
+            "const": "effort",
+            "type": "string"
+          },
+          {
+            "const": "executionMode",
+            "type": "string"
+          },
+          {
+            "const": "requiredFeatures",
+            "type": "string"
+          },
+          {
+            "const": "requiredTools",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    "candidates": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "profileId",
+          "differences"
+        ],
+        "properties": {
+          "profileId": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "differences": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "axis",
+                    "requested",
+                    "resolved"
+                  ],
+                  "properties": {
+                    "axis": {
+                      "const": "engine",
+                      "type": "string"
+                    },
+                    "requested": {
+                      "anyOf": [
+                        {
+                          "const": "claude",
+                          "type": "string"
+                        },
+                        {
+                          "const": "codex",
+                          "type": "string"
+                        },
+                        {
+                          "const": "cursor",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "resolved": {
+                      "anyOf": [
+                        {
+                          "const": "claude",
+                          "type": "string"
+                        },
+                        {
+                          "const": "codex",
+                          "type": "string"
+                        },
+                        {
+                          "const": "cursor",
+                          "type": "string"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "axis",
+                    "requested",
+                    "resolved"
+                  ],
+                  "properties": {
+                    "axis": {
+                      "const": "account",
+                      "type": "string"
+                    },
+                    "requested": {
+                      "anyOf": [
+                        {
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "resolved": {
+                      "anyOf": [
+                        {
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "axis",
+                    "requested",
+                    "resolved"
+                  ],
+                  "properties": {
+                    "axis": {
+                      "const": "billing",
+                      "type": "string"
+                    },
+                    "requested": {
+                      "anyOf": [
+                        {
+                          "const": "subscription",
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "resolved": {
+                      "anyOf": [
+                        {
+                          "const": "subscription",
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "axis",
+                    "requested",
+                    "resolved"
+                  ],
+                  "properties": {
+                    "axis": {
+                      "const": "model",
+                      "type": "string"
+                    },
+                    "requested": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "resolved": {
+                      "minLength": 1,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "axis",
+                    "requested",
+                    "resolved"
+                  ],
+                  "properties": {
+                    "axis": {
+                      "const": "effort",
+                      "type": "string"
+                    },
+                    "requested": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "resolved": {
+                      "minLength": 1,
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "axis",
+                    "requested",
+                    "resolved"
+                  ],
+                  "properties": {
+                    "axis": {
+                      "const": "executionMode",
+                      "type": "string"
+                    },
+                    "requested": {
+                      "anyOf": [
+                        {
+                          "const": "native",
+                          "type": "string"
+                        },
+                        {
+                          "const": "external",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "resolved": {
+                      "anyOf": [
+                        {
+                          "const": "native",
+                          "type": "string"
+                        },
+                        {
+                          "const": "external",
+                          "type": "string"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "axis",
+                    "requested",
+                    "resolved"
+                  ],
+                  "properties": {
+                    "axis": {
+                      "const": "preferredFeatures",
+                      "type": "string"
+                    },
+                    "requested": {
+                      "uniqueItems": true,
+                      "type": "array",
+                      "items": {
+                        "anyOf": [
+                          {
+                            "const": "questions",
+                            "type": "string"
+                          },
+                          {
+                            "const": "resume",
+                            "type": "string"
+                          },
+                          {
+                            "const": "usage",
+                            "type": "string"
+                          },
+                          {
+                            "const": "structuredOutput",
+                            "type": "string"
+                          },
+                          {
+                            "const": "cancellation",
+                            "type": "string"
+                          }
+                        ]
+                      }
+                    },
+                    "resolved": {
+                      "uniqueItems": true,
+                      "type": "array",
+                      "items": {
+                        "anyOf": [
+                          {
+                            "const": "questions",
+                            "type": "string"
+                          },
+                          {
+                            "const": "resume",
+                            "type": "string"
+                          },
+                          {
+                            "const": "usage",
+                            "type": "string"
+                          },
+                          {
+                            "const": "structuredOutput",
+                            "type": "string"
+                          },
+                          {
+                            "const": "cancellation",
+                            "type": "string"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "axis",
+                    "requested",
+                    "resolved"
+                  ],
+                  "properties": {
+                    "axis": {
+                      "const": "preferredTools",
+                      "type": "string"
+                    },
+                    "requested": {
+                      "uniqueItems": true,
+                      "type": "array",
+                      "items": {
+                        "minLength": 1,
+                        "type": "string"
+                      }
+                    },
+                    "resolved": {
+                      "uniqueItems": true,
+                      "type": "array",
+                      "items": {
+                        "minLength": 1,
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "axis",
+                    "requested",
+                    "resolved"
+                  ],
+                  "properties": {
+                    "axis": {
+                      "const": "requiredFeatures",
+                      "type": "string"
+                    },
+                    "requested": {
+                      "uniqueItems": true,
+                      "type": "array",
+                      "items": {
+                        "anyOf": [
+                          {
+                            "const": "questions",
+                            "type": "string"
+                          },
+                          {
+                            "const": "resume",
+                            "type": "string"
+                          },
+                          {
+                            "const": "usage",
+                            "type": "string"
+                          },
+                          {
+                            "const": "structuredOutput",
+                            "type": "string"
+                          },
+                          {
+                            "const": "cancellation",
+                            "type": "string"
+                          }
+                        ]
+                      }
+                    },
+                    "resolved": {
+                      "uniqueItems": true,
+                      "type": "array",
+                      "items": {
+                        "anyOf": [
+                          {
+                            "const": "questions",
+                            "type": "string"
+                          },
+                          {
+                            "const": "resume",
+                            "type": "string"
+                          },
+                          {
+                            "const": "usage",
+                            "type": "string"
+                          },
+                          {
+                            "const": "structuredOutput",
+                            "type": "string"
+                          },
+                          {
+                            "const": "cancellation",
+                            "type": "string"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "axis",
+                    "requested",
+                    "resolved"
+                  ],
+                  "properties": {
+                    "axis": {
+                      "const": "requiredTools",
+                      "type": "string"
+                    },
+                    "requested": {
+                      "uniqueItems": true,
+                      "type": "array",
+                      "items": {
+                        "minLength": 1,
+                        "type": "string"
+                      }
+                    },
+                    "resolved": {
+                      "uniqueItems": true,
+                      "type": "array",
+                      "items": {
+                        "minLength": 1,
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  }
+}

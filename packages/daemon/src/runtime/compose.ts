@@ -51,7 +51,7 @@ import {
   registerCodebase,
   resolveVerifyChecksFromPolicy,
 } from "@heniek/codebase";
-import type { ApplicationHome } from "@heniek/config";
+import type { ApplicationHome, ProfileInvocationOverrides } from "@heniek/config";
 import {
   type ArtifactId,
   type DoctorReportV2,
@@ -71,6 +71,7 @@ import {
   RunAnswerRequestV2,
   RunResumeRequestV2,
   StageStartRequestV2,
+  StageStartRequestV3,
 } from "@heniek/contracts";
 import { createFileSecretStore, createScopedSecretReader } from "@heniek/secrets";
 import {
@@ -131,6 +132,7 @@ import {
   type MethodHandler,
   type MethodRegistry,
   NATIVE_STAGE_POLL_V1_METHOD,
+  NATIVE_STAGE_POLL_V2_METHOD,
   NATIVE_STAGE_QUESTION_V1_METHOD,
   NATIVE_STAGE_STATUS_V1_METHOD,
   NATIVE_STAGE_SUBMIT_V1_METHOD,
@@ -145,6 +147,7 @@ import {
   RUN_RESULT_V1_METHOD,
   RUN_RESULT_V2_METHOD,
   RUN_RESULT_V3_METHOD,
+  RUN_RESULT_V4_METHOD,
   RUN_RESUME_V1_METHOD,
   RUN_RESUME_V2_METHOD,
   RUN_STATUS_V1_METHOD,
@@ -154,6 +157,7 @@ import {
   STAGE_START_V1_METHOD,
   STAGE_START_V2_METHOD,
   STAGE_START_V3_METHOD,
+  STAGE_START_V4_METHOD,
 } from "../rpc/methods.js";
 import { createSystemClock } from "./clock.js";
 import {
@@ -365,6 +369,7 @@ export interface StartDaemonDeps {
     readonly backend: ExecutionBackendV7;
     readonly resolveProfileChain: (
       profileId: string,
+      options?: { readonly invocationOverrides?: ProfileInvocationOverrides },
     ) => Promise<Static<typeof ResolvedProfileChainV1>> | Static<typeof ResolvedProfileChainV1>;
   };
   /**
@@ -378,6 +383,7 @@ export interface StartDaemonDeps {
     readonly backend: ExecutionBackendV7;
     readonly resolveProfileChain: (
       profileId: string,
+      options?: { readonly invocationOverrides?: ProfileInvocationOverrides },
     ) => Promise<Static<typeof ResolvedProfileChainV1>> | Static<typeof ResolvedProfileChainV1>;
     readonly resolveCodebaseContext: (runId: string) => {
       readonly codebaseId: string;
@@ -397,6 +403,7 @@ export interface StartDaemonDeps {
   readonly nativeBridge?: {
     readonly resolveProfileChain: (
       profileId: string,
+      options?: { readonly invocationOverrides?: ProfileInvocationOverrides },
     ) => Promise<Static<typeof ResolvedProfileChainV1>> | Static<typeof ResolvedProfileChainV1>;
   };
   /**
@@ -1293,6 +1300,37 @@ export async function startDaemon(deps: StartDaemonDeps): Promise<StartDaemonOut
         },
       ],
       [
+        RUN_RESULT_V4_METHOD,
+        async (params) => {
+          const runId = requiredParam(recordParams(params), "runId");
+          const payload = schedulingPayload(runId);
+          const result = schedulingService.result(runId);
+          const capabilityLanding = schedulingService.capabilityLanding(runId) ?? {
+            schemaVersion: 1 as const,
+            status: "satisfied" as const,
+          };
+          return {
+            schemaVersion: 4,
+            runId,
+            stageId: payload.snapshot.schedule.stageId,
+            status: payload.snapshot.status,
+            ...(result?.summary === undefined ? {} : { summary: result.summary }),
+            ...(result?.sessionId === undefined ? {} : { sessionId: result.sessionId }),
+            artifacts: readStageArtifacts(workspaceDatabase, runId).map((artifact) => ({
+              name: artifact.name,
+              artifactId: artifact.artifactId,
+              mediaType: artifact.mediaType,
+              byteLength: artifact.byteLength,
+              sha256: artifact.contentHash,
+            })),
+            scheduling: payload.scheduling,
+            attempts: payload.attempts,
+            decisions: payload.decisions.map((decision) => ({ ...decision, schemaVersion: 2 })),
+            capabilityLanding,
+          };
+        },
+      ],
+      [
         RUN_CANCEL_V1_METHOD,
         async (params) => {
           const runId = requiredParam(recordParams(params), "runId");
@@ -1391,59 +1429,142 @@ export async function startDaemon(deps: StartDaemonDeps): Promise<StartDaemonOut
     ]);
   }
   if (schedulingService !== undefined || nativeBridgeService !== undefined) {
-    entries.push([
-      STAGE_START_V3_METHOD,
-      async (params) => {
-        const input = withoutAuth(recordParams(params));
-        if (!Value.Check(StageStartRequestV2, input))
-          throw new Error("invalid stage start request");
-        const routingResolver =
-          deps.nativeBridge?.resolveProfileChain ?? deps.scheduling?.resolveProfileChain;
-        if (routingResolver === undefined) throw new Error("no execution routing is configured");
-        const chain = await routingResolver(input.profileId);
-        if (chain.primary.executionMode === "native") {
-          if (nativeBridgeService === undefined)
-            throw new Error("native execution is not configured");
-          const started = await nativeBridgeService.start({
+    entries.push(
+      [
+        STAGE_START_V3_METHOD,
+        async (params) => {
+          const input = withoutAuth(recordParams(params));
+          if (!Value.Check(StageStartRequestV2, input))
+            throw new Error("invalid stage start request");
+          const routingResolver =
+            deps.nativeBridge?.resolveProfileChain ?? deps.scheduling?.resolveProfileChain;
+          if (routingResolver === undefined) throw new Error("no execution routing is configured");
+          const chain = await routingResolver(input.profileId);
+          if (chain.primary.executionMode === "native") {
+            if (nativeBridgeService === undefined)
+              throw new Error("native execution is not configured");
+            const started = await nativeBridgeService.start({
+              currentDirectory: input.currentDirectory,
+              prompt: input.prompt,
+              artifactPath: input.artifactPath,
+              profileId: input.profileId,
+              requestedIdentifiers: input.requestedIdentifiers,
+              limits: input.limits,
+            });
+            const stageRevision = nativeBridgeService.status(started.runId)?.stage.revision;
+            return {
+              schemaVersion: 3,
+              runId: started.runId,
+              stageId: started.stageId,
+              status: started.status,
+              executionMode: "native",
+              ...(stageRevision === undefined ? {} : { stageRevision }),
+            };
+          }
+          if (schedulingService === undefined)
+            throw new Error("external execution is not configured");
+          const started = await schedulingService.start({
             currentDirectory: input.currentDirectory,
             prompt: input.prompt,
             artifactPath: input.artifactPath,
             profileId: input.profileId,
+            priority: input.priority,
             requestedIdentifiers: input.requestedIdentifiers,
             limits: input.limits,
           });
-          const stageRevision = nativeBridgeService.status(started.runId)?.stage.revision;
+          const current = schedulingService.status(started.runId);
           return {
             schemaVersion: 3,
             runId: started.runId,
             stageId: started.stageId,
-            status: started.status,
-            executionMode: "native",
-            ...(stageRevision === undefined ? {} : { stageRevision }),
+            status: current?.status ?? "queued",
+            executionMode: chain.primary.executionMode,
+            schedulingRevision: started.schedulingRevision,
           };
-        }
-        if (schedulingService === undefined)
-          throw new Error("external execution is not configured");
-        const started = await schedulingService.start({
-          currentDirectory: input.currentDirectory,
-          prompt: input.prompt,
-          artifactPath: input.artifactPath,
-          profileId: input.profileId,
-          priority: input.priority,
-          requestedIdentifiers: input.requestedIdentifiers,
-          limits: input.limits,
-        });
-        const current = schedulingService.status(started.runId);
-        return {
-          schemaVersion: 3,
-          runId: started.runId,
-          stageId: started.stageId,
-          status: current?.status ?? "queued",
-          executionMode: chain.primary.executionMode,
-          schedulingRevision: started.schedulingRevision,
-        };
-      },
-    ]);
+        },
+      ],
+      [
+        STAGE_START_V4_METHOD,
+        async (params) => {
+          const input = withoutAuth(recordParams(params));
+          if (!Value.Check(StageStartRequestV3, input))
+            throw new Error("invalid stage start request");
+          const routingResolver =
+            deps.nativeBridge?.resolveProfileChain ?? deps.scheduling?.resolveProfileChain;
+          if (routingResolver === undefined) throw new Error("no execution routing is configured");
+          const chain = await routingResolver(input.profileId, {
+            ...(input.invocationOverrides === undefined
+              ? {}
+              : { invocationOverrides: input.invocationOverrides }),
+          });
+          if (chain.primary.executionMode === "native") {
+            if (nativeBridgeService === undefined)
+              throw new Error("native execution is not configured");
+            const started = await nativeBridgeService.start({
+              currentDirectory: input.currentDirectory,
+              prompt: input.prompt,
+              artifactPath: input.artifactPath,
+              profileId: input.profileId,
+              requestedIdentifiers: input.requestedIdentifiers,
+              limits: input.limits,
+              ...(input.invocationOverrides === undefined
+                ? {}
+                : { invocationOverrides: input.invocationOverrides }),
+              ...(input.preferredFeatures === undefined
+                ? {}
+                : { preferredFeatures: input.preferredFeatures }),
+              ...(input.preferredTools === undefined
+                ? {}
+                : { preferredTools: input.preferredTools }),
+              ...(input.requiredFeatures === undefined
+                ? {}
+                : { requiredFeatures: input.requiredFeatures }),
+              ...(input.requiredTools === undefined ? {} : { requiredTools: input.requiredTools }),
+            });
+            const stageRevision = nativeBridgeService.status(started.runId)?.stage.revision;
+            return {
+              schemaVersion: 3,
+              runId: started.runId,
+              stageId: started.stageId,
+              status: started.status,
+              executionMode: "native",
+              ...(stageRevision === undefined ? {} : { stageRevision }),
+            };
+          }
+          if (schedulingService === undefined)
+            throw new Error("external execution is not configured");
+          const started = await schedulingService.start({
+            currentDirectory: input.currentDirectory,
+            prompt: input.prompt,
+            artifactPath: input.artifactPath,
+            profileId: input.profileId,
+            priority: input.priority,
+            requestedIdentifiers: input.requestedIdentifiers,
+            limits: input.limits,
+            ...(input.invocationOverrides === undefined
+              ? {}
+              : { invocationOverrides: input.invocationOverrides }),
+            ...(input.preferredFeatures === undefined
+              ? {}
+              : { preferredFeatures: input.preferredFeatures }),
+            ...(input.preferredTools === undefined ? {} : { preferredTools: input.preferredTools }),
+            ...(input.requiredFeatures === undefined
+              ? {}
+              : { requiredFeatures: input.requiredFeatures }),
+            ...(input.requiredTools === undefined ? {} : { requiredTools: input.requiredTools }),
+          });
+          const current = schedulingService.status(started.runId);
+          return {
+            schemaVersion: 3,
+            runId: started.runId,
+            stageId: started.stageId,
+            status: current?.status ?? "queued",
+            executionMode: chain.primary.executionMode,
+            schedulingRevision: started.schedulingRevision,
+          };
+        },
+      ],
+    );
   }
   if (executionService !== undefined) {
     entries.push(
@@ -1696,6 +1817,109 @@ export async function startDaemon(deps: StartDaemonDeps): Promise<StartDaemonOut
   }
   if (nativeBridgeService !== undefined) {
     const nativeBridge = nativeBridgeService;
+    const nativeStagePoll = async (params: unknown, schemaVersion: 1 | 2) => {
+      const input = withoutAuth(recordParams(params));
+      if (!Value.Check(NativeStagePollRequestV1, input))
+        throw new Error("invalid native stage poll request");
+      const maxDispatches = input.maxDispatches ?? NATIVE_MAX_DISPATCHES;
+      // The wire request carries no `codebaseId` — the session already
+      // pins one from `attach` — so it is resolved here rather than
+      // trusted from the caller.
+      const session = readParentSession(workspaceDatabase, input.sessionId);
+      if (session === undefined) {
+        return {
+          schemaVersion,
+          accepted: false,
+          rejectionCode: "session_not_attached",
+          sessionRevision: input.sessionRevision,
+          expiresAt: clock.nowIso(),
+          pollAfterMs: NATIVE_STAGE_POLL_AFTER_MS,
+          dispatches: [],
+          resumes: [],
+          revocations: [],
+        };
+      }
+      const outcome = await nativeBridge.poll({
+        sessionId: input.sessionId,
+        sessionRevision: input.sessionRevision,
+        codebaseId: session.codebaseId,
+        maxDispatches,
+      });
+      if (!outcome.accepted) {
+        // Re-read rather than reuse `session` — `poll()` runs the reap
+        // sweep before this rejection can be produced, and may have
+        // reclassified the session's liveness in the meantime.
+        const current = readParentSession(workspaceDatabase, input.sessionId);
+        return {
+          schemaVersion,
+          accepted: false,
+          rejectionCode: outcome.rejectionCode,
+          sessionRevision: current?.revision ?? input.sessionRevision,
+          expiresAt: current?.expiresAt ?? clock.nowIso(),
+          pollAfterMs: NATIVE_STAGE_POLL_AFTER_MS,
+          dispatches: [],
+          resumes: [],
+          revocations: [],
+        };
+      }
+      const dispatches = outcome.claimed.flatMap((claim) => {
+        const workingDirectory = outcome.workingDirectories.get(claim.dispatchId);
+        // No entry means workspace provisioning failed after the claim
+        // (`recordNativeAttemptWorkspaceFailure` already reverted the
+        // stage to `waiting_for_parent`) — nothing to dispatch for it.
+        if (workingDirectory === undefined) return [];
+        const attempt = readNativeStageAttempts(workspaceDatabase, claim.runId).find(
+          (candidate) => candidate.attemptId === claim.attemptId,
+        );
+        if (attempt?.workspaceId === undefined || attempt.workspaceId === null) return [];
+        return [
+          {
+            schemaVersion,
+            dispatchId: claim.dispatchId,
+            dispatchRevision: claim.dispatchRevision,
+            runId: claim.runId,
+            stageId: claim.stageId,
+            attemptId: claim.attemptId,
+            attemptOrdinal: claim.attemptOrdinal,
+            workspaceId: attempt.workspaceId,
+            workingDirectory,
+            instructionsPath: claim.instructionsPath,
+            prompt: claim.prompt,
+            artifactPath: claim.artifactPath,
+            artifactContract: claim.artifactContract,
+            model: claim.model,
+            effort: claim.effort,
+            ...(claim.focus === null ? {} : { focus: claim.focus }),
+            questions: claim.questions,
+            permissions: JSON.parse(claim.permissionsJson),
+            limits: JSON.parse(claim.limitsJson),
+            issuedAt: claim.issuedAt,
+            expiresAt: claim.expiresAt,
+            ...(claim.hardDeadlineAt === null ? {} : { deadlineAt: claim.hardDeadlineAt }),
+          },
+        ];
+      });
+      return {
+        schemaVersion,
+        accepted: true,
+        sessionRevision: outcome.sessionRevision,
+        expiresAt: outcome.expiresAt,
+        pollAfterMs: NATIVE_STAGE_POLL_AFTER_MS,
+        dispatches,
+        resumes: outcome.resumes.map((resume) => ({
+          dispatchId: resume.dispatchId,
+          dispatchRevision: resume.dispatchRevision,
+          interactionId: resume.interactionId,
+          interactionRevision: resume.interactionRevision,
+          answer: JSON.parse(resume.answerJson),
+        })),
+        revocations: outcome.revocations.map((revocation) => ({
+          dispatchId: revocation.dispatchId,
+          dispatchRevision: revocation.dispatchRevision,
+          reason: revocation.terminalReason,
+        })),
+      };
+    };
     entries.push(
       [
         PARENT_SESSION_ATTACH_V1_METHOD,
@@ -1754,112 +1978,8 @@ export async function startDaemon(deps: StartDaemonDeps): Promise<StartDaemonOut
           };
         },
       ],
-      [
-        NATIVE_STAGE_POLL_V1_METHOD,
-        async (params) => {
-          const input = withoutAuth(recordParams(params));
-          if (!Value.Check(NativeStagePollRequestV1, input))
-            throw new Error("invalid native stage poll request");
-          const maxDispatches = input.maxDispatches ?? NATIVE_MAX_DISPATCHES;
-          // The wire request carries no `codebaseId` — the session already
-          // pins one from `attach` — so it is resolved here rather than
-          // trusted from the caller.
-          const session = readParentSession(workspaceDatabase, input.sessionId);
-          if (session === undefined) {
-            return {
-              schemaVersion: 1,
-              accepted: false,
-              rejectionCode: "session_not_attached",
-              sessionRevision: input.sessionRevision,
-              expiresAt: clock.nowIso(),
-              pollAfterMs: NATIVE_STAGE_POLL_AFTER_MS,
-              dispatches: [],
-              resumes: [],
-              revocations: [],
-            };
-          }
-          const outcome = await nativeBridge.poll({
-            sessionId: input.sessionId,
-            sessionRevision: input.sessionRevision,
-            codebaseId: session.codebaseId,
-            maxDispatches,
-          });
-          if (!outcome.accepted) {
-            // Re-read rather than reuse `session` — `poll()` runs the reap
-            // sweep before this rejection can be produced, and may have
-            // reclassified the session's liveness in the meantime.
-            const current = readParentSession(workspaceDatabase, input.sessionId);
-            return {
-              schemaVersion: 1,
-              accepted: false,
-              rejectionCode: outcome.rejectionCode,
-              sessionRevision: current?.revision ?? input.sessionRevision,
-              expiresAt: current?.expiresAt ?? clock.nowIso(),
-              pollAfterMs: NATIVE_STAGE_POLL_AFTER_MS,
-              dispatches: [],
-              resumes: [],
-              revocations: [],
-            };
-          }
-          const dispatches = outcome.claimed.flatMap((claim) => {
-            const workingDirectory = outcome.workingDirectories.get(claim.dispatchId);
-            // No entry means workspace provisioning failed after the claim
-            // (`recordNativeAttemptWorkspaceFailure` already reverted the
-            // stage to `waiting_for_parent`) — nothing to dispatch for it.
-            if (workingDirectory === undefined) return [];
-            const attempt = readNativeStageAttempts(workspaceDatabase, claim.runId).find(
-              (candidate) => candidate.attemptId === claim.attemptId,
-            );
-            if (attempt?.workspaceId === undefined || attempt.workspaceId === null) return [];
-            return [
-              {
-                schemaVersion: 1,
-                dispatchId: claim.dispatchId,
-                dispatchRevision: claim.dispatchRevision,
-                runId: claim.runId,
-                stageId: claim.stageId,
-                attemptId: claim.attemptId,
-                attemptOrdinal: claim.attemptOrdinal,
-                workspaceId: attempt.workspaceId,
-                workingDirectory,
-                instructionsPath: claim.instructionsPath,
-                prompt: claim.prompt,
-                artifactPath: claim.artifactPath,
-                artifactContract: claim.artifactContract,
-                model: claim.model,
-                effort: claim.effort,
-                ...(claim.focus === null ? {} : { focus: claim.focus }),
-                questions: claim.questions,
-                permissions: JSON.parse(claim.permissionsJson),
-                limits: JSON.parse(claim.limitsJson),
-                issuedAt: claim.issuedAt,
-                expiresAt: claim.expiresAt,
-                ...(claim.hardDeadlineAt === null ? {} : { deadlineAt: claim.hardDeadlineAt }),
-              },
-            ];
-          });
-          return {
-            schemaVersion: 1,
-            accepted: true,
-            sessionRevision: outcome.sessionRevision,
-            expiresAt: outcome.expiresAt,
-            pollAfterMs: NATIVE_STAGE_POLL_AFTER_MS,
-            dispatches,
-            resumes: outcome.resumes.map((resume) => ({
-              dispatchId: resume.dispatchId,
-              dispatchRevision: resume.dispatchRevision,
-              interactionId: resume.interactionId,
-              interactionRevision: resume.interactionRevision,
-              answer: JSON.parse(resume.answerJson),
-            })),
-            revocations: outcome.revocations.map((revocation) => ({
-              dispatchId: revocation.dispatchId,
-              dispatchRevision: revocation.dispatchRevision,
-              reason: revocation.terminalReason,
-            })),
-          };
-        },
-      ],
+      [NATIVE_STAGE_POLL_V1_METHOD, async (params) => nativeStagePoll(params, 1)],
+      [NATIVE_STAGE_POLL_V2_METHOD, async (params) => nativeStagePoll(params, 2)],
       [
         NATIVE_STAGE_QUESTION_V1_METHOD,
         (params) => {

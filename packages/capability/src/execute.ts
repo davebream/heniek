@@ -4,6 +4,7 @@ import type {
   ExecutionRequestV3,
 } from "@heniek/contracts";
 import type { Static } from "@sinclair/typebox";
+import type { CapabilityLanding } from "./landing.js";
 import { type CatalogueProfileResolutionInput, resolveProfileForExecution } from "./resolve.js";
 import type { CapabilityService } from "./service.js";
 
@@ -21,7 +22,7 @@ export type ProfileExecutionStartResult =
   | {
       readonly ok: true;
       readonly handle: Static<typeof BackendExecutionHandleV1>;
-      readonly warnings: readonly string[];
+      readonly landing: Extract<CapabilityLanding, { readonly status: "satisfied" }>;
     }
   | Exclude<Awaited<ReturnType<typeof resolveProfileForExecution>>, { readonly ok: true }>;
 
@@ -58,6 +59,6 @@ export async function startProfileExecution(
       ...input.execution,
       profile: resolution.resolution.profile,
     }),
-    warnings: resolution.warnings,
+    landing: resolution.landing,
   };
 }

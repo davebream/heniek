@@ -33,6 +33,8 @@ import {
   INBOX_LIST_SCHEMA_SHA256,
   NATIVE_STAGE_POLL_SCHEMA_ID,
   NATIVE_STAGE_POLL_SCHEMA_SHA256,
+  NATIVE_STAGE_POLL_V2_SCHEMA_ID,
+  NATIVE_STAGE_POLL_V2_SCHEMA_SHA256,
   NATIVE_STAGE_QUESTION_SCHEMA_ID,
   NATIVE_STAGE_QUESTION_SCHEMA_SHA256,
   NATIVE_STAGE_STATUS_SCHEMA_ID,
@@ -61,6 +63,8 @@ import {
   RUN_RESULT_V2_SCHEMA_SHA256,
   RUN_RESULT_V3_SCHEMA_ID,
   RUN_RESULT_V3_SCHEMA_SHA256,
+  RUN_RESULT_V4_SCHEMA_ID,
+  RUN_RESULT_V4_SCHEMA_SHA256,
   RUN_RESUME_V2_SCHEMA_ID,
   RUN_RESUME_V2_SCHEMA_SHA256,
   RUN_STATUS_SCHEMA_ID,
@@ -108,6 +112,7 @@ import {
   type MethodContext,
   type MethodRegistry,
   NATIVE_STAGE_POLL_V1_METHOD,
+  NATIVE_STAGE_POLL_V2_METHOD,
   NATIVE_STAGE_QUESTION_V1_METHOD,
   NATIVE_STAGE_STATUS_V1_METHOD,
   NATIVE_STAGE_SUBMIT_V1_METHOD,
@@ -123,6 +128,7 @@ import {
   RUN_RESULT_V1_METHOD,
   RUN_RESULT_V2_METHOD,
   RUN_RESULT_V3_METHOD,
+  RUN_RESULT_V4_METHOD,
   RUN_RESUME_V1_METHOD,
   RUN_RESUME_V2_METHOD,
   RUN_STATUS_V1_METHOD,
@@ -132,6 +138,7 @@ import {
   STAGE_START_V1_METHOD,
   STAGE_START_V2_METHOD,
   STAGE_START_V3_METHOD,
+  STAGE_START_V4_METHOD,
 } from "./methods.js";
 
 const STATUS_SCHEMA_ID = "heniek://contract/DaemonStatus/v1";
@@ -303,6 +310,12 @@ function negotiateResult(params: Record<string, unknown>) {
     ],
     "stage.start": [
       {
+        methodVersion: 4,
+        schemaId: STAGE_START_V3_SCHEMA_ID,
+        sha256: STAGE_START_V3_SCHEMA_SHA256,
+        wireMethod: STAGE_START_V4_METHOD,
+      },
+      {
         methodVersion: 3,
         schemaId: STAGE_START_V3_SCHEMA_ID,
         sha256: STAGE_START_V3_SCHEMA_SHA256,
@@ -393,6 +406,12 @@ function negotiateResult(params: Record<string, unknown>) {
     ],
     "run.result": [
       {
+        methodVersion: 4,
+        schemaId: RUN_RESULT_V4_SCHEMA_ID,
+        sha256: RUN_RESULT_V4_SCHEMA_SHA256,
+        wireMethod: RUN_RESULT_V4_METHOD,
+      },
+      {
         methodVersion: 3,
         schemaId: RUN_RESULT_V3_SCHEMA_ID,
         sha256: RUN_RESULT_V3_SCHEMA_SHA256,
@@ -428,6 +447,12 @@ function negotiateResult(params: Record<string, unknown>) {
       },
     ],
     "nativeStage.poll": [
+      {
+        methodVersion: 2,
+        schemaId: NATIVE_STAGE_POLL_V2_SCHEMA_ID,
+        sha256: NATIVE_STAGE_POLL_V2_SCHEMA_SHA256,
+        wireMethod: NATIVE_STAGE_POLL_V2_METHOD,
+      },
       {
         methodVersion: 1,
         schemaId: NATIVE_STAGE_POLL_SCHEMA_ID,

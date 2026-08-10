@@ -274,6 +274,9 @@ importers:
 
   packages/execution-claudexor:
     dependencies:
+      '@heniek/capability':
+        specifier: workspace:*
+        version: link:../capability
       '@heniek/contracts':
         specifier: workspace:*
         version: link:../contracts

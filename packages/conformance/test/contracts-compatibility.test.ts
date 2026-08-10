@@ -185,6 +185,11 @@ const manifestPath = resolve(packageRoot, "../contracts/generated/manifest.json"
  * and resolved snapshots add structured setup dependencies/timeouts, while
  * composite provisioning and effective-instruction reports receive new V1
  * contracts. Every previously pinned schema digest remains byte-identical.
+ *
+ * Capability landing raises the count 190 → 198 by pure addition:
+ * CapabilityDelta/Landing/ResolutionBlocker v1, StageStartRequest/v3,
+ * StageRunResult/v4, ExecutionRequest/v5, NativeStageDispatch/v2, and
+ * NativeStagePollResult/v2. Every previously pinned digest stays byte-identical.
  */
 const EXPECTED_SCHEMAS: readonly {
   readonly schemaId: string;
@@ -251,6 +256,24 @@ const EXPECTED_SCHEMAS: readonly {
     schemaVersion: 1,
     sha256: "73ca0ffa12a40f501d7d20ee11c96a5f6058d560a579c1f0c7c5bfac983de6e9",
     path: "generated/CapabilityCatalogueRequest.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/CapabilityDelta/v1",
+    schemaVersion: 1,
+    sha256: "2097f85b0bd2bfe3da37ad3175c2df2d086e90b031df6caadc450a72dd8e9c16",
+    path: "generated/CapabilityDelta.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/CapabilityLanding/v1",
+    schemaVersion: 1,
+    sha256: "51c10a4f40bbfeb4b3973c41e658311bb768cafeeb267e02c16ee438c39b7282",
+    path: "generated/CapabilityLanding.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/CapabilityResolutionBlocker/v1",
+    schemaVersion: 1,
+    sha256: "64691abfed4ca234b418225f7a58396299c49dfc0030925bbab0b113e4457a8d",
+    path: "generated/CapabilityResolutionBlocker.v1.schema.json",
   },
   {
     schemaId: "heniek://contract/CapabilitySelectionError/v1",
@@ -475,6 +498,12 @@ const EXPECTED_SCHEMAS: readonly {
     path: "generated/ExecutionRequest.v4.schema.json",
   },
   {
+    schemaId: "heniek://contract/ExecutionRequest/v5",
+    schemaVersion: 5,
+    sha256: "21eaec3cc6dd54eec0ac05f367cf52a73bae0fccc10d6f0d3d701b5bb1bb108c",
+    path: "generated/ExecutionRequest.v5.schema.json",
+  },
+  {
     schemaId: "heniek://contract/ExecutionResult/v1",
     schemaVersion: 1,
     sha256: "7aabaff4e3b8450036a27c1c25ac299cd5d22a03b5feb7c2ea05657513ac7942",
@@ -619,6 +648,12 @@ const EXPECTED_SCHEMAS: readonly {
     path: "generated/NativeStageDispatch.v1.schema.json",
   },
   {
+    schemaId: "heniek://contract/NativeStageDispatch/v2",
+    schemaVersion: 2,
+    sha256: "99a3e6f636190744c6295bd36855aa1a65a2e99182d37a6e9d4a38ceb22bfd37",
+    path: "generated/NativeStageDispatch.v2.schema.json",
+  },
+  {
     schemaId: "heniek://contract/NativeStagePollRequest/v1",
     schemaVersion: 1,
     sha256: "064ea588ce653f32bbe150e87a903ff002ff27eeb275047c9b1f6978f564fb53",
@@ -629,6 +664,12 @@ const EXPECTED_SCHEMAS: readonly {
     schemaVersion: 1,
     sha256: "0e87c1f1fe5605faf0a1e1abf866c5771c3874234156bb11383e015019988e15",
     path: "generated/NativeStagePollResult.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/NativeStagePollResult/v2",
+    schemaVersion: 2,
+    sha256: "a34c271e8d80966f0f9bc150edaa895c7ae4ca60bd4e411de1ef708bff09925b",
+    path: "generated/NativeStagePollResult.v2.schema.json",
   },
   {
     schemaId: "heniek://contract/NativeStageQuestionRequest/v1",
@@ -1219,6 +1260,12 @@ const EXPECTED_SCHEMAS: readonly {
     path: "generated/StageRunResult.v3.schema.json",
   },
   {
+    schemaId: "heniek://contract/StageRunResult/v4",
+    schemaVersion: 4,
+    sha256: "9935b7c812af5dd7383741e39338885d619b0816e69395fd19284aadbe12ec5b",
+    path: "generated/StageRunResult.v4.schema.json",
+  },
+  {
     schemaId: "heniek://contract/StageRunResumeResult/v2",
     schemaVersion: 2,
     sha256: "39164d439fdce631fadae6a7baa7ca926d6c3fc76b76c25f8f9411e6da65b4c7",
@@ -1253,6 +1300,12 @@ const EXPECTED_SCHEMAS: readonly {
     schemaVersion: 2,
     sha256: "8b8ed13a64c711cb9c6700a13b291b8a770e9347a1652d84c77f0cbc8f7efcaf",
     path: "generated/StageStartRequest.v2.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/StageStartRequest/v3",
+    schemaVersion: 3,
+    sha256: "230438d2d02eb9966f95e135d5f130aca5c4c33664070538cb08cf1417b74c67",
+    path: "generated/StageStartRequest.v3.schema.json",
   },
   {
     schemaId: "heniek://contract/StageStartResult/v1",
@@ -1335,7 +1388,7 @@ const EXPECTED_SCHEMAS: readonly {
 ];
 
 describe("packages/contracts generated manifest is unchanged (AC4)", () => {
-  it("manifest.json lists exactly the 189 known schemas with their recorded sha256", async () => {
+  it("manifest.json lists exactly the 198 known schemas with their recorded sha256", async () => {
     const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
     expect(manifest).toEqual({
       schemaVersion: "heniek.contracts-manifest.v1",

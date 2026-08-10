@@ -4,6 +4,7 @@ import {
   type ProfileResolutionResult,
   resolveProfile,
 } from "@heniek/config";
+import type { CapabilityFeature, CapabilityLanding } from "./landing.js";
 import {
   type CapabilityService,
   profileCapabilityRows,
@@ -17,9 +18,12 @@ export interface CatalogueProfileResolutionInput {
   readonly invocationOverrides?: ProfileInvocationOverrides;
   readonly requiredFeatures?: CapabilityRequirement["features"];
   readonly requiredTools?: readonly string[];
+  readonly preferredFeatures?: readonly CapabilityFeature[];
+  readonly preferredTools?: readonly string[];
 }
 
-export type CatalogueProfileResolutionResult =
+/** Authoring retains free-text warnings for stale catalogue evidence. */
+export type CatalogueAuthoringResolutionResult =
   | {
       readonly ok: true;
       readonly resolution: Extract<ProfileResolutionResult, { readonly ok: true }>;
@@ -31,11 +35,30 @@ export type CatalogueProfileResolutionResult =
       readonly selectionError?: CapabilitySelectionError;
     };
 
+/**
+ * Execution resolution carries an explicit landing. Authoring-only stale
+ * warnings never appear here.
+ */
+export type CatalogueExecutionResolutionResult =
+  | {
+      readonly ok: true;
+      readonly resolution: Extract<ProfileResolutionResult, { readonly ok: true }>;
+      readonly landing: Extract<CapabilityLanding, { readonly status: "satisfied" }>;
+    }
+  | {
+      readonly ok: false;
+      readonly resolution?: Extract<ProfileResolutionResult, { readonly ok: false }>;
+      readonly selectionError?: CapabilitySelectionError;
+    };
+
+/** @deprecated Prefer the authoring/execution-specific result types. */
+export type CatalogueProfileResolutionResult = CatalogueAuthoringResolutionResult;
+
 async function resolveWithCatalogue(
   service: CapabilityService,
   input: CatalogueProfileResolutionInput,
   phase: "authoring" | "execution",
-): Promise<CatalogueProfileResolutionResult> {
+): Promise<CatalogueAuthoringResolutionResult | CatalogueExecutionResolutionResult> {
   const catalogue = await service.catalogue();
   const resolution = resolveProfile({
     profileId: input.profileId,
@@ -61,19 +84,34 @@ async function resolveWithCatalogue(
     phase,
   );
   if (!selection.ok) return { ok: false, selectionError: selection.error };
-  return { ok: true, resolution, warnings: selection.warnings };
+  if (phase === "authoring") {
+    return { ok: true, resolution, warnings: selection.warnings };
+  }
+  return {
+    ok: true,
+    resolution,
+    landing: { schemaVersion: 1, status: "satisfied" },
+  };
 }
 
 export function resolveProfileForAuthoring(
   service: CapabilityService,
   input: CatalogueProfileResolutionInput,
-): Promise<CatalogueProfileResolutionResult> {
-  return resolveWithCatalogue(service, input, "authoring");
+): Promise<CatalogueAuthoringResolutionResult> {
+  return resolveWithCatalogue(
+    service,
+    input,
+    "authoring",
+  ) as Promise<CatalogueAuthoringResolutionResult>;
 }
 
 export function resolveProfileForExecution(
   service: CapabilityService,
   input: CatalogueProfileResolutionInput,
-): Promise<CatalogueProfileResolutionResult> {
-  return resolveWithCatalogue(service, input, "execution");
+): Promise<CatalogueExecutionResolutionResult> {
+  return resolveWithCatalogue(
+    service,
+    input,
+    "execution",
+  ) as Promise<CatalogueExecutionResolutionResult>;
 }

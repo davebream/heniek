@@ -93,6 +93,7 @@ const RUN_VIEW: CompareView<RunState> = {
     updatedAt: row.updatedAt,
     instructionSnapshotSha256: row.instructionSnapshotSha256,
     instructionSnapshotJson: row.instructionSnapshotJson,
+    capabilityLandingJson: row.capabilityLandingJson,
   }),
 };
 

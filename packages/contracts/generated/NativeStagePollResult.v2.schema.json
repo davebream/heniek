@@ -1,0 +1,177 @@
+{
+  "$id": "heniek://contract/NativeStagePollResult/v2",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "accepted",
+    "sessionRevision",
+    "expiresAt",
+    "pollAfterMs",
+    "dispatches",
+    "resumes",
+    "revocations"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 2,
+      "type": "number"
+    },
+    "accepted": {
+      "type": "boolean"
+    },
+    "rejectionCode": {
+      "anyOf": [
+        {
+          "const": "session_not_attached",
+          "type": "string"
+        },
+        {
+          "const": "session_expired",
+          "type": "string"
+        },
+        {
+          "const": "stale_session_revision",
+          "type": "string"
+        },
+        {
+          "const": "unknown_dispatch",
+          "type": "string"
+        },
+        {
+          "const": "stale_dispatch_revision",
+          "type": "string"
+        },
+        {
+          "const": "dispatch_revoked",
+          "type": "string"
+        },
+        {
+          "const": "dispatch_already_settled",
+          "type": "string"
+        },
+        {
+          "const": "idempotency_key_reuse",
+          "type": "string"
+        },
+        {
+          "const": "run_terminal",
+          "type": "string"
+        },
+        {
+          "const": "artifact_missing",
+          "type": "string"
+        },
+        {
+          "const": "result_contract_violation",
+          "type": "string"
+        },
+        {
+          "const": "workspace_mutated",
+          "type": "string"
+        }
+      ]
+    },
+    "sessionRevision": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "expiresAt": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "pollAfterMs": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "dispatches": {
+      "maxItems": 16,
+      "type": "array",
+      "items": {
+        "$ref": "heniek://contract/NativeStageDispatch/v2"
+      }
+    },
+    "resumes": {
+      "maxItems": 16,
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "dispatchId",
+          "dispatchRevision",
+          "interactionId",
+          "interactionRevision",
+          "answer"
+        ],
+        "properties": {
+          "dispatchId": {
+            "minLength": 1,
+            "description": "Opaque NativeDispatchId.",
+            "type": "string"
+          },
+          "dispatchRevision": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "interactionId": {
+            "minLength": 1,
+            "description": "Opaque InteractionId.",
+            "type": "string"
+          },
+          "interactionRevision": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "answer": {
+            "$ref": "heniek://contract/InteractionAnswerSet/v1"
+          }
+        }
+      }
+    },
+    "revocations": {
+      "maxItems": 64,
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "dispatchId",
+          "dispatchRevision",
+          "reason"
+        ],
+        "properties": {
+          "dispatchId": {
+            "minLength": 1,
+            "description": "Opaque NativeDispatchId.",
+            "type": "string"
+          },
+          "dispatchRevision": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "const": "run_cancelled",
+                "type": "string"
+              },
+              {
+                "const": "lease_expired",
+                "type": "string"
+              },
+              {
+                "const": "superseded",
+                "type": "string"
+              },
+              {
+                "const": "recovery_required",
+                "type": "string"
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

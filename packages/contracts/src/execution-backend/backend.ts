@@ -11,6 +11,7 @@ import type {
   ExecutionRequestV2,
   ExecutionRequestV3,
   ExecutionRequestV4,
+  ExecutionRequestV5,
   ExecutionResultV1,
   ExecutionResultV2,
   ExecutionResultV3,
@@ -164,6 +165,26 @@ export interface ExecutionBackendV7 {
 export interface ExecutionBackendV8 {
   start(
     request: Static<typeof ExecutionRequestV4>,
+    context: { readonly identifierReader: ExecutionIdentifierReaderV1 },
+  ): Promise<Static<typeof BackendExecutionHandleV1>>;
+  status(executionId: string): Promise<ExecutionStatus>;
+  interactions(executionId: string): Promise<Static<typeof PendingInteractionV2>[]>;
+  answer(executionId: string, answer: Static<typeof InteractionAnswerSetV1>): Promise<void>;
+  resume(request: Static<typeof ExecutionResumeRequestV2>): Promise<void>;
+  result(executionId: string): Promise<Static<typeof ExecutionResultV5>>;
+  cancel(executionId: string): Promise<void>;
+  artifacts(executionId: string): Promise<Static<typeof BackendArtifactV1>[]>;
+  readArtifact(executionId: string, artifactId: string): Promise<Uint8Array>;
+  events(executionId: string, after?: string): AsyncIterable<Static<typeof ExecutionEventV3>>;
+}
+
+/**
+ * Capability-landing backend boundary. V1–V8 remain frozen; V9 accepts
+ * `ExecutionRequest/v5` so a degradation delta can reach the executing stage.
+ */
+export interface ExecutionBackendV9 {
+  start(
+    request: Static<typeof ExecutionRequestV5>,
     context: { readonly identifierReader: ExecutionIdentifierReaderV1 },
   ): Promise<Static<typeof BackendExecutionHandleV1>>;
   status(executionId: string): Promise<ExecutionStatus>;

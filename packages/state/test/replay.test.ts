@@ -751,6 +751,7 @@ describe("a row present on one side only", () => {
           updatedAt: "2026-01-01T00:00:00.000Z",
           instructionSnapshotSha256: null,
           instructionSnapshotJson: null,
+          capabilityLandingJson: null,
         },
         replayed: null,
       },

@@ -70,5 +70,9 @@
   "18": {
     "name": "pipeline-admission",
     "statementHash": "c6089fd448b955e9211a8ea84383c325c9d01e1762e601a5c5ae11e25caef3a4"
+  },
+  "19": {
+    "name": "capability-landing",
+    "statementHash": "b70ebd1487b482524a94ee51c5f0c7815e067eb9f43e4534f9817d63c6558947"
   }
 }

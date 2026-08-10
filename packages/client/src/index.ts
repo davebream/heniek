@@ -16,6 +16,7 @@ import type {
   InteractionAnswerSubmissionV2,
   InteractionInboxResultV1,
   NativeStagePollResultV1,
+  NativeStagePollResultV2,
   NativeStageQuestionResultV1,
   NativeStageStatusResultV1,
   NativeStageSubmitResultV1,
@@ -34,6 +35,7 @@ import type {
   StageRunResultV1,
   StageRunResultV2,
   StageRunResultV3,
+  StageRunResultV4,
   StageRunResumeResultV2,
   StageRunStatusResultV1,
   StageRunStatusResultV2,
@@ -91,6 +93,9 @@ import {
   NATIVE_STAGE_POLL_SCHEMA_ID,
   NATIVE_STAGE_POLL_SCHEMA_SHA256,
   NATIVE_STAGE_POLL_V1_METHOD,
+  NATIVE_STAGE_POLL_V2_METHOD,
+  NATIVE_STAGE_POLL_V2_SCHEMA_ID,
+  NATIVE_STAGE_POLL_V2_SCHEMA_SHA256,
   NATIVE_STAGE_QUESTION_METHOD,
   NATIVE_STAGE_QUESTION_SCHEMA_ID,
   NATIVE_STAGE_QUESTION_SCHEMA_SHA256,
@@ -145,6 +150,9 @@ import {
   RUN_RESULT_V3_METHOD,
   RUN_RESULT_V3_SCHEMA_ID,
   RUN_RESULT_V3_SCHEMA_SHA256,
+  RUN_RESULT_V4_METHOD,
+  RUN_RESULT_V4_SCHEMA_ID,
+  RUN_RESULT_V4_SCHEMA_SHA256,
   RUN_RESUME_METHOD,
   RUN_RESUME_V1_METHOD,
   RUN_RESUME_V2_METHOD,
@@ -173,6 +181,7 @@ import {
   STAGE_START_V3_METHOD,
   STAGE_START_V3_SCHEMA_ID,
   STAGE_START_V3_SCHEMA_SHA256,
+  STAGE_START_V4_METHOD,
   TRANSPORT_VERSION,
   zeroCredential,
 } from "@heniek/protocol";
@@ -487,6 +496,14 @@ const STAGE_START_V3_REQUIREMENT: RpcRequirement = {
   sha256: STAGE_START_V3_SCHEMA_SHA256,
 };
 
+const STAGE_START_V4_REQUIREMENT: RpcRequirement = {
+  name: STAGE_START_METHOD,
+  methodVersion: 4,
+  wireMethod: STAGE_START_V4_METHOD,
+  schemaId: STAGE_START_V3_SCHEMA_ID,
+  sha256: STAGE_START_V3_SCHEMA_SHA256,
+};
+
 const RUN_STATUS_REQUIREMENT: RpcRequirement = {
   name: RUN_STATUS_METHOD,
   wireMethod: RUN_STATUS_V1_METHOD,
@@ -573,6 +590,14 @@ const RUN_RESULT_V3_REQUIREMENT: RpcRequirement = {
   sha256: RUN_RESULT_V3_SCHEMA_SHA256,
 };
 
+const RUN_RESULT_V4_REQUIREMENT: RpcRequirement = {
+  name: RUN_RESULT_METHOD,
+  methodVersion: 4,
+  wireMethod: RUN_RESULT_V4_METHOD,
+  schemaId: RUN_RESULT_V4_SCHEMA_ID,
+  sha256: RUN_RESULT_V4_SCHEMA_SHA256,
+};
+
 /**
  * Q023's native bridge — the surface the Claude Code plugin (Q050) will
  * drive. `parentSession.*` requirements have no `methodVersion` entry
@@ -598,6 +623,14 @@ const NATIVE_STAGE_POLL_REQUIREMENT: RpcRequirement = {
   wireMethod: NATIVE_STAGE_POLL_V1_METHOD,
   schemaId: NATIVE_STAGE_POLL_SCHEMA_ID,
   sha256: NATIVE_STAGE_POLL_SCHEMA_SHA256,
+};
+
+const NATIVE_STAGE_POLL_V2_REQUIREMENT: RpcRequirement = {
+  name: NATIVE_STAGE_POLL_METHOD,
+  methodVersion: 2,
+  wireMethod: NATIVE_STAGE_POLL_V2_METHOD,
+  schemaId: NATIVE_STAGE_POLL_V2_SCHEMA_ID,
+  sha256: NATIVE_STAGE_POLL_V2_SCHEMA_SHA256,
 };
 
 const NATIVE_STAGE_QUESTION_REQUIREMENT: RpcRequirement = {
@@ -1231,6 +1264,67 @@ export function startStageV3ViaDaemon(
   );
 }
 
+/**
+ * Capability-aware admission: same result shape as v3, but the request may
+ * carry typed invocation overrides and preferred/required feature-tool pins.
+ */
+export function startStageV4ViaDaemon(
+  home: ApplicationHome,
+  input: {
+    readonly currentDirectory: string;
+    readonly prompt: string;
+    readonly artifactPath: string;
+    readonly profileId: string;
+    readonly priority?: number;
+    readonly requestedIdentifiers?: readonly string[];
+    readonly limits?: { readonly maxDurationMs?: number; readonly maxTurns?: number };
+    readonly invocationOverrides?: {
+      readonly engine?: "claude-code" | "codex";
+      readonly account?: string;
+      readonly billing?: "subscription";
+      readonly model?: string;
+      readonly effort?: string;
+      readonly executor?: "external" | "native";
+      readonly focus?: string;
+      readonly max_duration?: string;
+      readonly workspace_strategy?: string;
+    };
+    readonly preferredFeatures?: readonly string[];
+    readonly preferredTools?: readonly string[];
+    readonly requiredFeatures?: readonly string[];
+    readonly requiredTools?: readonly string[];
+    readonly signal?: AbortSignal;
+  },
+): Promise<Static<typeof StageStartResultV3>> {
+  return domainCall(
+    home,
+    STAGE_START_V4_REQUIREMENT,
+    {
+      schemaVersion: 3,
+      currentDirectory: input.currentDirectory,
+      prompt: input.prompt,
+      artifactPath: input.artifactPath,
+      profileId: input.profileId,
+      priority: input.priority ?? 0,
+      requestedIdentifiers: [...(input.requestedIdentifiers ?? [])],
+      limits: input.limits ?? {},
+      ...(input.invocationOverrides === undefined
+        ? {}
+        : { invocationOverrides: input.invocationOverrides }),
+      ...(input.preferredFeatures === undefined
+        ? {}
+        : { preferredFeatures: [...input.preferredFeatures] }),
+      ...(input.preferredTools === undefined ? {} : { preferredTools: [...input.preferredTools] }),
+      ...(input.requiredFeatures === undefined
+        ? {}
+        : { requiredFeatures: [...input.requiredFeatures] }),
+      ...(input.requiredTools === undefined ? {} : { requiredTools: [...input.requiredTools] }),
+    },
+    "stage start v4",
+    input.signal,
+  );
+}
+
 export function fetchRunStatusViaDaemon(
   home: ApplicationHome,
   runId: string,
@@ -1356,6 +1450,13 @@ export function fetchRunResultV3ViaDaemon(
   return domainCall(home, RUN_RESULT_V3_REQUIREMENT, { runId }, "run result v3");
 }
 
+export function fetchRunResultV4ViaDaemon(
+  home: ApplicationHome,
+  runId: string,
+): Promise<Static<typeof StageRunResultV4>> {
+  return domainCall(home, RUN_RESULT_V4_REQUIREMENT, { runId }, "run result v4");
+}
+
 /**
  * Q023's native bridge — the surface the Claude Code plugin (Q050) will
  * drive: attach once per connection, then poll/question/submit against
@@ -1435,6 +1536,29 @@ export function pollNativeStageViaDaemon(
       ...(input.maxDispatches === undefined ? {} : { maxDispatches: input.maxDispatches }),
     },
     "native stage poll",
+    input.signal,
+  );
+}
+
+export function pollNativeStageV2ViaDaemon(
+  home: ApplicationHome,
+  input: {
+    readonly sessionId: string;
+    readonly sessionRevision: number;
+    readonly maxDispatches?: number;
+    readonly signal?: AbortSignal;
+  },
+): Promise<Static<typeof NativeStagePollResultV2>> {
+  return domainCall(
+    home,
+    NATIVE_STAGE_POLL_V2_REQUIREMENT,
+    {
+      schemaVersion: 1,
+      sessionId: input.sessionId,
+      sessionRevision: input.sessionRevision,
+      ...(input.maxDispatches === undefined ? {} : { maxDispatches: input.maxDispatches }),
+    },
+    "native stage poll v2",
     input.signal,
   );
 }

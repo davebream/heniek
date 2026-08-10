@@ -11,7 +11,7 @@
 
 import { createHash } from "node:crypto";
 import { internalHandle, type StateDatabase } from "../database/open.js";
-import { toSafeInteger, toText } from "../database/pragma.js";
+import { readUserVersion, toSafeInteger, toText } from "../database/pragma.js";
 import { StateDatabaseCorruptionError } from "../errors.js";
 import { type JsonValue, parseJsonValue, stringifyCanonical } from "../json.js";
 import {
@@ -22,7 +22,7 @@ import {
   toWorkspaceRow,
   type WorkspaceRow,
 } from "./identity.js";
-import { type RunProjectionRow, toRunProjectionRow } from "./run.js";
+import { type RunProjectionRow, runProjectionSelectColumns, toRunProjectionRow } from "./run.js";
 import {
   toWorkspaceLeaseRow,
   WORKSPACE_LEASE_COLUMNS,
@@ -170,6 +170,7 @@ function runRow(state: RunState): Record<string, string | number | null> {
     workspace_id: state.workspaceId,
     instruction_snapshot_sha256: state.instructionSnapshotSha256,
     instruction_snapshot_json: state.instructionSnapshotJson,
+    capability_landing_json: state.capabilityLandingJson,
   };
 }
 
@@ -426,6 +427,7 @@ export function projectionStateToJson(state: ProjectionState): JsonValue {
         updatedAt: row.updatedAt,
         instructionSnapshotSha256: row.instructionSnapshotSha256,
         instructionSnapshotJson: row.instructionSnapshotJson,
+        capabilityLandingJson: row.capabilityLandingJson,
       };
     }
   }
@@ -634,12 +636,9 @@ function toStageArtifactAliasRow(raw: Record<string, unknown>): StageArtifactAli
 export function loadStoredProjectionState(db: StateDatabase): ProjectionState {
   const handle = internalHandle(db);
   const runs: Record<string, RunState> = {};
+  const runColumns = runProjectionSelectColumns(readUserVersion(handle));
   for (const raw of handle
-    .prepare(
-      "SELECT run_id, status, revision, last_event_sequence, workspace_id, codebase_id, updated_at," +
-        " instruction_snapshot_sha256, instruction_snapshot_json" +
-        " FROM run_projection ORDER BY run_id",
-    )
+    .prepare(`SELECT ${runColumns} FROM run_projection ORDER BY run_id`)
     .all()) {
     const row = toRunProjectionRow(raw);
     runs[row.runId] = row;
@@ -745,11 +744,8 @@ export function loadScopedProjectionState(
 ): ProjectionState {
   const handle = internalHandle(db);
   const runs: Record<string, RunState> = {};
-  const runStatement = handle.prepare(
-    "SELECT run_id, status, revision, last_event_sequence, workspace_id, codebase_id, updated_at," +
-      " instruction_snapshot_sha256, instruction_snapshot_json" +
-      " FROM run_projection WHERE run_id = ?",
-  );
+  const runColumns = runProjectionSelectColumns(readUserVersion(handle));
+  const runStatement = handle.prepare(`SELECT ${runColumns} FROM run_projection WHERE run_id = ?`);
   for (const key of scope.runs) {
     const raw = runStatement.get(key);
     if (raw !== undefined) {

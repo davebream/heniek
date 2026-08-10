@@ -65,6 +65,8 @@ const RUN_SCOPED_TYPES = new Set([
    * external round-trip behind it to make durable.
    */
   "native_question.delivered",
+  "run.capability_degraded",
+  "run.capability_blocked",
 ]);
 
 /**
@@ -273,6 +275,17 @@ function requireInstructionSnapshot(
     );
   }
   return { sha256: value.snapshotSha256, json: JSON.stringify(value) };
+}
+
+function requireCapabilityLanding(
+  event: StateEvent,
+  payload: Readonly<Record<string, JsonValue>>,
+): string {
+  const value = payload.landing;
+  if (value === undefined || !isJsonObject(value)) {
+    throw new ReducerError(event.eventId, event.type, "payload.landing must be a JSON object");
+  }
+  return JSON.stringify(value);
 }
 
 function optionalWorkspaceId(
@@ -613,6 +626,8 @@ export function eventScope(event: StateEvent): ProjectionScope {
         stageArtifactAliases: [],
       };
     case "run.instructions_snapshotted":
+    case "run.capability_degraded":
+    case "run.capability_blocked":
       return {
         runs: [requireRunId(event, payload)],
         codebases: [],
@@ -759,6 +774,7 @@ export const applyEvent: Reducer = (state, event) => {
             updatedAt: event.recordedAt,
             instructionSnapshotSha256: null,
             instructionSnapshotJson: null,
+            capabilityLandingJson: null,
           },
         },
       };
@@ -984,6 +1000,38 @@ export const applyEvent: Reducer = (state, event) => {
             updatedAt: event.recordedAt,
             instructionSnapshotSha256: snapshot.sha256,
             instructionSnapshotJson: snapshot.json,
+          },
+        },
+      };
+    }
+    case "run.capability_degraded":
+    case "run.capability_blocked": {
+      const runId = requireRunId(event, payload);
+      const previous = state.runs[runId];
+      if (previous === undefined) {
+        throw new ReducerError(event.eventId, event.type, `run does not exist: ${runId}`);
+      }
+      const landingJson = requireCapabilityLanding(event, payload);
+      if (previous.capabilityLandingJson !== null) {
+        if (previous.capabilityLandingJson === landingJson) {
+          return state;
+        }
+        throw new ReducerError(
+          event.eventId,
+          event.type,
+          `run capability landing is immutable: ${runId}`,
+        );
+      }
+      return {
+        ...state,
+        runs: {
+          ...state.runs,
+          [runId]: {
+            ...previous,
+            revision: previous.revision + 1,
+            lastEventSequence: event.sequence,
+            updatedAt: event.recordedAt,
+            capabilityLandingJson: landingJson,
           },
         },
       };

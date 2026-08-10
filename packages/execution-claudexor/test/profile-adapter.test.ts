@@ -1,4 +1,4 @@
-import type { ExecutionRequestV3, ExecutionRequestV4 } from "@heniek/contracts";
+import type { ExecutionRequestV3, ExecutionRequestV4, ExecutionRequestV5 } from "@heniek/contracts";
 import type { Static } from "@sinclair/typebox";
 import { describe, expect, it } from "vitest";
 import {
@@ -96,9 +96,9 @@ const cursorInput: Static<typeof ExecutionRequestV3> = {
   },
 };
 
-const scheduledInput: Static<typeof ExecutionRequestV4> = {
+const scheduledInput: Static<typeof ExecutionRequestV5> = {
   ...input,
-  schemaVersion: 4,
+  schemaVersion: 5,
   profile: {
     ...input.profile,
     schemaVersion: 2,
