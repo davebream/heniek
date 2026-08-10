@@ -5,6 +5,7 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
+    "spike:q033": "tsx scripts/q033/run.ts",
     "test": "vitest run"
   },
   "dependencies": {
