@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "scenario": "two parallel variants from one composite integration SHA",
+  "workspaceId": "ws_evidence",
+  "integrationSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "variants": [
+    {
+      "variantId": "variant_a",
+      "repositories": [
+        {
+          "repositoryId": "repo_api",
+          "access": "write",
+          "materialization": "worktree",
+          "leaseFence": 1
+        },
+        {
+          "repositoryId": "repo_web",
+          "access": "read-only",
+          "materialization": "worktree",
+          "leaseFence": null
+        }
+      ]
+    },
+    {
+      "variantId": "variant_b",
+      "repositories": [
+        {
+          "repositoryId": "repo_api",
+          "access": "write",
+          "materialization": "worktree",
+          "leaseFence": 1
+        },
+        {
+          "repositoryId": "repo_web",
+          "access": "read-only",
+          "materialization": "worktree",
+          "leaseFence": null
+        }
+      ]
+    }
+  ],
+  "stress": {
+    "liveLeaseContenders": 100,
+    "additionalWinners": 0,
+    "expiredOwnerStates": ["alive-blocked", "unknown-blocked", "dead-recovered"],
+    "recoveredFence": 2
+  }
+}

@@ -74,5 +74,9 @@
   "19": {
     "name": "capability-landing",
     "statementHash": "b70ebd1487b482524a94ee51c5f0c7815e067eb9f43e4534f9817d63c6558947"
+  },
+  "20": {
+    "name": "workspace-variants",
+    "statementHash": "b00f8162e2581e063584e8023b38680766a26ff460ac51742dfe43a80749a605"
   }
 }

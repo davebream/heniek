@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "scenario": "second repository moves after preparation",
+  "strategy": "synthesize",
+  "events": [
+    { "sequence": 1, "repositoryId": null, "phase": "intent-recorded" },
+    { "sequence": 2, "repositoryId": "repo_api", "phase": "source-observed" },
+    { "sequence": 3, "repositoryId": "repo_api", "phase": "target-observed" },
+    { "sequence": 4, "repositoryId": "repo_api", "phase": "merge-prepared" },
+    { "sequence": 5, "repositoryId": "repo_web", "phase": "source-observed" },
+    { "sequence": 6, "repositoryId": "repo_web", "phase": "target-observed" },
+    { "sequence": 7, "repositoryId": "repo_web", "phase": "merge-prepared" },
+    { "sequence": 8, "repositoryId": "repo_api", "phase": "ref-update-attempted" },
+    {
+      "sequence": 9,
+      "repositoryId": "repo_api",
+      "phase": "ref-update-observed",
+      "classification": "integrated"
+    },
+    {
+      "sequence": 10,
+      "repositoryId": null,
+      "phase": "completed",
+      "classification": "partial-progress"
+    }
+  ],
+  "result": {
+    "classification": "partial-progress",
+    "repo_api": "integrated",
+    "repo_web": "stale-target",
+    "rollbackAttempted": false
+  }
+}

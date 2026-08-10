@@ -1,0 +1,89 @@
+{
+  "$id": "heniek://contract/VariantIntegrationResult/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "workspaceId",
+    "variantId",
+    "strategy",
+    "classification",
+    "repositories",
+    "finishedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "workspaceId": {
+      "minLength": 1,
+      "description": "Opaque WorkspaceId.",
+      "type": "string"
+    },
+    "variantId": {
+      "minLength": 1,
+      "description": "Opaque WorkspaceVariantId.",
+      "type": "string"
+    },
+    "strategy": {
+      "anyOf": [
+        {
+          "const": "select-best",
+          "type": "string"
+        },
+        {
+          "const": "synthesize",
+          "type": "string"
+        },
+        {
+          "const": "manual",
+          "type": "string"
+        }
+      ]
+    },
+    "classification": {
+      "anyOf": [
+        {
+          "const": "integrated",
+          "type": "string"
+        },
+        {
+          "const": "already-applied",
+          "type": "string"
+        },
+        {
+          "const": "conflict",
+          "type": "string"
+        },
+        {
+          "const": "stale-source",
+          "type": "string"
+        },
+        {
+          "const": "stale-target",
+          "type": "string"
+        },
+        {
+          "const": "partial-progress",
+          "type": "string"
+        },
+        {
+          "const": "recovery-required",
+          "type": "string"
+        }
+      ]
+    },
+    "repositories": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "$ref": "heniek://contract/IntegrationResult/v1"
+      }
+    },
+    "finishedAt": {
+      "format": "date-time",
+      "type": "string"
+    }
+  }
+}

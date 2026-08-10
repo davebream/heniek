@@ -22,6 +22,7 @@ import { MIGRATION_0015_PIPELINE_RECOVERY } from "./pipeline-recovery.js";
 import { MIGRATION_0013_PIPELINE_RUNNER } from "./pipeline-runner.js";
 import { MIGRATION_0014_PIPELINE_RUNNER_OPERATIONS } from "./pipeline-runner-operations.js";
 import { MIGRATION_0012_PIPELINE_SCHEDULER } from "./pipeline-scheduler.js";
+import { MIGRATION_0020_WORKSPACE_VARIANTS } from "./workspace-variants.js";
 
 export { MIGRATION_0019_CAPABILITY_LANDING } from "./capability-landing.js";
 export type { Migration } from "./migration.js";
@@ -32,6 +33,7 @@ export { MIGRATION_0015_PIPELINE_RECOVERY } from "./pipeline-recovery.js";
 export { MIGRATION_0013_PIPELINE_RUNNER } from "./pipeline-runner.js";
 export { MIGRATION_0014_PIPELINE_RUNNER_OPERATIONS } from "./pipeline-runner-operations.js";
 export { MIGRATION_0012_PIPELINE_SCHEDULER } from "./pipeline-scheduler.js";
+export { MIGRATION_0020_WORKSPACE_VARIANTS } from "./workspace-variants.js";
 
 /**
  * `PRAGMA application_id = 1213090609` (0x484E4B31, `"HNK1"`) is the first
@@ -1136,5 +1138,6 @@ export const MIGRATIONS: readonly Migration[] = Object.freeze([
   MIGRATION_0017_PIPELINE_FINDINGS,
   MIGRATION_0018_PIPELINE_ADMISSION,
   MIGRATION_0019_CAPABILITY_LANDING,
+  MIGRATION_0020_WORKSPACE_VARIANTS,
 ]);
 assertAppendOnly(MIGRATIONS);

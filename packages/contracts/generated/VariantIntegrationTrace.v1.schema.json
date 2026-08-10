@@ -1,0 +1,130 @@
+{
+  "$id": "heniek://contract/VariantIntegrationTrace/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "workspaceId",
+    "variantId",
+    "sequence",
+    "repositoryId",
+    "phase",
+    "expectedSha",
+    "observedSha",
+    "candidateSha",
+    "classification",
+    "recordedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "workspaceId": {
+      "minLength": 1,
+      "description": "Opaque WorkspaceId.",
+      "type": "string"
+    },
+    "variantId": {
+      "minLength": 1,
+      "description": "Opaque WorkspaceVariantId.",
+      "type": "string"
+    },
+    "sequence": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "repositoryId": {
+      "anyOf": [
+        {
+          "minLength": 1,
+          "description": "Opaque RepositoryId.",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "phase": {
+      "anyOf": [
+        {
+          "const": "intent-recorded",
+          "type": "string"
+        },
+        {
+          "const": "source-observed",
+          "type": "string"
+        },
+        {
+          "const": "target-observed",
+          "type": "string"
+        },
+        {
+          "const": "merge-prepared",
+          "type": "string"
+        },
+        {
+          "const": "ref-update-attempted",
+          "type": "string"
+        },
+        {
+          "const": "ref-update-observed",
+          "type": "string"
+        },
+        {
+          "const": "completed",
+          "type": "string"
+        }
+      ]
+    },
+    "expectedSha": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{40}(?:[0-9a-f]{24})?$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "observedSha": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{40}(?:[0-9a-f]{24})?$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "candidateSha": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{40}(?:[0-9a-f]{24})?$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "classification": {
+      "anyOf": [
+        {
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "recordedAt": {
+      "format": "date-time",
+      "type": "string"
+    }
+  }
+}
