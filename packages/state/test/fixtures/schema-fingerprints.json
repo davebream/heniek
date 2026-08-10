@@ -78,5 +78,9 @@
   "19": {
     "structural": "df3c85b424ca778085f0ed1fa2cb16b9574b8a097fde07ac62dd45ca3c4d865d",
     "declared": "b697919add5917a19e8d86c77ea5717da43bf239bce8e183c7a4841f0b4e98d8"
+  },
+  "20": {
+    "structural": "d4752ec292e2dae0e12377d96294439e9649290c35a3f0bd902363c0ccb7d78b",
+    "declared": "f0ef2012fb098dc5dec1cf9ba20bf1d1870dd80fae5b1ad8dd64e1a101852f35"
   }
 }

@@ -1332,6 +1332,24 @@ const EXPECTED_SCHEMAS: readonly {
     path: "generated/TaskContext.v1.schema.json",
   },
   {
+    schemaId: "heniek://contract/VariantIntegrationRequest/v1",
+    schemaVersion: 1,
+    sha256: "d0c57fec9a67ab44b83a3e81eac0cfce122365a42dcce602b907ffb7a4769b04",
+    path: "generated/VariantIntegrationRequest.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/VariantIntegrationResult/v1",
+    schemaVersion: 1,
+    sha256: "313e0af114c04ca9bb6bb5c473d7008bf0671903c18e75683d230b0ae28658b2",
+    path: "generated/VariantIntegrationResult.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/VariantIntegrationTrace/v1",
+    schemaVersion: 1,
+    sha256: "325395b3a8923f936ff08a5c67b60d58b8e83d6c50e70bb4e2ed674712e6735d",
+    path: "generated/VariantIntegrationTrace.v1.schema.json",
+  },
+  {
     schemaId: "heniek://contract/VerifyCheck/v1",
     schemaVersion: 1,
     sha256: "e02774c22149725ec94915721fdafe50fe984d5fd25bea1ea14d85268eb432f0",
@@ -1380,6 +1398,12 @@ const EXPECTED_SCHEMAS: readonly {
     path: "generated/WorkspaceSynchronizationResult.v1.schema.json",
   },
   {
+    schemaId: "heniek://contract/WorkspaceVariantManifest/v1",
+    schemaVersion: 1,
+    sha256: "75bc2ea16a2d503c4b291ee0ed1ab43e6b57e10ac37545f1313200effdd205e3",
+    path: "generated/WorkspaceVariantManifest.v1.schema.json",
+  },
+  {
     schemaId: "heniek://contract/WorkspaceWriterLease/v1",
     schemaVersion: 1,
     sha256: "75b0e5e7d04c02d73266ce663bd691d3a9d26d017e459faaee50a7d31e05c18d",
@@ -1388,7 +1412,7 @@ const EXPECTED_SCHEMAS: readonly {
 ];
 
 describe("packages/contracts generated manifest is unchanged (AC4)", () => {
-  it("manifest.json lists exactly the 198 known schemas with their recorded sha256", async () => {
+  it("manifest.json lists exactly the 202 known schemas with their recorded sha256", async () => {
     const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
     expect(manifest).toEqual({
       schemaVersion: "heniek.contracts-manifest.v1",

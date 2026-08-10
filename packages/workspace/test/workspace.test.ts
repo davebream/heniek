@@ -665,6 +665,25 @@ describe("writer leases", () => {
         ttlMilliseconds: 1_000,
       }),
     ).toThrow(/live writer lease/);
+    const stressOutcomes = Array.from({ length: 100 }, (_, index) => {
+      try {
+        service.acquire({
+          workspaceId: manifest.workspaceId,
+          repositoryId: manifest.repositoryId,
+          checkoutPath: manifest.checkoutPath,
+          expectedSha: fixture.baseSha,
+          ownerId: `stress-owner-${index}`,
+          bootWitness: "boot-1",
+          processWitnesses: [{ kind: "process", value: 1_000 + index }],
+          ttlMilliseconds: 1_000,
+        });
+        return "acquired";
+      } catch {
+        return "blocked";
+      }
+    });
+    expect(stressOutcomes.filter((outcome) => outcome === "acquired")).toHaveLength(0);
+    expect(stressOutcomes.filter((outcome) => outcome === "blocked")).toHaveLength(100);
     now.value += 2_000;
     expect(() =>
       service.acquire({
