@@ -11,3 +11,4 @@ ADR disagree, the ADR is correct and the note is stale.
 | Note | Covers |
 |---|---|
 | [A logical stage is not a model session](stage-is-not-a-session.md) | Why pipeline stage boundaries and provider session boundaries are separated, how segment fusion and continuation capsules work, and what the separation costs. |
+| [Ouroboros is a peer, not a backend](ouroboros-is-a-peer-not-a-backend.md) | Why an adjacent orchestrator sharing Heniek's Claudexor kernel is not adopted as an execution backend, what Heniek takes from it as prior art instead, and what that costs. |
