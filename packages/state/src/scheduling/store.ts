@@ -5,9 +5,10 @@ import {
   internalIds,
   type StateDatabase,
 } from "../database/open.js";
-import { toNullableText, toSafeInteger, toText } from "../database/pragma.js";
+import { readUserVersion, toNullableText, toSafeInteger, toText } from "../database/pragma.js";
 import { StateDatabaseCorruptionError, StateStoreError } from "../errors.js";
 import { type JsonValue, parseJsonValue, stringifyCanonical } from "../json.js";
+import { CAPABILITY_LANDING_SCHEMA_VERSION } from "../migrations/capability-landing.js";
 
 export type CapacityPolicy = "queue" | "fallback" | "ask";
 export type WorkspacePermission = "read-only" | "read-write";
@@ -22,6 +23,7 @@ export interface SchedulingCandidateInput {
   readonly permissions: JsonValue;
   readonly compatible?: boolean;
   readonly rejectionReason?: string;
+  readonly capabilityDelta?: JsonValue;
 }
 
 export interface CreateExecutionScheduleInput {
@@ -38,6 +40,7 @@ export interface CreateExecutionScheduleInput {
   readonly requestedIdentifiers?: readonly string[];
   readonly chain: JsonValue;
   readonly candidates: readonly SchedulingCandidateInput[];
+  readonly capabilityRequest?: JsonValue;
 }
 
 export interface SchedulingClaim {
@@ -58,6 +61,7 @@ export interface SchedulingClaim {
   readonly profile: JsonValue;
   readonly limits: JsonValue;
   readonly permissions: JsonValue;
+  readonly capabilityDelta?: JsonValue;
 }
 
 export interface ExecutionScheduleSnapshot {
@@ -77,6 +81,7 @@ export interface ExecutionScheduleSnapshot {
   readonly revision: number;
   readonly enqueuedAt: string;
   readonly updatedAt: string;
+  readonly capabilityRequest: JsonValue | null;
 }
 
 export interface ExecutionAttemptSnapshot {
@@ -145,9 +150,41 @@ interface QueueRow {
   readonly profileJson: string;
   readonly limitsJson: string;
   readonly permissionsJson: string;
+  readonly capabilityDeltaJson: string | null;
 }
 
 const DEFAULT_LEASE_TTL_MS = 5 * 60_000;
+
+const EXECUTION_SCHEDULE_SELECT_COLUMNS_BEFORE_LANDING =
+  "run_id, stage_id, codebase_id, repository_id, prompt, artifact_path," +
+  " base_sha, hard_deadline_at, state, capacity_policy," +
+  " requested_priority, current_candidate_index, current_attempt_id, revision," +
+  " enqueued_at, updated_at";
+
+const EXECUTION_SCHEDULE_SELECT_COLUMNS =
+  EXECUTION_SCHEDULE_SELECT_COLUMNS_BEFORE_LANDING + ", capability_request_json";
+
+const CLAIM_QUEUE_SELECT_COLUMNS_BEFORE_LANDING = `q.queue_sequence, q.run_id, q.candidate_index, q.account_id,
+                q.requested_priority, q.enqueued_at, c.profile_id,
+                COALESCE(ac.max_concurrent_runs, c.max_concurrent_runs) AS max_concurrent_runs,
+                c.profile_json, c.limits_json, c.permissions_json, s.stage_id, s.codebase_id,
+                s.repository_id, s.prompt, s.artifact_path, s.base_sha, s.hard_deadline_at,
+                s.capacity_policy`;
+
+const CLAIM_QUEUE_SELECT_COLUMNS =
+  CLAIM_QUEUE_SELECT_COLUMNS_BEFORE_LANDING + ", c.capability_delta_json";
+
+function executionScheduleSelectColumns(schemaVersion: number): string {
+  return schemaVersion >= CAPABILITY_LANDING_SCHEMA_VERSION
+    ? EXECUTION_SCHEDULE_SELECT_COLUMNS
+    : EXECUTION_SCHEDULE_SELECT_COLUMNS_BEFORE_LANDING;
+}
+
+function claimQueueSelectColumns(schemaVersion: number): string {
+  return schemaVersion >= CAPABILITY_LANDING_SCHEMA_VERSION
+    ? CLAIM_QUEUE_SELECT_COLUMNS
+    : CLAIM_QUEUE_SELECT_COLUMNS_BEFORE_LANDING;
+}
 
 function assertPriority(priority: number): void {
   if (!Number.isSafeInteger(priority) || priority < 0 || priority > 9) {
@@ -324,57 +361,117 @@ export function createExecutionSchedule(
   return transaction(db, () => {
     const now = internalClock(db).nowIso();
     const initialState = "queued";
-    internalHandle(db)
-      .prepare(
-        `INSERT INTO execution_schedule
-         (run_id, stage_id, base_sha, hard_deadline_at, state, capacity_policy,
-          codebase_id, repository_id, prompt, artifact_path,
-          requested_priority, current_candidate_index, current_attempt_id, revision,
-          chain_json, requested_secret_ids_json, enqueued_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, 1, ?, ?, ?, ?)`,
-      )
-      .run(
-        input.runId,
-        input.stageId,
-        input.baseSha,
-        input.hardDeadlineAt ?? null,
-        initialState,
-        input.capacityPolicy,
-        input.codebaseId,
-        input.repositoryId,
-        input.prompt,
-        input.artifactPath,
-        requestedPriority,
-        stringifyCanonical(input.chain),
-        stringifyCanonical([...(input.requestedIdentifiers ?? [])]),
-        now,
-        now,
-      );
+    const schemaVersion = readUserVersion(internalHandle(db));
+    const hasLandingColumns = schemaVersion >= CAPABILITY_LANDING_SCHEMA_VERSION;
+    if (hasLandingColumns) {
+      internalHandle(db)
+        .prepare(
+          `INSERT INTO execution_schedule
+           (run_id, stage_id, base_sha, hard_deadline_at, state, capacity_policy,
+            codebase_id, repository_id, prompt, artifact_path,
+            requested_priority, current_candidate_index, current_attempt_id, revision,
+            chain_json, requested_secret_ids_json, enqueued_at, updated_at,
+            capability_request_json)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, 1, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          input.runId,
+          input.stageId,
+          input.baseSha,
+          input.hardDeadlineAt ?? null,
+          initialState,
+          input.capacityPolicy,
+          input.codebaseId,
+          input.repositoryId,
+          input.prompt,
+          input.artifactPath,
+          requestedPriority,
+          stringifyCanonical(input.chain),
+          stringifyCanonical([...(input.requestedIdentifiers ?? [])]),
+          now,
+          now,
+          input.capabilityRequest === undefined
+            ? null
+            : stringifyCanonical(input.capabilityRequest),
+        );
+    } else {
+      internalHandle(db)
+        .prepare(
+          `INSERT INTO execution_schedule
+           (run_id, stage_id, base_sha, hard_deadline_at, state, capacity_policy,
+            codebase_id, repository_id, prompt, artifact_path,
+            requested_priority, current_candidate_index, current_attempt_id, revision,
+            chain_json, requested_secret_ids_json, enqueued_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, 1, ?, ?, ?, ?)`,
+        )
+        .run(
+          input.runId,
+          input.stageId,
+          input.baseSha,
+          input.hardDeadlineAt ?? null,
+          initialState,
+          input.capacityPolicy,
+          input.codebaseId,
+          input.repositoryId,
+          input.prompt,
+          input.artifactPath,
+          requestedPriority,
+          stringifyCanonical(input.chain),
+          stringifyCanonical([...(input.requestedIdentifiers ?? [])]),
+          now,
+          now,
+        );
+    }
 
     for (const [candidateIndex, candidate] of input.candidates.entries()) {
       if (!Number.isSafeInteger(candidate.maxConcurrentRuns) || candidate.maxConcurrentRuns < 1) {
         throw new StateStoreError("max concurrent runs must be a positive integer");
       }
       const compatible = candidate.compatible !== false;
-      internalHandle(db)
-        .prepare(
-          `INSERT INTO execution_candidate
-           (run_id, candidate_index, profile_id, account_id, engine, max_concurrent_runs,
-            profile_json, limits_json, permissions_json, state)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        )
-        .run(
-          input.runId,
-          candidateIndex,
-          candidate.profileId,
-          candidate.accountId ?? null,
-          candidate.engine,
-          candidate.maxConcurrentRuns,
-          stringifyCanonical(candidate.profile),
-          stringifyCanonical(candidate.limits),
-          stringifyCanonical(candidate.permissions),
-          compatible ? "pending" : "rejected",
-        );
+      if (hasLandingColumns) {
+        internalHandle(db)
+          .prepare(
+            `INSERT INTO execution_candidate
+             (run_id, candidate_index, profile_id, account_id, engine, max_concurrent_runs,
+              profile_json, limits_json, permissions_json, state, capability_delta_json)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          )
+          .run(
+            input.runId,
+            candidateIndex,
+            candidate.profileId,
+            candidate.accountId ?? null,
+            candidate.engine,
+            candidate.maxConcurrentRuns,
+            stringifyCanonical(candidate.profile),
+            stringifyCanonical(candidate.limits),
+            stringifyCanonical(candidate.permissions),
+            compatible ? "pending" : "rejected",
+            candidate.capabilityDelta === undefined
+              ? null
+              : stringifyCanonical(candidate.capabilityDelta),
+          );
+      } else {
+        internalHandle(db)
+          .prepare(
+            `INSERT INTO execution_candidate
+             (run_id, candidate_index, profile_id, account_id, engine, max_concurrent_runs,
+              profile_json, limits_json, permissions_json, state)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          )
+          .run(
+            input.runId,
+            candidateIndex,
+            candidate.profileId,
+            candidate.accountId ?? null,
+            candidate.engine,
+            candidate.maxConcurrentRuns,
+            stringifyCanonical(candidate.profile),
+            stringifyCanonical(candidate.limits),
+            stringifyCanonical(candidate.permissions),
+            compatible ? "pending" : "rejected",
+          );
+      }
       if (candidate.accountId !== undefined) {
         internalHandle(db)
           .prepare(
@@ -460,6 +557,11 @@ function queueRow(raw: Record<string, unknown>): QueueRow {
     profileJson: toText(raw.profile_json, "execution_candidate.profile_json"),
     limitsJson: toText(raw.limits_json, "execution_candidate.limits_json"),
     permissionsJson: toText(raw.permissions_json, "execution_candidate.permissions_json"),
+    // Absent when SELECT omitted the column on a pre-migration-19 schema.
+    capabilityDeltaJson:
+      raw.capability_delta_json === undefined
+        ? null
+        : toNullableText(raw.capability_delta_json, "execution_candidate.capability_delta_json"),
   };
 }
 
@@ -510,14 +612,10 @@ export function claimNextExecutionCandidate(
     const now = internalClock(db).nowIso();
     const nowMs = assertIso(now, "clock value");
     expireOrphanLeases(db, now);
+    const claimColumns = claimQueueSelectColumns(readUserVersion(internalHandle(db)));
     const rawRows = internalHandle(db)
       .prepare(
-        `SELECT q.queue_sequence, q.run_id, q.candidate_index, q.account_id,
-                q.requested_priority, q.enqueued_at, c.profile_id,
-                COALESCE(ac.max_concurrent_runs, c.max_concurrent_runs) AS max_concurrent_runs,
-                c.profile_json, c.limits_json, c.permissions_json, s.stage_id, s.codebase_id,
-                s.repository_id, s.prompt, s.artifact_path, s.base_sha, s.hard_deadline_at,
-                s.capacity_policy
+        `SELECT ${claimColumns}
            FROM account_queue_entry q
            JOIN execution_candidate c
              ON c.run_id = q.run_id AND c.candidate_index = q.candidate_index
@@ -698,6 +796,14 @@ export function claimNextExecutionCandidate(
       profile: parseJsonValue(selected.profileJson, "execution candidate profile"),
       limits: parseJsonValue(selected.limitsJson, "execution candidate limits"),
       permissions: parseJsonValue(selected.permissionsJson, "execution candidate permissions"),
+      ...(selected.capabilityDeltaJson === null
+        ? {}
+        : {
+            capabilityDelta: parseJsonValue(
+              selected.capabilityDeltaJson,
+              "execution candidate capability delta",
+            ),
+          }),
     };
   });
 }
@@ -1338,13 +1444,10 @@ export function readExecutionSchedule(
   db: StateDatabase,
   runId: string,
 ): ExecutionScheduleSnapshot | undefined {
-  const row = internalHandle(db)
-    .prepare(
-      `SELECT run_id, stage_id, codebase_id, repository_id, prompt, artifact_path,
-              base_sha, hard_deadline_at, state, capacity_policy,
-              requested_priority, current_candidate_index, current_attempt_id, revision,
-              enqueued_at, updated_at FROM execution_schedule WHERE run_id = ?`,
-    )
+  const handle = internalHandle(db);
+  const columns = executionScheduleSelectColumns(readUserVersion(handle));
+  const row = handle
+    .prepare(`SELECT ${columns} FROM execution_schedule WHERE run_id = ?`)
     .get(runId);
   if (row === undefined) return undefined;
   const state = toText(row.state, "execution_schedule.state");
@@ -1382,6 +1485,14 @@ export function readExecutionSchedule(
     revision: toSafeInteger(row.revision, "execution_schedule.revision"),
     enqueuedAt: toText(row.enqueued_at, "execution_schedule.enqueued_at"),
     updatedAt: toText(row.updated_at, "execution_schedule.updated_at"),
+    // Absent when SELECT omitted the column on a pre-migration-19 schema.
+    capabilityRequest:
+      row.capability_request_json === undefined || row.capability_request_json === null
+        ? null
+        : parseJsonValue(
+            toText(row.capability_request_json, "execution_schedule.capability_request_json"),
+            "execution schedule capability request",
+          ),
   };
 }
 

@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { formatCapabilityDeltaContext } from "@heniek/capability";
 import type {
   BackendArtifactId,
   BackendArtifactV1,
@@ -8,6 +9,7 @@ import type {
   ExecutionRequestV2,
   ExecutionRequestV3,
   ExecutionRequestV4,
+  ExecutionRequestV5,
   ExecutionResultV2,
   ExecutionResultV4,
   ExecutionResultV5,
@@ -58,9 +60,9 @@ export interface ClaudexorExecutionBackend extends Omit<ExecutionBackendV2, "res
   startProfile(
     request: Static<typeof ExecutionRequestV3>,
   ): Promise<Static<typeof import("@heniek/contracts").BackendExecutionHandleV1>>;
-  /** Q021 primitive: explicit profile/account plus a non-escalating permission envelope. */
+  /** Q021/capability-landing primitive: profile plus optional degradation delta. */
   startScheduled(
-    request: Static<typeof ExecutionRequestV4>,
+    request: Static<typeof ExecutionRequestV4> | Static<typeof ExecutionRequestV5>,
   ): Promise<Static<typeof import("@heniek/contracts").BackendExecutionHandleV1>>;
   /** Internal primitive used by the subscription-only profile adapter. */
   resumeProfile(
@@ -706,7 +708,9 @@ export function createClaudexorExecutionBackend(
       return { schemaVersion: 1, executionId: executionId as BackendExecutionId };
     },
 
-    async startScheduled(input: Static<typeof ExecutionRequestV4>) {
+    async startScheduled(
+      input: Static<typeof ExecutionRequestV4> | Static<typeof ExecutionRequestV5>,
+    ) {
       const route = subscriptionProfileRoute(input.profile, "startScheduled");
       await handshake();
       await requireSubscriptionRoute(route.harness);
@@ -734,10 +738,15 @@ export function createClaudexorExecutionBackend(
         },
       );
       const executionId = requiredString(created, "id", "createThread");
+      const deltaContext =
+        "capabilityDelta" in input && input.capabilityDelta !== undefined
+          ? `\n\n${formatCapabilityDeltaContext(input.capabilityDelta)}`
+          : "";
       await createTurn(
         executionId,
         `${input.prompt}\n\nWrite the requested final artifact to ${input.artifactPath}. ` +
-          "Do not write outside the current workspace. Finish with a concise summary.",
+          "Do not write outside the current workspace. Finish with a concise summary." +
+          deltaContext,
         `${input.runId}:${input.stageId}:${input.profile.fingerprint}:initial`,
         input.limits,
         input.profile,

@@ -1,4 +1,5 @@
 import { Type } from "@sinclair/typebox";
+import { CapabilityDeltaV1 } from "../capability/schemas.js";
 import { ProfileQuestionMode } from "../configuration/index.js";
 import {
   ExecutionFailureV1,
@@ -170,6 +171,32 @@ export const NativeStageDispatchV1 = versioned("NativeStageDispatch", 1, {
   deadlineAt: Type.Optional(Type.String({ format: "date-time" })),
 });
 
+/** Adds an optional capability degradation for the parent session to surface. */
+export const NativeStageDispatchV2 = versioned("NativeStageDispatch", 2, {
+  dispatchId: NativeDispatchId,
+  dispatchRevision: Type.Integer({ minimum: 1 }),
+  runId: RunId,
+  stageId: StageId,
+  attemptId: StageAttemptId,
+  attemptOrdinal: Type.Integer({ minimum: 1 }),
+  workspaceId: WorkspaceId,
+  workingDirectory: Type.String({ minLength: 1 }),
+  instructionsPath: Type.String({ minLength: 1, pattern: SAFE_RELATIVE_PATH }),
+  prompt: Type.String({ minLength: 1 }),
+  artifactPath: Type.String({ minLength: 1, pattern: SAFE_RELATIVE_PATH }),
+  artifactContract: Type.String({ minLength: 1 }),
+  model: Type.String({ minLength: 1 }),
+  effort: Type.String({ minLength: 1 }),
+  focus: Type.Optional(Type.String({ minLength: 1 })),
+  questions: ProfileQuestionMode,
+  permissions: Type.Ref(ExecutionPermissionEnvelopeV1),
+  limits: NativeStageLimits,
+  issuedAt: Type.String({ format: "date-time" }),
+  expiresAt: Type.String({ format: "date-time" }),
+  deadlineAt: Type.Optional(Type.String({ format: "date-time" })),
+  capabilityDelta: Type.Optional(Type.Ref(CapabilityDeltaV1)),
+});
+
 /**
  * One poll is the whole read side: it renews the lease, claims dispatches,
  * delivers answers to questions raised since the last poll, and reports
@@ -189,6 +216,45 @@ export const NativeStagePollResultV1 = versioned("NativeStagePollResult", 1, {
   expiresAt: Type.String({ format: "date-time" }),
   pollAfterMs: Type.Integer({ minimum: 0 }),
   dispatches: Type.Array(Type.Ref(NativeStageDispatchV1), { maxItems: 16 }),
+  resumes: Type.Array(
+    Type.Object(
+      {
+        dispatchId: NativeDispatchId,
+        dispatchRevision: Type.Integer({ minimum: 1 }),
+        interactionId: InteractionId,
+        interactionRevision: Type.Integer({ minimum: 1 }),
+        answer: Type.Ref(InteractionAnswerSetV1),
+      },
+      { additionalProperties: false },
+    ),
+    { maxItems: 16 },
+  ),
+  revocations: Type.Array(
+    Type.Object(
+      {
+        dispatchId: NativeDispatchId,
+        dispatchRevision: Type.Integer({ minimum: 1 }),
+        reason: Type.Union([
+          Type.Literal("run_cancelled"),
+          Type.Literal("lease_expired"),
+          Type.Literal("superseded"),
+          Type.Literal("recovery_required"),
+        ]),
+      },
+      { additionalProperties: false },
+    ),
+    { maxItems: 64 },
+  ),
+});
+
+/** Poll result carrying `NativeStageDispatch/v2` (optional capability delta). */
+export const NativeStagePollResultV2 = versioned("NativeStagePollResult", 2, {
+  accepted: Type.Boolean(),
+  rejectionCode: Type.Optional(NativeBridgeRejectionCode),
+  sessionRevision: Type.Integer({ minimum: 1 }),
+  expiresAt: Type.String({ format: "date-time" }),
+  pollAfterMs: Type.Integer({ minimum: 0 }),
+  dispatches: Type.Array(Type.Ref(NativeStageDispatchV2), { maxItems: 16 }),
   resumes: Type.Array(
     Type.Object(
       {

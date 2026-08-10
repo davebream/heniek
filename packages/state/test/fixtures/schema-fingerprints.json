@@ -74,5 +74,9 @@
   "18": {
     "structural": "11a73710443efa6abe16abadd67566eeee409e7adaa82abbedc6430df34a3b52",
     "declared": "ec14655bc5967a2ae831f17e494553288bce96c55b3933e1b019750088ef51ae"
+  },
+  "19": {
+    "structural": "df3c85b424ca778085f0ed1fa2cb16b9574b8a097fde07ac62dd45ca3c4d865d",
+    "declared": "b697919add5917a19e8d86c77ea5717da43bf239bce8e183c7a4841f0b4e98d8"
   }
 }

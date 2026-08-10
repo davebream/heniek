@@ -22,6 +22,7 @@ export const STAGE_START_METHOD = "stage.start";
 export const STAGE_START_V1_METHOD = "stage.start.v1";
 export const STAGE_START_V2_METHOD = "stage.start.v2";
 export const STAGE_START_V3_METHOD = "stage.start.v3";
+export const STAGE_START_V4_METHOD = "stage.start.v4";
 export const RUN_STATUS_METHOD = "run.status";
 export const RUN_STATUS_V1_METHOD = "run.status.v1";
 export const RUN_STATUS_V2_METHOD = "run.status.v2";
@@ -41,6 +42,7 @@ export const RUN_RESULT_METHOD = "run.result";
 export const RUN_RESULT_V1_METHOD = "run.result.v1";
 export const RUN_RESULT_V2_METHOD = "run.result.v2";
 export const RUN_RESULT_V3_METHOD = "run.result.v3";
+export const RUN_RESULT_V4_METHOD = "run.result.v4";
 
 /**
  * Q023's native bridge. Two families on purpose: `parentSession.*` is
@@ -55,6 +57,7 @@ export const PARENT_SESSION_DETACH_METHOD = "parentSession.detach";
 export const PARENT_SESSION_DETACH_V1_METHOD = "parentSession.detach.v1";
 export const NATIVE_STAGE_POLL_METHOD = "nativeStage.poll";
 export const NATIVE_STAGE_POLL_V1_METHOD = "nativeStage.poll.v1";
+export const NATIVE_STAGE_POLL_V2_METHOD = "nativeStage.poll.v2";
 export const NATIVE_STAGE_QUESTION_METHOD = "nativeStage.question";
 export const NATIVE_STAGE_QUESTION_V1_METHOD = "nativeStage.question.v1";
 export const NATIVE_STAGE_SUBMIT_METHOD = "nativeStage.submit";
@@ -181,6 +184,11 @@ export const CAPABILITY_CATALOGUE_SCHEMA_SHA256 =
  * only because `SchedulingDecision/v1` could not express four decision kinds
  * the scheduler has always written; v2/v3 stay pinned above and remain
  * selectable for any client that negotiated them.
+ *
+ * Capability landing: `stage.start.v4` still returns `StageStartResult/v3`
+ * (only the request advances to `StageStartRequest/v3`); `run.result.v4`
+ * returns `StageRunResult/v4` with an explicit `capabilityLanding`.
+ * `nativeStage.poll.v2` carries `NativeStageDispatch/v2` (optional delta).
  */
 export const STAGE_START_V3_SCHEMA_ID = "heniek://contract/StageStartResult/v3";
 export const STAGE_START_V3_SCHEMA_SHA256 =
@@ -191,6 +199,9 @@ export const RUN_STATUS_V4_SCHEMA_SHA256 =
 export const RUN_RESULT_V3_SCHEMA_ID = "heniek://contract/StageRunResult/v3";
 export const RUN_RESULT_V3_SCHEMA_SHA256 =
   "0bcc4f412bf6574a4f75f26b77979fa6c56963497e8a16efc886bfd119959557";
+export const RUN_RESULT_V4_SCHEMA_ID = "heniek://contract/StageRunResult/v4";
+export const RUN_RESULT_V4_SCHEMA_SHA256 =
+  "9935b7c812af5dd7383741e39338885d619b0816e69395fd19284aadbe12ec5b";
 export const PARENT_SESSION_ATTACH_SCHEMA_ID = "heniek://contract/ParentSessionAttachment/v1";
 export const PARENT_SESSION_ATTACH_SCHEMA_SHA256 =
   "bdfc12500ea76159d46d9da097dc41569cbc0004df2dc55daa58088bcb2fc555";
@@ -200,6 +211,9 @@ export const PARENT_SESSION_DETACH_SCHEMA_SHA256 =
 export const NATIVE_STAGE_POLL_SCHEMA_ID = "heniek://contract/NativeStagePollResult/v1";
 export const NATIVE_STAGE_POLL_SCHEMA_SHA256 =
   "0e87c1f1fe5605faf0a1e1abf866c5771c3874234156bb11383e015019988e15";
+export const NATIVE_STAGE_POLL_V2_SCHEMA_ID = "heniek://contract/NativeStagePollResult/v2";
+export const NATIVE_STAGE_POLL_V2_SCHEMA_SHA256 =
+  "a34c271e8d80966f0f9bc150edaa895c7ae4ca60bd4e411de1ef708bff09925b";
 export const NATIVE_STAGE_QUESTION_SCHEMA_ID = "heniek://contract/NativeStageQuestionResult/v1";
 export const NATIVE_STAGE_QUESTION_SCHEMA_SHA256 =
   "04594a8c6786a0b580bcbe23bd5d961cd472ed1e7b05caff3c21f6474748b3be";

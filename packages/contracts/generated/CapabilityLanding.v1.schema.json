@@ -1,0 +1,67 @@
+{
+  "$id": "heniek://contract/CapabilityLanding/v1",
+  "anyOf": [
+    {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "status"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1,
+          "type": "number"
+        },
+        "status": {
+          "const": "satisfied",
+          "type": "string"
+        }
+      }
+    },
+    {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "status",
+        "delta"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1,
+          "type": "number"
+        },
+        "status": {
+          "const": "degraded",
+          "type": "string"
+        },
+        "delta": {
+          "$ref": "heniek://contract/CapabilityDelta/v1"
+        }
+      }
+    },
+    {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "status",
+        "blocker"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1,
+          "type": "number"
+        },
+        "status": {
+          "const": "blocked",
+          "type": "string"
+        },
+        "blocker": {
+          "$ref": "heniek://contract/CapabilityResolutionBlocker/v1"
+        }
+      }
+    }
+  ]
+}

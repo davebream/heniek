@@ -2,10 +2,10 @@ import type {
   BackendArtifactV1,
   BackendExecutionHandleV1,
   ExecutionBackendV6,
-  ExecutionBackendV8,
+  ExecutionBackendV9,
   ExecutionEventV3,
   ExecutionRequestV3,
-  ExecutionRequestV4,
+  ExecutionRequestV5,
   ExecutionResultV4,
   ExecutionResultV5,
   ExecutionResumeRequestV1,
@@ -41,7 +41,7 @@ export interface CursorProfileExecutionAdapter extends ProfileExecutionAdapter {
 
 type ProfileEngine = "claude" | "codex" | "cursor";
 
-export interface ScheduledProfileExecutionAdapter extends ExecutionBackendV8 {
+export interface ScheduledProfileExecutionAdapter extends ExecutionBackendV9 {
   diagnoseCompatibility(): ReturnType<ClaudexorExecutionBackend["diagnoseCompatibility"]>;
   diagnoseRuntime(): ReturnType<ClaudexorExecutionBackend["diagnoseRuntime"]>;
   diagnoseAuthRoute(): ReturnType<ClaudexorExecutionBackend["diagnoseAuthRoute"]>;
@@ -100,12 +100,12 @@ export function createScheduledProfileExecutionAdapter(
   const backend = createClaudexorExecutionBackend(options);
   return {
     start: async (
-      request: Static<typeof ExecutionRequestV4>,
+      request: Static<typeof ExecutionRequestV5>,
     ): Promise<Static<typeof BackendExecutionHandleV1>> => {
       if (request.profile.engine !== engine) {
         throw new ClaudexorControlError(400, "unsupported_profile", "startScheduled");
       }
-      return backend.startScheduled(request);
+      return backend.startScheduled(request as never);
     },
     status: (executionId: string): Promise<ExecutionStatus> => backend.status(executionId),
     interactions: (executionId: string): Promise<Static<typeof PendingInteractionV2>[]> =>

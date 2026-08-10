@@ -11,6 +11,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@heniek/capability": "workspace:*",
     "@heniek/contracts": "workspace:*",
     "@heniek/telemetry": "workspace:*",
     "@sinclair/typebox": "catalog:"

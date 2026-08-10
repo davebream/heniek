@@ -202,7 +202,8 @@ CREATE TABLE run_projection
     updated_at           TEXT NOT NULL,
     workspace_id         TEXT,
     instruction_snapshot_sha256 TEXT,
-    instruction_snapshot_json TEXT CHECK (instruction_snapshot_json IS NULL OR json_valid(instruction_snapshot_json))
+    instruction_snapshot_json TEXT CHECK (instruction_snapshot_json IS NULL OR json_valid(instruction_snapshot_json)),
+    capability_landing_json TEXT CHECK (capability_landing_json IS NULL OR json_valid(capability_landing_json))
 ) STRICT;
 
 CREATE TRIGGER run_projection_first_revision
@@ -477,6 +478,7 @@ CREATE TABLE execution_schedule
     requested_secret_ids_json TEXT NOT NULL CHECK (json_valid(requested_secret_ids_json)),
     enqueued_at               TEXT NOT NULL,
     updated_at                TEXT NOT NULL,
+    capability_request_json   TEXT CHECK (capability_request_json IS NULL OR json_valid(capability_request_json)),
     CHECK (state IN ('queued','waiting_on_user','running','terminal')),
     CHECK (capacity_policy IN ('queue','fallback','ask')),
     CHECK (requested_priority BETWEEN 0 AND 9),
@@ -495,6 +497,7 @@ CREATE TABLE execution_candidate
     limits_json            TEXT NOT NULL CHECK (json_valid(limits_json)),
     permissions_json       TEXT NOT NULL CHECK (json_valid(permissions_json)),
     state                  TEXT NOT NULL,
+    capability_delta_json  TEXT CHECK (capability_delta_json IS NULL OR json_valid(capability_delta_json)),
     PRIMARY KEY (run_id, candidate_index),
     CHECK (candidate_index >= 0),
     CHECK (max_concurrent_runs >= 1),
@@ -1740,4 +1743,4 @@ BEGIN
     SELECT RAISE(ABORT, 'pipeline attachment ledger is immutable');
 END;
 
-PRAGMA user_version = 18;
+PRAGMA user_version = 19;

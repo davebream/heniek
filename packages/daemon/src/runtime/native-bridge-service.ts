@@ -29,6 +29,7 @@ import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { promisify } from "node:util";
+import type { ProfileInvocationOverrides } from "@heniek/config";
 import type { ResolvedProfileChainV1 } from "@heniek/contracts";
 import {
   type AnswerNativeQuestionInput,
@@ -90,6 +91,11 @@ export interface StartNativeStageInput {
   readonly profileId: string;
   readonly requestedIdentifiers?: readonly string[];
   readonly limits?: { readonly maxDurationMs?: number; readonly maxTurns?: number };
+  readonly invocationOverrides?: ProfileInvocationOverrides;
+  readonly preferredFeatures?: readonly string[];
+  readonly preferredTools?: readonly string[];
+  readonly requiredFeatures?: readonly string[];
+  readonly requiredTools?: readonly string[];
 }
 
 export interface SubmitNativeDispatchInput {
@@ -145,7 +151,10 @@ export interface NativeBridgeServiceOptions {
   readonly artifactsDirectory: string;
   readonly ids: { next(prefix: string): string };
   readonly clock: { nowIso(): string };
-  readonly resolveProfileChain: (profileId: string) => Promise<ProfileChain> | ProfileChain;
+  readonly resolveProfileChain: (
+    profileId: string,
+    options?: { readonly invocationOverrides?: ProfileInvocationOverrides },
+  ) => Promise<ProfileChain> | ProfileChain;
   readonly witnessOf?: WitnessClassifier;
   readonly pollMilliseconds?: number;
   readonly sessionLeaseTtlMs?: number;
@@ -320,7 +329,11 @@ export function createNativeBridgeService(
       if (!safeArtifactPath(input.artifactPath)) throw new Error("artifact path must be safe");
       const context = findRegisteredExecutionContext(options.db, input.currentDirectory);
       if (context === undefined) throw new Error("current directory is not registered");
-      const chain = await options.resolveProfileChain(input.profileId);
+      const chain = await options.resolveProfileChain(input.profileId, {
+        ...(input.invocationOverrides === undefined
+          ? {}
+          : { invocationOverrides: input.invocationOverrides }),
+      });
       if (chain.primary.executionMode !== "native") {
         throw new Error("profile is not configured for native execution");
       }

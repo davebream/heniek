@@ -1,0 +1,200 @@
+{
+  "$id": "heniek://contract/StageStartRequest/v3",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "currentDirectory",
+    "prompt",
+    "artifactPath",
+    "profileId",
+    "priority",
+    "requestedIdentifiers",
+    "limits"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 3,
+      "type": "number"
+    },
+    "currentDirectory": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "prompt": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "artifactPath": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "profileId": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "priority": {
+      "minimum": 0,
+      "maximum": 9,
+      "type": "integer"
+    },
+    "requestedIdentifiers": {
+      "uniqueItems": true,
+      "type": "array",
+      "items": {
+        "minLength": 1,
+        "maxLength": 128,
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+        "type": "string"
+      }
+    },
+    "limits": {
+      "additionalProperties": false,
+      "type": "object",
+      "properties": {
+        "maxDurationMs": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "maxTurns": {
+          "minimum": 1,
+          "type": "integer"
+        }
+      }
+    },
+    "invocationOverrides": {
+      "additionalProperties": false,
+      "type": "object",
+      "properties": {
+        "engine": {
+          "anyOf": [
+            {
+              "const": "claude",
+              "type": "string"
+            },
+            {
+              "const": "codex",
+              "type": "string"
+            },
+            {
+              "const": "cursor",
+              "type": "string"
+            }
+          ]
+        },
+        "account": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "billing": {
+          "const": "subscription",
+          "type": "string"
+        },
+        "model": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "effort": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "executor": {
+          "anyOf": [
+            {
+              "const": "native",
+              "type": "string"
+            },
+            {
+              "const": "external",
+              "type": "string"
+            }
+          ]
+        },
+        "focus": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "max_duration": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "workspace_strategy": {
+          "minLength": 1,
+          "type": "string"
+        }
+      }
+    },
+    "preferredFeatures": {
+      "uniqueItems": true,
+      "type": "array",
+      "items": {
+        "anyOf": [
+          {
+            "const": "questions",
+            "type": "string"
+          },
+          {
+            "const": "resume",
+            "type": "string"
+          },
+          {
+            "const": "usage",
+            "type": "string"
+          },
+          {
+            "const": "structuredOutput",
+            "type": "string"
+          },
+          {
+            "const": "cancellation",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    "preferredTools": {
+      "uniqueItems": true,
+      "type": "array",
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      }
+    },
+    "requiredFeatures": {
+      "uniqueItems": true,
+      "type": "array",
+      "items": {
+        "anyOf": [
+          {
+            "const": "questions",
+            "type": "string"
+          },
+          {
+            "const": "resume",
+            "type": "string"
+          },
+          {
+            "const": "usage",
+            "type": "string"
+          },
+          {
+            "const": "structuredOutput",
+            "type": "string"
+          },
+          {
+            "const": "cancellation",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    "requiredTools": {
+      "uniqueItems": true,
+      "type": "array",
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      }
+    }
+  }
+}

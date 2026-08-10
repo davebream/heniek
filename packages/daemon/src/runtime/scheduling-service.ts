@@ -1,12 +1,29 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import {
+  buildPinnedCapabilityBlocker,
+  type CapabilityCatalogue,
+  type CapabilityDelta,
+  type CapabilityFeature,
+  type CapabilityLanding,
+  type CapabilityPinOverrideField,
+  candidateSnapshotFromProfile,
+  evaluateCapabilityCandidate,
+  landingFromDelta,
+  pinnedAxesFrom,
+  requestSnapshotFromProfile,
+} from "@heniek/capability";
+import type { ProfileInvocationOverrides } from "@heniek/config";
 import type {
   ExecutionBackendV7,
+  ExecutionBackendV9,
   ExecutionFailureV1,
+  ExecutionRequestV5,
   ExecutionResultV5,
   InteractionAnswerSubmissionV2,
   InteractionV2,
   ResolvedProfileChainV1,
+  ResolvedProfileV2,
   RunId,
   StageId,
   WorkspaceId,
@@ -27,6 +44,7 @@ import {
   readExecutionSchedule,
   readIdentity,
   readRecoverableSchedulingAttempts,
+  readRunProjection,
   readSchedulingDecisions,
   recordAttemptReadonlyBaseline,
   renewAccountLease,
@@ -54,6 +72,16 @@ const execFileAsync = promisify(execFile);
 type ProfileChain = Static<typeof ResolvedProfileChainV1>;
 type Failure = Static<typeof ExecutionFailureV1>;
 type Result = Static<typeof ExecutionResultV5>;
+type ResolvedProfile = Static<typeof ResolvedProfileV2>;
+
+const CAPABILITY_PIN_FIELDS = new Set<string>([
+  "engine",
+  "account",
+  "billing",
+  "model",
+  "effort",
+  "executor",
+]);
 
 export interface ScheduledStageInput {
   readonly currentDirectory: string;
@@ -63,17 +91,28 @@ export interface ScheduledStageInput {
   readonly priority?: number;
   readonly requestedIdentifiers?: readonly string[];
   readonly limits?: { readonly maxDurationMs?: number; readonly maxTurns?: number };
+  readonly invocationOverrides?: ProfileInvocationOverrides;
+  readonly preferredFeatures?: readonly CapabilityFeature[];
+  readonly preferredTools?: readonly string[];
+  readonly requiredFeatures?: readonly CapabilityFeature[];
+  readonly requiredTools?: readonly string[];
+  /** Applied capability-shaped override fields treated as pins. */
+  readonly appliedCapabilityPins?: readonly CapabilityPinOverrideField[];
 }
 
 export interface SchedulingExecutionServiceOptions {
   readonly db: StateDatabase;
-  readonly backend: ExecutionBackendV7;
+  readonly backend: ExecutionBackendV7 | ExecutionBackendV9;
   readonly workspaceService: WorkspaceService;
   readonly instanceId: string;
   readonly artifactsDirectory: string;
   readonly ids: { next(prefix: string): string };
   readonly clock: { nowIso(): string };
-  readonly resolveProfileChain: (profileId: string) => Promise<ProfileChain> | ProfileChain;
+  readonly resolveProfileChain: (
+    profileId: string,
+    options?: { readonly invocationOverrides?: ProfileInvocationOverrides },
+  ) => Promise<ProfileChain> | ProfileChain;
+  readonly resolveCapabilityCatalogue?: () => Promise<CapabilityCatalogue> | CapabilityCatalogue;
   readonly createIdentifierReader: (allowedIdentifiers: readonly string[]) => {
     read(identifier: string): Promise<unknown>;
   };
@@ -90,6 +129,7 @@ export interface SchedulingExecutionService {
   reconcile(): Promise<void>;
   status(runId: string): ReturnType<typeof schedulingStatus>;
   result(runId: string): Result | undefined;
+  capabilityLanding(runId: string): CapabilityLanding | undefined;
   interactions(runId: string): readonly Static<typeof InteractionV2>[];
   answer(
     runId: string,
@@ -203,6 +243,74 @@ function asJson(value: unknown): JsonValue {
   return value as JsonValue;
 }
 
+function appliedPinsFrom(
+  overrides: ProfileInvocationOverrides | undefined,
+  explicit: readonly CapabilityPinOverrideField[] | undefined,
+): readonly CapabilityPinOverrideField[] {
+  if (explicit !== undefined) return explicit;
+  if (overrides === undefined) return [];
+  return (Object.keys(overrides) as CapabilityPinOverrideField[]).filter((field) =>
+    CAPABILITY_PIN_FIELDS.has(field),
+  );
+}
+
+function parseDelta(value: JsonValue | undefined): CapabilityDelta | undefined {
+  if (value === undefined || typeof value !== "object" || value === null || Array.isArray(value)) {
+    return undefined;
+  }
+  const record = value as Record<string, unknown>;
+  if (record.schemaVersion !== 1 || typeof record.requestedProfileId !== "string") return undefined;
+  return value as CapabilityDelta;
+}
+
+function readStoredLanding(db: StateDatabase, runId: string): CapabilityLanding | undefined {
+  const json = readRunProjection(db, runId)?.capabilityLandingJson;
+  if (json === null || json === undefined) return undefined;
+  try {
+    return JSON.parse(json) as CapabilityLanding;
+  } catch {
+    return undefined;
+  }
+}
+
+function recordCapabilityLanding(
+  db: StateDatabase,
+  runId: string,
+  landing: Extract<CapabilityLanding, { readonly status: "degraded" | "blocked" }>,
+): void {
+  const existing = readStoredLanding(db, runId);
+  if (existing !== undefined) return;
+  commitStateChange(db, {
+    runId,
+    type: landing.status === "degraded" ? "run.capability_degraded" : "run.capability_blocked",
+    payload: { runId, landing },
+  });
+}
+
+async function startBackend(
+  backend: ExecutionBackendV7 | ExecutionBackendV9,
+  request: Static<typeof ExecutionRequestV5>,
+  context: { readonly identifierReader: { read(identifier: string): Promise<unknown> } },
+) {
+  if (request.capabilityDelta === undefined) {
+    const v4 = {
+      schemaVersion: 4 as const,
+      runId: request.runId,
+      stageId: request.stageId,
+      workspaceId: request.workspaceId,
+      workingDirectory: request.workingDirectory,
+      prompt: request.prompt,
+      artifactPath: request.artifactPath,
+      inputArtifactRefs: request.inputArtifactRefs,
+      limits: request.limits,
+      profile: request.profile,
+      permissions: request.permissions,
+    };
+    return (backend as ExecutionBackendV7).start(v4, context);
+  }
+  return (backend as ExecutionBackendV9).start(request, context);
+}
+
 export function createSchedulingExecutionService(
   options: SchedulingExecutionServiceOptions,
 ): SchedulingExecutionService {
@@ -310,9 +418,18 @@ export function createSchedulingExecutionService(
         recordAttemptReadonlyBaseline(options.db, claim.attemptId, asJson(baseline));
       }
       backendStartAttempted = true;
-      const handle = await options.backend.start(
+      const capabilityDelta = parseDelta(claim.capabilityDelta);
+      if (capabilityDelta !== undefined) {
+        recordCapabilityLanding(options.db, claim.runId, {
+          schemaVersion: 1,
+          status: "degraded",
+          delta: capabilityDelta,
+        });
+      }
+      const handle = await startBackend(
+        options.backend,
         {
-          schemaVersion: 4,
+          schemaVersion: 5,
           runId: claim.runId,
           stageId: claim.stageId as StageId,
           workspaceId,
@@ -321,8 +438,9 @@ export function createSchedulingExecutionService(
           artifactPath: claim.artifactPath,
           inputArtifactRefs: [],
           limits: effectiveLimits,
-          profile: claim.profile as Static<typeof import("@heniek/contracts").ResolvedProfileV2>,
+          profile: claim.profile as ResolvedProfile,
           permissions,
+          ...(capabilityDelta === undefined ? {} : { capabilityDelta }),
         },
         { identifierReader: options.createIdentifierReader(permissions.identifiers) },
       );
@@ -510,7 +628,11 @@ export function createSchedulingExecutionService(
       if (!safeArtifactPath(input.artifactPath)) throw new Error("artifact path must be safe");
       const context = findRegisteredExecutionContext(options.db, input.currentDirectory);
       if (context === undefined) throw new Error("current directory is not registered");
-      const chain = await options.resolveProfileChain(input.profileId);
+      const chain = await options.resolveProfileChain(input.profileId, {
+        ...(input.invocationOverrides === undefined
+          ? {}
+          : { invocationOverrides: input.invocationOverrides }),
+      });
       const requested = input.requestedIdentifiers ?? [];
       const profiles = [chain.primary, ...chain.fallbacks];
       const permissionResults = profiles.map((candidate) =>
@@ -520,6 +642,73 @@ export function createSchedulingExecutionService(
         throw new Error("primary profile denies requested permissions");
       if (chain.primary.accountId === undefined)
         throw new Error("primary profile needs an account");
+      const pins = pinnedAxesFrom({
+        appliedOverrideFields: appliedPinsFrom(
+          input.invocationOverrides,
+          input.appliedCapabilityPins,
+        ),
+        ...(input.requiredFeatures === undefined
+          ? {}
+          : { requiredFeatures: input.requiredFeatures }),
+        ...(input.requiredTools === undefined ? {} : { requiredTools: input.requiredTools }),
+      });
+      const catalogue =
+        options.resolveCapabilityCatalogue === undefined
+          ? undefined
+          : await options.resolveCapabilityCatalogue();
+      const requestedSnapshot = requestSnapshotFromProfile(chain.primary, {
+        ...(input.preferredFeatures === undefined
+          ? {}
+          : { preferredFeatures: input.preferredFeatures }),
+        ...(input.preferredTools === undefined ? {} : { preferredTools: input.preferredTools }),
+        ...(input.requiredFeatures === undefined
+          ? {}
+          : { requiredFeatures: input.requiredFeatures }),
+        ...(input.requiredTools === undefined ? {} : { requiredTools: input.requiredTools }),
+      });
+      const evaluations = profiles.map((candidate) =>
+        evaluateCapabilityCandidate({
+          requested: requestedSnapshot,
+          candidate: candidateSnapshotFromProfile(candidate),
+          pinnedAxes: pins,
+          ...(catalogue === undefined ? {} : { catalogue }),
+        }),
+      );
+      const pinRejections = evaluations.flatMap((evaluation, index) => {
+        if (evaluation.ok) return [];
+        return [
+          {
+            profileId: profiles[index]?.profileId ?? `candidate-${index}`,
+            differences: evaluation.differences,
+          },
+        ];
+      });
+      const eligible = evaluations.some((evaluation) => evaluation.ok);
+      if (!eligible && pinRejections.length > 0 && pins.length > 0) {
+        const blocker = buildPinnedCapabilityBlocker({
+          pinnedAxes: pins,
+          rejections: pinRejections,
+        });
+        const runId = options.ids.next("run") as RunId;
+        commitStateChange(options.db, {
+          runId,
+          type: "run.created",
+          payload: { runId, codebaseId: context.codebaseId },
+        });
+        recordCapabilityLanding(options.db, runId, {
+          schemaVersion: 1,
+          status: "blocked",
+          blocker,
+        });
+        commitStateChange(options.db, {
+          runId,
+          type: "run.status_changed",
+          payload: { runId, status: "failed" },
+        });
+        const error = new Error("pinned capability unavailable");
+        (error as { blocker?: unknown }).blocker = blocker;
+        throw error;
+      }
       const baseSha = await repositoryHead(context.repositoryPath);
       const now = options.clock.nowIso();
       const hardDeadlineAt =
@@ -530,7 +719,10 @@ export function createSchedulingExecutionService(
       const stageId = options.ids.next("stage") as StageId;
       const candidates = profiles.map((candidate, index) => {
         const permissionResult = permissionResults[index];
-        const compatible = permissionResult?.ok === true && candidate.accountId !== undefined;
+        const evaluation = evaluations[index];
+        const permissionOk = permissionResult?.ok === true && candidate.accountId !== undefined;
+        const capabilityOk = evaluation?.ok === true;
+        const compatible = permissionOk && capabilityOk;
         return {
           profileId: candidate.profileId,
           ...(candidate.accountId === undefined ? {} : { accountId: candidate.accountId }),
@@ -558,7 +750,16 @@ export function createSchedulingExecutionService(
                 },
           ),
           compatible,
-          ...(compatible ? {} : { rejectionReason: "permission_or_account_incompatible" }),
+          ...(compatible
+            ? {}
+            : {
+                rejectionReason: permissionOk
+                  ? "pinned_capability_unavailable"
+                  : "permission_or_account_incompatible",
+              }),
+          ...(evaluation?.ok === true && evaluation.delta !== undefined
+            ? { capabilityDelta: asJson(evaluation.delta) }
+            : {}),
         };
       });
       commitStateChange(options.db, {
@@ -579,6 +780,13 @@ export function createSchedulingExecutionService(
         requestedPriority: input.priority ?? 0,
         requestedIdentifiers: requested,
         chain: asJson(chain),
+        capabilityRequest: asJson({
+          pinnedAxes: pins,
+          preferredFeatures: input.preferredFeatures ?? [],
+          preferredTools: input.preferredTools ?? [],
+          requiredFeatures: input.requiredFeatures ?? [],
+          requiredTools: input.requiredTools ?? [],
+        }),
         candidates,
       });
       await dispatchAvailable();
@@ -592,6 +800,15 @@ export function createSchedulingExecutionService(
     reconcile,
     status: (runId) => schedulingStatus(options.db, runId),
     interactions: (runId) => schedulingInteractions(options.db, runId),
+    capabilityLanding(runId) {
+      const stored = readStoredLanding(options.db, runId);
+      if (stored !== undefined) return stored;
+      const attempts = readExecutionAttempts(options.db, runId);
+      const succeeded = attempts.find((attempt) => attempt.status === "succeeded");
+      if (succeeded === undefined) return undefined;
+      // Primary or equivalent success without a journaled degradation.
+      return landingFromDelta(undefined);
+    },
     async answer(runId, answer, answeredByKeyId) {
       const accepted = answerCapacityQuestion(options.db, {
         runId,

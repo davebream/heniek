@@ -1,6 +1,7 @@
 import { Type } from "@sinclair/typebox";
 import { ArtifactId } from "../artifact/index.js";
-import { ProfileExecutionMode } from "../configuration/index.js";
+import { CapabilityFeatureName, CapabilityLandingV1 } from "../capability/schemas.js";
+import { ProfileEngine, ProfileExecutionMode } from "../configuration/index.js";
 import {
   ExecutionAttemptV1,
   ExecutionBackendDiagnosticV1,
@@ -255,6 +256,48 @@ export const StageStartRequestV2 = versioned("StageStartRequest", 2, {
   limits: StageLimits,
 });
 
+/**
+ * Ad-hoc stage start with typed invocation overrides and preferred/required
+ * feature-tool preferences. Capability-shaped overrides become pins during
+ * candidate comparison; preferred axes degrade rather than block.
+ */
+export const StageStartRequestV3 = versioned("StageStartRequest", 3, {
+  currentDirectory: Type.String({ minLength: 1 }),
+  prompt: Type.String({ minLength: 1 }),
+  artifactPath: Type.String({ minLength: 1 }),
+  profileId: Type.String({ minLength: 1 }),
+  priority: Type.Integer({ minimum: 0, maximum: 9 }),
+  requestedIdentifiers: Type.Array(
+    Type.String({
+      minLength: 1,
+      maxLength: 128,
+      pattern: "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+    }),
+    { uniqueItems: true },
+  ),
+  limits: StageLimits,
+  invocationOverrides: Type.Optional(
+    Type.Object(
+      {
+        engine: Type.Optional(ProfileEngine),
+        account: Type.Optional(Type.String({ minLength: 1 })),
+        billing: Type.Optional(Type.Literal("subscription")),
+        model: Type.Optional(Type.String({ minLength: 1 })),
+        effort: Type.Optional(Type.String({ minLength: 1 })),
+        executor: Type.Optional(ProfileExecutionMode),
+        focus: Type.Optional(Type.String({ minLength: 1 })),
+        max_duration: Type.Optional(Type.String({ minLength: 1 })),
+        workspace_strategy: Type.Optional(Type.String({ minLength: 1 })),
+      },
+      { additionalProperties: false },
+    ),
+  ),
+  preferredFeatures: Type.Optional(Type.Array(CapabilityFeatureName, { uniqueItems: true })),
+  preferredTools: Type.Optional(Type.Array(Type.String({ minLength: 1 }), { uniqueItems: true })),
+  requiredFeatures: Type.Optional(Type.Array(CapabilityFeatureName, { uniqueItems: true })),
+  requiredTools: Type.Optional(Type.Array(Type.String({ minLength: 1 }), { uniqueItems: true })),
+});
+
 export const StageStartResultV2 = versioned("StageStartResult", 2, {
   runId: RunId,
   stageId: StageId,
@@ -473,6 +516,36 @@ export const StageRunResultV3 = versioned("StageRunResult", 3, {
   scheduling: SchedulingState,
   attempts: Type.Array(Type.Ref(ExecutionAttemptV1)),
   decisions: Type.Array(Type.Ref(SchedulingDecisionV2)),
+});
+
+/**
+ * Adds an explicit capability landing. Older result revisions remain
+ * negotiable and omit this field, so a machine reader negotiated onto V4
+ * never has to parse warning strings to distinguish satisfied from degraded.
+ */
+export const StageRunResultV4 = versioned("StageRunResult", 4, {
+  runId: RunId,
+  stageId: StageId,
+  status: RunStatus.schema,
+  summary: Type.Optional(Type.String({ minLength: 1 })),
+  sessionId: Type.Optional(Type.String({ minLength: 1 })),
+  artifacts: Type.Array(
+    Type.Object(
+      {
+        name: Type.String({ minLength: 1 }),
+        artifactId: ArtifactId,
+        mediaType: Type.String({ minLength: 1 }),
+        byteLength: Type.Integer({ minimum: 0 }),
+        sha256: Type.String({ pattern: "^[a-f0-9]{64}$" }),
+      },
+      { additionalProperties: false },
+    ),
+  ),
+  error: Type.Optional(Type.String({ minLength: 1 })),
+  scheduling: SchedulingState,
+  attempts: Type.Array(Type.Ref(ExecutionAttemptV1)),
+  decisions: Type.Array(Type.Ref(SchedulingDecisionV2)),
+  capabilityLanding: Type.Ref(CapabilityLandingV1),
 });
 
 export const ArtifactGetResultV1 = versioned("ArtifactGetResult", 1, {
