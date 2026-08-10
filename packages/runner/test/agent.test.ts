@@ -312,6 +312,81 @@ describe("createAgentStageRunner", () => {
     expect(report.envelopeValid).toBe(false);
   });
 
+  it("emits schema, verdict, and canonical-state evidence for a structured report", async () => {
+    const checkout = await tempRoot();
+    const runtime = join(checkout, ".runtime");
+    const bytes = Buffer.from(
+      JSON.stringify({
+        schemaVersion: 1,
+        reportId: "review-plan-1",
+        runId: "run_agent_1",
+        stageId: "plan-review",
+        sourceArtifactIds: [],
+        markdown: "# Plan validation\n\nReady.",
+        createdAt: "2026-08-10T00:00:00.000Z",
+        reviewKind: "plan-validation",
+        contextPolicy: "fresh",
+        verdict: "ready",
+        findings: [],
+      }),
+    );
+    const artifact: Artifact = {
+      schemaVersion: 1,
+      id: "art_review" as Artifact["id"],
+      path: "artifacts/plan_validation.json",
+      byteLength: bytes.byteLength,
+      mediaType: "application/json",
+      sha256: createHash("sha256").update(bytes).digest("hex"),
+    };
+    const backend = scriptedBackend({ artifacts: [artifact], bytesById: { art_review: bytes } });
+    const runner = createAgentStageRunner({
+      backend,
+      resolveProfile: async (id) => profile(id),
+      resolvePermissions: async (p) => ({
+        schemaVersion: 1,
+        workspace: p.permissions.workspace,
+        identifiers: [...p.permissions.identifiers],
+      }),
+      resolveAgentInvocation: async () => ({
+        prompt: "validate the plan",
+        artifactPath: artifact.path,
+        inputArtifactRefs: [],
+        structuredSchemaName: "review-report-v1",
+      }),
+      identifierReader: { read: async () => null },
+    });
+    const stage = agentStage({
+      id: "plan-review" as PipelineGraphStage["id"],
+      writes: ["artifacts.plan_validation", "decisions.review_plan"],
+      completion: {
+        require: [
+          { kind: "result_envelope" },
+          { kind: "artifact", name: "plan_validation" },
+          { kind: "schema_check", name: "review-report-v1" },
+          { kind: "verdict", profile: asProfileId("builder") },
+        ],
+      },
+    });
+    await runner.prepare(prepareInput(checkout, runtime, stage));
+    await runner.start("att_agent_1");
+    await runner.observe("att_agent_1");
+    await runner.collect("att_agent_1");
+    const validation = await runner.validate("att_agent_1");
+    const finalized = await runner.finalize("att_agent_1");
+    expect(validation.valid).toBe(true);
+    expect(finalized.result.evidence).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: "schema_check", satisfied: true }),
+        expect.objectContaining({ kind: "verdict", satisfied: true }),
+      ]),
+    );
+    expect(finalized.result.outputs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ reference: "decisions.review_plan", kind: "value" }),
+      ]),
+    );
+  });
+
   it("cancels through the backend and observes until terminal", async () => {
     const checkout = await tempRoot();
     const runtime = join(checkout, ".runtime");

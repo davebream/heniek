@@ -59,9 +59,9 @@ afterEach(async () => {
 
 describe("migration 16 — pipeline fusion", () => {
   it("creates fusion tables on a fresh database", () => {
-    runMigrations(db);
+    runMigrationList(db, MIGRATIONS, 16);
     expect(readUserVersion(internalHandle(db))).toBe(16);
-    expect(currentSchemaVersion()).toBe(16);
+    expect(currentSchemaVersion()).toBe(17);
     const names = new Set(
       internalHandle(db)
         .prepare("SELECT name FROM sqlite_schema WHERE type = 'table'")
@@ -76,7 +76,7 @@ describe("migration 16 — pipeline fusion", () => {
   it("upgrades from migration 15 without touching prior tables", () => {
     runMigrationList(db, MIGRATIONS, 15);
     expect(readUserVersion(internalHandle(db))).toBe(15);
-    const report = runMigrations(db);
+    const report = runMigrationList(db, MIGRATIONS, 16);
     expect(report.fromVersion).toBe(15);
     expect(report.toVersion).toBe(16);
     expect(report.applied.map((entry) => entry.name)).toEqual(["pipeline-fusion"]);

@@ -62,5 +62,9 @@
   "16": {
     "name": "pipeline-fusion",
     "statementHash": "de10a9b91120922bde5f23bf569cd4ddb15c718993ba20015aadcff1560851cc"
+  },
+  "17": {
+    "name": "pipeline-findings",
+    "statementHash": "285f260169cd8bdd682d9705e6aa0161f5450a825f7ef487ccf5e1f2bb798700"
   }
 }

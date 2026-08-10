@@ -490,6 +490,18 @@ const EXPECTED_SCHEMAS: readonly {
     path: "generated/ExternalStageResult.v1.schema.json",
   },
   {
+    schemaId: "heniek://contract/FinalVerificationReport/v1",
+    schemaVersion: 1,
+    sha256: "59a01b6eed094da71a80a23f6743975af4682c1247a966c26f5c9a368b437ae1",
+    path: "generated/FinalVerificationReport.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/FindingSnapshot/v1",
+    schemaVersion: 1,
+    sha256: "dbaa851a4e27eb4b34e65e015bee7bdd12d2a51a8a34cdcbca13b0e551fccaa1",
+    path: "generated/FindingSnapshot.v1.schema.json",
+  },
+  {
     schemaId: "heniek://contract/InstructionDiagnostic/v1",
     schemaVersion: 1,
     sha256: "8ec3850c705343e34ddb27a7eff133fc68d1ef249f358e5b63cb43db967768e6",
@@ -844,6 +856,12 @@ const EXPECTED_SCHEMAS: readonly {
     path: "generated/RegisteredCodebase.v1.schema.json",
   },
   {
+    schemaId: "heniek://contract/RepairReport/v1",
+    schemaVersion: 1,
+    sha256: "6f620d7736b89bc3851ea2de457f18daee572eb0dbdebff32a85239ceab1b87d",
+    path: "generated/RepairReport.v1.schema.json",
+  },
+  {
     schemaId: "heniek://contract/RepositoryWorkspacePolicy/v1",
     schemaVersion: 1,
     sha256: "5cf03fd921bc9cece3ae33d6866b69db566784db22e547a5fd5e19e3c85cefe2",
@@ -872,6 +890,18 @@ const EXPECTED_SCHEMAS: readonly {
     schemaVersion: 1,
     sha256: "14bda7fb4b3eac7bf433be8221453835466208552c2f591780c91b289d214b74",
     path: "generated/ResolvedProfileChain.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/ReviewFinding/v1",
+    schemaVersion: 1,
+    sha256: "1ee682a4a2881a110f48b0a9276dfe9d4074376f1ed56e0aa538d087fe188ee2",
+    path: "generated/ReviewFinding.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/ReviewReport/v1",
+    schemaVersion: 1,
+    sha256: "482acea1418674a165fb2691690b789656d3acd3b0866a889c9bfe1929bf5912",
+    path: "generated/ReviewReport.v1.schema.json",
   },
   {
     schemaId: "heniek://contract/RpcCancelRequest/v1",
@@ -1170,7 +1200,7 @@ const EXPECTED_SCHEMAS: readonly {
 ];
 
 describe("packages/contracts generated manifest is unchanged (AC4)", () => {
-  it("manifest.json lists exactly the 164 known schemas with their recorded sha256", async () => {
+  it("manifest.json lists exactly the 169 known schemas with their recorded sha256", async () => {
     const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
     expect(manifest).toEqual({
       schemaVersion: "heniek.contracts-manifest.v1",

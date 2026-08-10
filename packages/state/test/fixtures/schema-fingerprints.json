@@ -66,5 +66,9 @@
   "16": {
     "structural": "c0bdaf3c3ce5892c5744d1bc29e427fb80ac465eaa159655e7eccd9a1c851a8e",
     "declared": "6cb9190cf3f36d4f60922cf675a6ab6d9cc52190a1208c86592e596f54d1909c"
+  },
+  "17": {
+    "structural": "2624ade9c658dea5f8ebec80e3b83141f1b1e54b05325b95cf18caeb889936cd",
+    "declared": "69874d5ef6ee472a81a2c0262641ceb6cd7d334deaacd324db902f732fbb237c"
   }
 }

@@ -1,0 +1,417 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`bundled careful.v1 > pins stages, fresh reviewers, repair budget, and conditional gates 1`] = `
+"{
+  "context": {},
+  "description": "Design critique and plan validation, implementation, fresh code review, bounded repair, deterministic checks, final verification, then publish.\\n",
+  "edges": [
+    {
+      "from": "build",
+      "to": "code-review"
+    },
+    {
+      "condition": {
+        "kind": "expression",
+        "nodes": [
+          {
+            "kind": "path",
+            "path": [
+              "decisions",
+              "review_code",
+              "actionableFindingIds",
+              "length"
+            ]
+          },
+          {
+            "kind": "literal",
+            "value": 0
+          },
+          {
+            "kind": "compare",
+            "left": 0,
+            "operator": "gt",
+            "right": 1
+          }
+        ],
+        "root": 2
+      },
+      "from": "code-review",
+      "to": "repair"
+    },
+    {
+      "from": "code-review",
+      "to": "verify"
+    },
+    {
+      "from": "critique",
+      "to": "revise-plan"
+    },
+    {
+      "from": "final-verification",
+      "to": "publish"
+    },
+    {
+      "from": "plan-review",
+      "to": "build"
+    },
+    {
+      "from": "repair",
+      "to": "verify"
+    },
+    {
+      "from": "revise-plan",
+      "to": "build"
+    },
+    {
+      "condition": {
+        "kind": "expression",
+        "nodes": [
+          {
+            "kind": "path",
+            "path": [
+              "risk",
+              "requiresPlanReview"
+            ]
+          },
+          {
+            "kind": "literal",
+            "value": true
+          },
+          {
+            "kind": "compare",
+            "left": 0,
+            "operator": "eq",
+            "right": 1
+          }
+        ],
+        "root": 2
+      },
+      "from": "revise-plan",
+      "to": "plan-review"
+    },
+    {
+      "from": "understand-design",
+      "to": "critique"
+    },
+    {
+      "from": "verify",
+      "to": "final-verification"
+    }
+  ],
+  "limits": {
+    "maxRepairAttempts": 2
+  },
+  "mode": "autonomous",
+  "name": "Careful",
+  "pipelineId": "careful",
+  "schemaVersion": 1,
+  "stages": [
+    {
+      "completion": {
+        "require": [
+          {
+            "kind": "non_empty_diff"
+          },
+          {
+            "kind": "result_envelope"
+          }
+        ]
+      },
+      "id": "build",
+      "mode": "autonomous",
+      "optional": false,
+      "overridable": [],
+      "profile": "builder",
+      "reads": [
+        "artifacts.plan_revision",
+        "artifacts.plan_validation",
+        "task.current"
+      ],
+      "session": {
+        "policy": "fresh"
+      },
+      "type": "agent",
+      "writes": [
+        "artifacts.implementation"
+      ]
+    },
+    {
+      "completion": {
+        "require": [
+          {
+            "kind": "artifact",
+            "name": "code_review"
+          },
+          {
+            "kind": "result_envelope"
+          },
+          {
+            "kind": "schema_check",
+            "name": "review-report-v1"
+          }
+        ]
+      },
+      "id": "code-review",
+      "mode": "autonomous",
+      "optional": false,
+      "overridable": [],
+      "profile": "code-reviewer",
+      "reads": [
+        "artifacts.implementation"
+      ],
+      "session": {
+        "policy": "fresh"
+      },
+      "type": "agent",
+      "writes": [
+        "artifacts.code_review",
+        "decisions.review_code"
+      ]
+    },
+    {
+      "completion": {
+        "require": [
+          {
+            "kind": "artifact",
+            "name": "design_critique"
+          },
+          {
+            "kind": "result_envelope"
+          },
+          {
+            "kind": "schema_check",
+            "name": "review-report-v1"
+          }
+        ]
+      },
+      "id": "critique",
+      "mode": "autonomous",
+      "optional": false,
+      "overridable": [],
+      "profile": "critic",
+      "reads": [
+        "artifacts.design",
+        "task.current"
+      ],
+      "session": {
+        "policy": "fresh"
+      },
+      "type": "agent",
+      "writes": [
+        "artifacts.design_critique",
+        "decisions.review_design"
+      ]
+    },
+    {
+      "completion": {
+        "require": [
+          {
+            "kind": "artifact",
+            "name": "final_verification"
+          },
+          {
+            "kind": "result_envelope"
+          },
+          {
+            "kind": "schema_check",
+            "name": "final-verification-report-v1"
+          },
+          {
+            "kind": "verdict",
+            "profile": "verifier"
+          }
+        ]
+      },
+      "id": "final-verification",
+      "mode": "autonomous",
+      "optional": false,
+      "overridable": [],
+      "profile": "verifier",
+      "reads": [
+        "artifacts.code_review",
+        "artifacts.repair",
+        "artifacts.verification"
+      ],
+      "session": {
+        "policy": "fresh"
+      },
+      "type": "agent",
+      "writes": [
+        "artifacts.final_verification",
+        "decisions.review_final"
+      ]
+    },
+    {
+      "completion": {
+        "require": [
+          {
+            "kind": "artifact",
+            "name": "plan_validation"
+          },
+          {
+            "kind": "result_envelope"
+          },
+          {
+            "kind": "schema_check",
+            "name": "review-report-v1"
+          },
+          {
+            "kind": "verdict",
+            "profile": "plan-reviewer"
+          }
+        ]
+      },
+      "id": "plan-review",
+      "mode": "autonomous",
+      "optional": false,
+      "overridable": [],
+      "profile": "plan-reviewer",
+      "reads": [
+        "artifacts.design_critique",
+        "artifacts.plan_revision"
+      ],
+      "session": {
+        "policy": "fresh"
+      },
+      "type": "agent",
+      "writes": [
+        "artifacts.plan_validation",
+        "decisions.review_plan"
+      ]
+    },
+    {
+      "id": "publish",
+      "mode": "autonomous",
+      "optional": false,
+      "overridable": [],
+      "reads": [
+        "artifacts.final_verification",
+        "artifacts.implementation",
+        "artifacts.verification"
+      ],
+      "type": "publish",
+      "writes": [
+        "artifacts.publication"
+      ]
+    },
+    {
+      "completion": {
+        "require": [
+          {
+            "kind": "artifact",
+            "name": "repair"
+          },
+          {
+            "kind": "non_empty_diff"
+          },
+          {
+            "kind": "result_envelope"
+          },
+          {
+            "kind": "schema_check",
+            "name": "repair-report-v1"
+          }
+        ]
+      },
+      "id": "repair",
+      "mode": "autonomous",
+      "onValidationFailure": {
+        "maxAttempts": 2,
+        "session": "resume",
+        "strategy": "repair"
+      },
+      "optional": false,
+      "overridable": [],
+      "profile": "builder",
+      "reads": [
+        "artifacts.code_review",
+        "artifacts.implementation"
+      ],
+      "session": {
+        "policy": "resume"
+      },
+      "type": "agent",
+      "writes": [
+        "artifacts.repair",
+        "decisions.repair_code"
+      ]
+    },
+    {
+      "completion": {
+        "require": [
+          {
+            "kind": "artifact",
+            "name": "plan_revision"
+          },
+          {
+            "kind": "result_envelope"
+          },
+          {
+            "kind": "schema_check",
+            "name": "repair-report-v1"
+          }
+        ]
+      },
+      "id": "revise-plan",
+      "mode": "autonomous",
+      "optional": false,
+      "overridable": [],
+      "profile": "designer",
+      "reads": [
+        "artifacts.design",
+        "artifacts.design_critique",
+        "task.current"
+      ],
+      "session": {
+        "policy": "resume"
+      },
+      "type": "agent",
+      "writes": [
+        "artifacts.plan_revision",
+        "decisions.repair_design"
+      ]
+    },
+    {
+      "completion": {
+        "require": [
+          {
+            "kind": "artifact",
+            "name": "design"
+          },
+          {
+            "kind": "result_envelope"
+          }
+        ]
+      },
+      "id": "understand-design",
+      "mode": "autonomous",
+      "optional": false,
+      "overridable": [],
+      "profile": "designer",
+      "reads": [
+        "task.current"
+      ],
+      "type": "agent",
+      "writes": [
+        "artifacts.design"
+      ]
+    },
+    {
+      "id": "verify",
+      "mode": "autonomous",
+      "optional": false,
+      "overridable": [],
+      "profile": "verifier",
+      "reads": [
+        "artifacts.implementation",
+        "artifacts.repair"
+      ],
+      "type": "verify",
+      "writes": [
+        "artifacts.verification"
+      ]
+    }
+  ]
+}
+"
+`;
