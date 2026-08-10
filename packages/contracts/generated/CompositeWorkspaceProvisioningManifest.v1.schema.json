@@ -1,0 +1,489 @@
+{
+  "$id": "heniek://contract/CompositeWorkspaceProvisioningManifest/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "workspaceId",
+    "codebaseId",
+    "configurationSha256",
+    "lifecycle",
+    "workspaceRoot",
+    "repositories",
+    "effectiveInstructions",
+    "createdAt",
+    "updatedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "workspaceId": {
+      "minLength": 1,
+      "description": "Opaque WorkspaceId.",
+      "type": "string"
+    },
+    "codebaseId": {
+      "minLength": 1,
+      "description": "Opaque CodebaseId.",
+      "type": "string"
+    },
+    "configurationSha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "lifecycle": {
+      "anyOf": [
+        {
+          "const": "provisioning",
+          "type": "string"
+        },
+        {
+          "const": "ready",
+          "type": "string"
+        },
+        {
+          "const": "partial-failure",
+          "type": "string"
+        },
+        {
+          "const": "blocked",
+          "type": "string"
+        },
+        {
+          "const": "recovery-required",
+          "type": "string"
+        }
+      ]
+    },
+    "workspaceRoot": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "repositories": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "repositoryId",
+          "name",
+          "strategy",
+          "phase",
+          "checkoutPath",
+          "gitCommonDirectory",
+          "baseSha",
+          "checkoutHeadSha",
+          "materialization",
+          "setup",
+          "updatedAt"
+        ],
+        "properties": {
+          "repositoryId": {
+            "minLength": 1,
+            "description": "Opaque RepositoryId.",
+            "type": "string"
+          },
+          "name": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "strategy": {
+            "anyOf": [
+              {
+                "const": "managed-worktree",
+                "type": "string"
+              },
+              {
+                "const": "current-checkout",
+                "type": "string"
+              },
+              {
+                "const": "existing-checkout",
+                "type": "string"
+              },
+              {
+                "const": "custom",
+                "type": "string"
+              }
+            ]
+          },
+          "phase": {
+            "anyOf": [
+              {
+                "const": "pending",
+                "type": "string"
+              },
+              {
+                "const": "materializing",
+                "type": "string"
+              },
+              {
+                "const": "materialized",
+                "type": "string"
+              },
+              {
+                "const": "setup-running",
+                "type": "string"
+              },
+              {
+                "const": "completed",
+                "type": "string"
+              },
+              {
+                "const": "failed",
+                "type": "string"
+              },
+              {
+                "const": "blocked",
+                "type": "string"
+              },
+              {
+                "const": "recovery-required",
+                "type": "string"
+              }
+            ]
+          },
+          "checkoutPath": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "gitCommonDirectory": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "baseSha": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{40}(?:[0-9a-f]{24})?$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "checkoutHeadSha": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{40}(?:[0-9a-f]{24})?$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "materialization": {
+            "additionalProperties": false,
+            "type": "object",
+            "required": [
+              "state",
+              "commandSha256",
+              "startedAt",
+              "finishedAt",
+              "exitCode",
+              "signal",
+              "timedOut",
+              "logPath",
+              "logSha256",
+              "logTruncated"
+            ],
+            "properties": {
+              "state": {
+                "anyOf": [
+                  {
+                    "const": "pending",
+                    "type": "string"
+                  },
+                  {
+                    "const": "running",
+                    "type": "string"
+                  },
+                  {
+                    "const": "succeeded",
+                    "type": "string"
+                  },
+                  {
+                    "const": "failed",
+                    "type": "string"
+                  },
+                  {
+                    "const": "recovery-required",
+                    "type": "string"
+                  }
+                ]
+              },
+              "commandSha256": {
+                "anyOf": [
+                  {
+                    "pattern": "^[0-9a-f]{64}$",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "startedAt": {
+                "anyOf": [
+                  {
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "finishedAt": {
+                "anyOf": [
+                  {
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "exitCode": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "signal": {
+                "anyOf": [
+                  {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "timedOut": {
+                "type": "boolean"
+              },
+              "logPath": {
+                "anyOf": [
+                  {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "logSha256": {
+                "anyOf": [
+                  {
+                    "pattern": "^[0-9a-f]{64}$",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "logTruncated": {
+                "type": "boolean"
+              }
+            }
+          },
+          "setup": {
+            "additionalProperties": false,
+            "type": "object",
+            "required": [
+              "state",
+              "commandSha256",
+              "startedAt",
+              "finishedAt",
+              "exitCode",
+              "signal",
+              "timedOut",
+              "logPath",
+              "logSha256",
+              "logTruncated",
+              "blockedBy"
+            ],
+            "properties": {
+              "state": {
+                "anyOf": [
+                  {
+                    "const": "pending",
+                    "type": "string"
+                  },
+                  {
+                    "const": "blocked",
+                    "type": "string"
+                  },
+                  {
+                    "const": "skipped",
+                    "type": "string"
+                  },
+                  {
+                    "const": "running",
+                    "type": "string"
+                  },
+                  {
+                    "const": "succeeded",
+                    "type": "string"
+                  },
+                  {
+                    "const": "failed",
+                    "type": "string"
+                  },
+                  {
+                    "const": "timed-out",
+                    "type": "string"
+                  },
+                  {
+                    "const": "recovery-required",
+                    "type": "string"
+                  }
+                ]
+              },
+              "commandSha256": {
+                "anyOf": [
+                  {
+                    "pattern": "^[0-9a-f]{64}$",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "startedAt": {
+                "anyOf": [
+                  {
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "finishedAt": {
+                "anyOf": [
+                  {
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "exitCode": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "signal": {
+                "anyOf": [
+                  {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "timedOut": {
+                "type": "boolean"
+              },
+              "logPath": {
+                "anyOf": [
+                  {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "logSha256": {
+                "anyOf": [
+                  {
+                    "pattern": "^[0-9a-f]{64}$",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "logTruncated": {
+                "type": "boolean"
+              },
+              "blockedBy": {
+                "uniqueItems": true,
+                "type": "array",
+                "items": {
+                  "minLength": 1,
+                  "description": "Opaque RepositoryId.",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        }
+      }
+    },
+    "effectiveInstructions": {
+      "anyOf": [
+        {
+          "$ref": "heniek://contract/EffectiveInstructionReport/v1"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "createdAt": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "updatedAt": {
+      "format": "date-time",
+      "type": "string"
+    }
+  }
+}

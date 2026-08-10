@@ -414,6 +414,69 @@ describe("Q034 multi-root configuration", () => {
   });
 });
 
+describe("Q035 structured setup configuration", () => {
+  it("resolves V2 setup dependencies and timeout policy", async () => {
+    const repositories = [repository("repo-api", "api"), repository("repo-web", "web")];
+    const result = await resolveCodebaseConfiguration(deps(new GitFixture()), {
+      registration: registration(repositories),
+      documents: [
+        document("codebase", {
+          schemaVersion: 2,
+          codebaseId: "cb-1",
+          repositories: {
+            "repo-api": {
+              expectedPath: "/workspace/api",
+              provisioning: { strategy: "current-checkout" },
+              setup: { command: "pnpm install", dependsOn: [], timeoutMilliseconds: 900000 },
+            },
+            "repo-web": {
+              expectedPath: "/workspace/web",
+              provisioning: { strategy: "current-checkout" },
+              setup: {
+                command: "pnpm install",
+                dependsOn: ["repo-api"],
+                timeoutMilliseconds: 300000,
+              },
+            },
+          },
+        }),
+      ],
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.snapshot.schemaVersion).toBe(2);
+    expect(result.snapshot.repositories[1]?.setup).toMatchObject({
+      dependsOn: ["repo-api"],
+      timeoutMilliseconds: 300000,
+    });
+  });
+
+  it.each([
+    ["codebase.setup-self-dependency", ["repo-managed"]],
+    ["codebase.setup-dependency-missing", ["repo-missing"]],
+  ])("rejects %s", async (code, dependsOn) => {
+    const result = await resolveCodebaseConfiguration(deps(new GitFixture()), {
+      registration: registration(),
+      documents: [
+        document("codebase", {
+          schemaVersion: 2,
+          codebaseId: "cb-1",
+          repositories: {
+            "repo-managed": {
+              expectedPath: "/workspace/api",
+              provisioning: { strategy: "current-checkout" },
+              setup: { command: null, dependsOn, timeoutMilliseconds: 900000 },
+            },
+          },
+        }),
+      ],
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({ code }));
+  });
+});
+
 import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";

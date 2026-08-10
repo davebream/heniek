@@ -3,9 +3,13 @@ import { Ajv } from "ajv";
 import { describe, expect, it } from "vitest";
 import {
   CodebaseConfigurationV1,
+  CodebaseConfigurationV2,
+  CompositeWorkspaceProvisioningManifestV1,
+  EffectiveInstructionReportV1,
   RepositoryBasePinV1,
   RepositoryProvisioningConfigurationV1,
   ResolvedCodebaseSnapshotV1,
+  ResolvedCodebaseSnapshotV2,
   SCHEMA_REGISTRY,
 } from "../src/index.js";
 
@@ -118,5 +122,52 @@ describe("Q034 Codebase configuration contracts", () => {
         basePins: [pin],
       }),
     ).toBe(true);
+  });
+});
+
+describe("Q035 composite workspace contracts", () => {
+  it("accepts structured V2 setup policies while V1 remains registered", () => {
+    const repository = {
+      expectedPath: "/workspace/api",
+      provisioning: { strategy: "current-checkout" as const },
+      setup: { command: "pnpm install", dependsOn: [], timeoutMilliseconds: 900000 },
+    };
+    expect(
+      validate(CodebaseConfigurationV2, {
+        schemaVersion: 2,
+        codebaseId: "cb-1",
+        repositories: { "repo-api": repository },
+      }),
+    ).toBe(true);
+    expect(
+      validate(ResolvedCodebaseSnapshotV2, {
+        schemaVersion: 2,
+        codebaseId: "cb-1",
+        registrationSha256: "1".repeat(64),
+        configurationSha256: "2".repeat(64),
+        resolvedAt: "2026-08-10T12:00:00.000Z",
+        repositories: [
+          {
+            repositoryId: "repo-api",
+            name: "api",
+            path: "/workspace/api",
+            provisioning: repository.provisioning,
+            setup: repository.setup,
+            provenance: [],
+          },
+        ],
+        basePins: [],
+      }),
+    ).toBe(true);
+    expect(CodebaseConfigurationV1.$id).toBe("heniek://contract/CodebaseConfiguration/v1");
+  });
+
+  it("registers composite manifest and effective-instruction report schemas", () => {
+    expect(EffectiveInstructionReportV1.$id).toBe(
+      "heniek://contract/EffectiveInstructionReport/v1",
+    );
+    expect(CompositeWorkspaceProvisioningManifestV1.$id).toBe(
+      "heniek://contract/CompositeWorkspaceProvisioningManifest/v1",
+    );
   });
 });

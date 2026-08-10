@@ -1,4 +1,5 @@
 import { type Static, Type } from "@sinclair/typebox";
+import { EffectiveInstructionReportV1 } from "../codebase/schemas.js";
 import { versioned } from "../kernel/index.js";
 import { VerifyCheckV1 } from "../pipeline/operations.js";
 import { CodebaseId, RepositoryId, WorkspaceId } from "../run/index.js";
@@ -158,6 +159,110 @@ export const WorkspaceProvisioningManifestV1 = versioned("WorkspaceProvisioningM
   updatedAt: IsoDateTime,
 });
 
+const CompositeSetupResult = Type.Object(
+  {
+    state: Type.Union([
+      Type.Literal("pending"),
+      Type.Literal("blocked"),
+      Type.Literal("skipped"),
+      Type.Literal("running"),
+      Type.Literal("succeeded"),
+      Type.Literal("failed"),
+      Type.Literal("timed-out"),
+      Type.Literal("recovery-required"),
+    ]),
+    commandSha256: Type.Union([Sha256, Type.Null()]),
+    startedAt: Type.Union([IsoDateTime, Type.Null()]),
+    finishedAt: Type.Union([IsoDateTime, Type.Null()]),
+    exitCode: Type.Union([Type.Integer(), Type.Null()]),
+    signal: Type.Union([Type.String({ minLength: 1 }), Type.Null()]),
+    timedOut: Type.Boolean(),
+    logPath: Type.Union([Type.String({ minLength: 1 }), Type.Null()]),
+    logSha256: Type.Union([Sha256, Type.Null()]),
+    logTruncated: Type.Boolean(),
+    blockedBy: Type.Array(RepositoryId, { uniqueItems: true }),
+  },
+  { additionalProperties: false },
+);
+
+const CompositeMaterializationResult = Type.Object(
+  {
+    state: Type.Union([
+      Type.Literal("pending"),
+      Type.Literal("running"),
+      Type.Literal("succeeded"),
+      Type.Literal("failed"),
+      Type.Literal("recovery-required"),
+    ]),
+    commandSha256: Type.Union([Sha256, Type.Null()]),
+    startedAt: Type.Union([IsoDateTime, Type.Null()]),
+    finishedAt: Type.Union([IsoDateTime, Type.Null()]),
+    exitCode: Type.Union([Type.Integer(), Type.Null()]),
+    signal: Type.Union([Type.String({ minLength: 1 }), Type.Null()]),
+    timedOut: Type.Boolean(),
+    logPath: Type.Union([Type.String({ minLength: 1 }), Type.Null()]),
+    logSha256: Type.Union([Sha256, Type.Null()]),
+    logTruncated: Type.Boolean(),
+  },
+  { additionalProperties: false },
+);
+
+const CompositeRepositoryProvisioning = Type.Object(
+  {
+    repositoryId: RepositoryId,
+    name: Type.String({ minLength: 1 }),
+    strategy: Type.Union([
+      Type.Literal("managed-worktree"),
+      Type.Literal("current-checkout"),
+      Type.Literal("existing-checkout"),
+      Type.Literal("custom"),
+    ]),
+    phase: Type.Union([
+      Type.Literal("pending"),
+      Type.Literal("materializing"),
+      Type.Literal("materialized"),
+      Type.Literal("setup-running"),
+      Type.Literal("completed"),
+      Type.Literal("failed"),
+      Type.Literal("blocked"),
+      Type.Literal("recovery-required"),
+    ]),
+    checkoutPath: Type.Union([Type.String({ minLength: 1 }), Type.Null()]),
+    gitCommonDirectory: Type.Union([Type.String({ minLength: 1 }), Type.Null()]),
+    baseSha: Type.Union([Type.String({ pattern: "^[0-9a-f]{40}(?:[0-9a-f]{24})?$" }), Type.Null()]),
+    checkoutHeadSha: Type.Union([
+      Type.String({ pattern: "^[0-9a-f]{40}(?:[0-9a-f]{24})?$" }),
+      Type.Null(),
+    ]),
+    materialization: CompositeMaterializationResult,
+    setup: CompositeSetupResult,
+    updatedAt: IsoDateTime,
+  },
+  { additionalProperties: false },
+);
+
+export const CompositeWorkspaceProvisioningManifestV1 = versioned(
+  "CompositeWorkspaceProvisioningManifest",
+  1,
+  {
+    workspaceId: WorkspaceId,
+    codebaseId: CodebaseId,
+    configurationSha256: Sha256,
+    lifecycle: Type.Union([
+      Type.Literal("provisioning"),
+      Type.Literal("ready"),
+      Type.Literal("partial-failure"),
+      Type.Literal("blocked"),
+      Type.Literal("recovery-required"),
+    ]),
+    workspaceRoot: Type.String({ minLength: 1 }),
+    repositories: Type.Array(CompositeRepositoryProvisioning, { minItems: 1 }),
+    effectiveInstructions: Type.Union([Type.Ref(EffectiveInstructionReportV1), Type.Null()]),
+    createdAt: IsoDateTime,
+    updatedAt: IsoDateTime,
+  },
+);
+
 const WriterProcessWitness = Type.Object(
   {
     kind: Type.Union([Type.Literal("process"), Type.Literal("process-group")]),
@@ -212,5 +317,8 @@ export type WorkspaceConfigurationV2 = Static<typeof WorkspaceConfigurationV2>;
 /** @deprecated Prefer an explicit V1/V2 alias; retained as V1 for existing call sites. */
 export type WorkspaceConfiguration = WorkspaceConfigurationV1;
 export type WorkspaceProvisioningManifest = Static<typeof WorkspaceProvisioningManifestV1>;
+export type CompositeWorkspaceProvisioningManifest = Static<
+  typeof CompositeWorkspaceProvisioningManifestV1
+>;
 export type WorkspaceWriterLease = Static<typeof WorkspaceWriterLeaseV1>;
 export type WorkspaceSynchronizationResult = Static<typeof WorkspaceSynchronizationResultV1>;

@@ -16,6 +16,7 @@ export type WorkspaceErrorCode =
   | "LEASE_OWNER_ALIVE"
   | "LEASE_OWNER_UNKNOWN"
   | "SETUP_FAILED"
+  | "INSTRUCTION_CHANGED"
   | "RECOVERY_REQUIRED";
 
 export class WorkspaceError extends Error {

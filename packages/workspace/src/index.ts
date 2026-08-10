@@ -1,3 +1,4 @@
+export * from "./composite.js";
 export * from "./errors.js";
 export * from "./lease.js";
 export * from "./runtime/node.js";
