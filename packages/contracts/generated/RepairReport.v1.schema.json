@@ -1,0 +1,200 @@
+{
+  "$id": "heniek://contract/RepairReport/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "reportId",
+    "runId",
+    "stageId",
+    "sourceArtifactIds",
+    "markdown",
+    "createdAt",
+    "sourceReportId",
+    "entries"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "reportId": {
+      "minLength": 1,
+      "maxLength": 128,
+      "type": "string"
+    },
+    "runId": {
+      "minLength": 1,
+      "description": "Opaque RunId.",
+      "type": "string"
+    },
+    "stageId": {
+      "minLength": 1,
+      "description": "Opaque PipelineStageId.",
+      "type": "string"
+    },
+    "sourceArtifactIds": {
+      "uniqueItems": true,
+      "type": "array",
+      "items": {
+        "minLength": 1,
+        "description": "Opaque ArtifactId.",
+        "type": "string"
+      }
+    },
+    "markdown": {
+      "minLength": 1,
+      "maxLength": 16384,
+      "type": "string"
+    },
+    "createdAt": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "sourceReportId": {
+      "minLength": 1,
+      "maxLength": 128,
+      "type": "string"
+    },
+    "entries": {
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "findingId",
+          "outcome",
+          "evidence"
+        ],
+        "properties": {
+          "findingId": {
+            "minLength": 3,
+            "maxLength": 64,
+            "pattern": "^[A-Z][A-Z0-9_-]*$",
+            "type": "string"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "const": "applied",
+                "type": "string"
+              },
+              {
+                "const": "skipped",
+                "type": "string"
+              },
+              {
+                "const": "failed",
+                "type": "string"
+              }
+            ]
+          },
+          "reason": {
+            "minLength": 1,
+            "maxLength": 16384,
+            "type": "string"
+          },
+          "evidence": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "kind",
+                    "path",
+                    "startLine"
+                  ],
+                  "properties": {
+                    "kind": {
+                      "const": "source",
+                      "type": "string"
+                    },
+                    "path": {
+                      "minLength": 1,
+                      "maxLength": 1024,
+                      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\u0000).+$",
+                      "type": "string"
+                    },
+                    "startLine": {
+                      "minimum": 1,
+                      "type": "integer"
+                    },
+                    "endLine": {
+                      "minimum": 1,
+                      "type": "integer"
+                    },
+                    "contentHash": {
+                      "minLength": 64,
+                      "maxLength": 64,
+                      "pattern": "^[0-9a-f]{64}$",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "kind",
+                    "checkId",
+                    "exitCode"
+                  ],
+                  "properties": {
+                    "kind": {
+                      "const": "command",
+                      "type": "string"
+                    },
+                    "checkId": {
+                      "minLength": 1,
+                      "maxLength": 128,
+                      "type": "string"
+                    },
+                    "exitCode": {
+                      "minimum": 0,
+                      "maximum": 255,
+                      "type": "integer"
+                    },
+                    "artifactId": {
+                      "minLength": 1,
+                      "description": "Opaque ArtifactId.",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "kind",
+                    "artifactId",
+                    "contentHash"
+                  ],
+                  "properties": {
+                    "kind": {
+                      "const": "artifact",
+                      "type": "string"
+                    },
+                    "artifactId": {
+                      "minLength": 1,
+                      "description": "Opaque ArtifactId.",
+                      "type": "string"
+                    },
+                    "contentHash": {
+                      "minLength": 64,
+                      "maxLength": 64,
+                      "pattern": "^[0-9a-f]{64}$",
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  }
+}

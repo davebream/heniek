@@ -18,6 +18,12 @@ export {
 } from "./process.js";
 export { createPublishStageRunner } from "./publish.js";
 export { redactFailureMessage } from "./redact.js";
+export {
+  contentSchemaIdForReviewReport,
+  isReviewReportSchemaName,
+  type StructuredReportValidation,
+  validateStructuredReviewReport,
+} from "./structured-report.js";
 export type {
   AgentStageRunnerDeps,
   ApprovalDecision,

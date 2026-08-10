@@ -162,6 +162,16 @@ export {
   type WitnessClassifier,
 } from "./native-bridge/store.js";
 export {
+  type FindingReportKind,
+  type ListRunFindingsFilter,
+  listRunFindings,
+  type RecordFindingReportInput,
+  type RecordFindingReportResult,
+  rebuildFindingProjection,
+  recordFindingReport,
+  validateFindingReportIngestion,
+} from "./pipeline/finding-store.js";
+export {
   type InsertContinuationCapsuleInput,
   type InsertExecutionSegmentInput,
   type InsertFusionDecisionInput,

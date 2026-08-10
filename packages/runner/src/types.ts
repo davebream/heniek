@@ -19,6 +19,7 @@ import type {
   PipelineGraphV1,
   PublishRequestV1,
   ResolvedProfileSchemaV2,
+  ReviewReportSchemaName,
   StageRunnerAttemptV1,
   StageRunnerAttemptV2,
   StageRunnerCleanupReportV1,
@@ -228,6 +229,7 @@ export type ResolveAgentInvocation = () => Promise<{
   readonly prompt: string;
   readonly artifactPath: string;
   readonly inputArtifactRefs: readonly ArtifactId[];
+  readonly structuredSchemaName?: ReviewReportSchemaName;
 }>;
 
 export interface AgentStageRunnerDeps {

@@ -1,0 +1,52 @@
+{
+  "schemaVersion": "heniek.careful-run-export.v1",
+  "runId": "run-careful-e2e",
+  "pipeline": "careful.v1",
+  "stages": [
+    "understand-design",
+    "critique",
+    "revise-plan",
+    "plan-review",
+    "build",
+    "code-review",
+    "repair",
+    "verify",
+    "final-verification",
+    "publish"
+  ],
+  "repairAttempts": 2,
+  "deterministicChecks": {
+    "artifactId": "artifact-checks",
+    "passed": true
+  },
+  "findings": [
+    {
+      "findingId": "F_CODE_1",
+      "severity": "critical",
+      "disposition": "accepted",
+      "claimVerificationState": "verified",
+      "repairState": "applied",
+      "resolutionState": "fixed"
+    },
+    {
+      "findingId": "F_CODE_2",
+      "severity": "minor",
+      "disposition": "rejected",
+      "claimVerificationState": "retracted",
+      "repairState": "not_required",
+      "resolutionState": "not_applicable"
+    },
+    {
+      "findingId": "F_DESIGN_1",
+      "severity": "major",
+      "disposition": "accepted",
+      "claimVerificationState": "verified",
+      "repairState": "applied",
+      "resolutionState": "fixed"
+    }
+  ],
+  "publication": {
+    "gatedBy": ["verify", "final-verification"],
+    "status": "ready"
+  }
+}

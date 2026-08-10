@@ -9,6 +9,7 @@
  * operations after restart. Evaluator intents stay ignored.
  */
 
+import { createHash } from "node:crypto";
 import { mkdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type {
@@ -23,6 +24,7 @@ import type {
   PublishRequestV1,
   ResolvedProfileChainV1,
   ResolvedProfileSchemaV2,
+  StructuredReviewReport,
   VerifyRequestV1,
   WorkspaceId,
 } from "@heniek/contracts";
@@ -34,6 +36,7 @@ import {
 } from "@heniek/pipeline";
 import {
   type ApprovalStageRunner,
+  contentSchemaIdForReviewReport,
   createAgentStageRunner,
   createApprovalStageRunner,
   createCommandStageRunner,
@@ -42,6 +45,7 @@ import {
   createPublishStageRunner,
   createVerifyStageRunner,
   type GitIntegrationAdapter,
+  isReviewReportSchemaName,
   type StageRunner,
   type StageRunnerPrepareInput,
   type StageRunnerRetryDirective,
@@ -68,6 +72,7 @@ import {
   readRunnerAttempt,
   readRunnerOperationState,
   reconstructRunnerOperation,
+  recordFindingReport,
   recordPipelineObservation,
   recordRecoveryApproval,
   recordRunnerApprovalAnswer,
@@ -77,6 +82,7 @@ import {
   updateRunnerAttempt,
   updateRunnerOperationState,
   upsertCanonicalRunState,
+  validateFindingReportIngestion,
 } from "@heniek/state";
 import { validateExecutionWorkspace, type WorkspaceService } from "@heniek/workspace";
 import type { Static } from "@sinclair/typebox";
@@ -386,18 +392,35 @@ function defaultAgentInvocation(stage: StageRunnerPrepareInput["stage"]): {
   readonly prompt: string;
   readonly artifactPath: string;
   readonly inputArtifactRefs: readonly ArtifactId[];
+  readonly structuredSchemaName?: import("@heniek/contracts").ReviewReportSchemaName;
 } {
   const artifactRequirement = stage.completion?.require.find(
     (requirement) => requirement.kind === "artifact",
   );
+  const structuredRequirement = stage.completion?.require.find(
+    (requirement) =>
+      requirement.kind === "schema_check" &&
+      (requirement.name === "review-report-v1" ||
+        requirement.name === "repair-report-v1" ||
+        requirement.name === "final-verification-report-v1"),
+  );
   const artifactPath =
     artifactRequirement !== undefined && artifactRequirement.kind === "artifact"
-      ? `artifacts/${artifactRequirement.name}.md`
+      ? `artifacts/${artifactRequirement.name}.${structuredRequirement === undefined ? "md" : "json"}`
       : `artifacts/${stage.id}/result.md`;
   return {
-    prompt: `Execute pipeline stage ${stage.id} (${stage.type}).`,
+    prompt:
+      structuredRequirement === undefined || structuredRequirement.kind !== "schema_check"
+        ? `Execute pipeline stage ${stage.id} (${stage.type}).`
+        : `Execute pipeline stage ${stage.id} (${stage.type}). Write exactly one JSON artifact satisfying ${structuredRequirement.name}; include its human-readable Markdown in the contract's markdown field.`,
     artifactPath,
     inputArtifactRefs: [],
+    ...(structuredRequirement === undefined || structuredRequirement.kind !== "schema_check"
+      ? {}
+      : {
+          structuredSchemaName:
+            structuredRequirement.name as import("@heniek/contracts").ReviewReportSchemaName,
+        }),
   };
 }
 
@@ -822,17 +845,55 @@ export function createPipelineRunnerService(
     ) {
       try {
         const bytes = await readFile(join(attempt.checkoutPath, finalized.result.artifactPath));
+        const schemaEvidence = finalized.result.evidence.find(
+          (item) =>
+            item.kind === "schema_check" && item.satisfied && item.requirement !== undefined,
+        );
+        const schemaName = schemaEvidence?.requirement?.replace(/^schema_check:/, "");
+        const structuredSchemaName =
+          schemaName !== undefined && isReviewReportSchemaName(schemaName) ? schemaName : undefined;
+        const structuredReport =
+          structuredSchemaName === undefined
+            ? undefined
+            : (JSON.parse(bytes.toString("utf8")) as StructuredReviewReport);
+        if (structuredReport !== undefined) {
+          validateFindingReportIngestion(options.db, {
+            artifactId: `pending:${attemptId}`,
+            contentHash: createHash("sha256").update(bytes).digest("hex"),
+            report: structuredReport,
+          });
+        }
         finalizeStageArtifact(options.db, artifactStore, {
           runId: attempt.runId,
           stageId: attempt.stageId,
           summary: finalized.result.summary,
           artifactPath: finalized.result.artifactPath,
           bytes,
-          mediaType: "application/octet-stream",
+          mediaType:
+            structuredSchemaName === undefined ? "application/octet-stream" : "application/json",
+          ...(structuredSchemaName === undefined
+            ? {}
+            : { contentSchemaId: contentSchemaIdForReviewReport(structuredSchemaName) }),
           producer: `pipeline-runner:${attempt.stageType}`,
           sourceLineage: [`attempt:${attemptId}`],
+          ...(structuredSchemaName === undefined
+            ? {}
+            : {
+                onPublished: (receipt) => {
+                  recordFindingReport(options.db, {
+                    artifactId: receipt.artifactId,
+                    contentHash: receipt.contentHash,
+                    report: structuredReport as StructuredReviewReport,
+                  });
+                },
+              }),
         });
-      } catch {
+      } catch (error) {
+        if (
+          finalized.result.evidence.some((item) => item.kind === "schema_check" && item.satisfied)
+        ) {
+          throw error;
+        }
         // Validation already decided; missing bytes do not invent success.
       }
     }
