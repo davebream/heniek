@@ -14,8 +14,49 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  q033-spike:
+    name: q033-spike (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - macos-latest
+          - ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        with:
+          run_install: false
+
+      - name: Install Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run ten-repository composite spike
+        run: pnpm --filter @heniek/workspace spike:q033 -- --output "${RUNNER_TEMP}/q033-evidence"
+
+      - name: Upload platform evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: q033-evidence-${{ matrix.os }}
+          path: ${{ runner.temp }}/q033-evidence/*.json
+          if-no-files-found: error
+
   quality:
     name: quality
+    needs: q033-spike
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "heniek.q033-fixture/v1",
+  "repositories": [
+    { "name": "contracts", "dependencies": [], "writable": false },
+    { "name": "shared", "dependencies": [], "writable": false },
+    { "name": "api", "dependencies": ["contracts", "shared"], "writable": true },
+    { "name": "worker", "dependencies": ["api"], "writable": false },
+    { "name": "web", "dependencies": ["api", "shared"], "writable": true },
+    { "name": "admin", "dependencies": ["api", "shared"], "writable": false },
+    { "name": "mobile", "dependencies": ["api", "shared"], "writable": false },
+    { "name": "docs", "dependencies": ["contracts"], "writable": false },
+    { "name": "infra", "dependencies": ["api", "worker"], "writable": false },
+    { "name": "e2e", "dependencies": ["web", "admin", "api"], "writable": true }
+  ]
+}
