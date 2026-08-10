@@ -1,11 +1,12 @@
 import { type Static, Type } from "@sinclair/typebox";
 import { EffectiveInstructionReportV1 } from "../codebase/schemas.js";
 import { versioned } from "../kernel/index.js";
-import { VerifyCheckV1 } from "../pipeline/operations.js";
-import { CodebaseId, RepositoryId, WorkspaceId } from "../run/index.js";
+import { IntegrationResultV1, VerifyCheckV1 } from "../pipeline/operations.js";
+import { CodebaseId, RepositoryId, WorkspaceId, WorkspaceVariantId } from "../run/index.js";
 
 const Sha256 = Type.String({ pattern: "^[0-9a-f]{64}$" });
 const IsoDateTime = Type.String({ format: "date-time" });
+const GitObjectId = Type.String({ pattern: "^[0-9a-f]{40}(?:[0-9a-f]{24})?$" });
 
 export const WorkspaceSynchronizationStrategy = Type.Union([
   Type.Literal("notify"),
@@ -263,6 +264,120 @@ export const CompositeWorkspaceProvisioningManifestV1 = versioned(
   },
 );
 
+export const WorkspaceVariantIntegrationStrategy = Type.Union([
+  Type.Literal("select-best"),
+  Type.Literal("synthesize"),
+  Type.Literal("manual"),
+]);
+
+const WorkspaceVariantRepository = Type.Object(
+  {
+    repositoryId: RepositoryId,
+    name: Type.String({ minLength: 1 }),
+    access: Type.Union([Type.Literal("write"), Type.Literal("read-only")]),
+    materialization: Type.Union([Type.Literal("worktree"), Type.Literal("clone")]),
+    checkoutPath: Type.String({ minLength: 1 }),
+    sourceCheckoutPath: Type.String({ minLength: 1 }),
+    targetRef: Type.String({ minLength: 1, maxLength: 256 }),
+    expectedTargetSha: GitObjectId,
+    observedHeadSha: GitObjectId,
+    leaseId: Type.Union([Type.String({ minLength: 1 }), Type.Null()]),
+    readOnlyBaseline: Type.Union([
+      Type.Object(
+        {
+          head: GitObjectId,
+          indexTree: GitObjectId,
+          trackedPatchHash: Sha256,
+          untracked: Type.Array(
+            Type.Object(
+              { path: Type.String({ minLength: 1 }), hash: Sha256 },
+              { additionalProperties: false },
+            ),
+          ),
+        },
+        { additionalProperties: false },
+      ),
+      Type.Null(),
+    ]),
+    phase: Type.Union([
+      Type.Literal("ready"),
+      Type.Literal("prepared"),
+      Type.Literal("integrated"),
+      Type.Literal("already-applied"),
+      Type.Literal("conflict"),
+      Type.Literal("stale"),
+      Type.Literal("recovery-required"),
+    ]),
+    candidateSha: Type.Union([GitObjectId, Type.Null()]),
+    resultSha: Type.Union([GitObjectId, Type.Null()]),
+  },
+  { additionalProperties: false },
+);
+
+export const WorkspaceVariantManifestV1 = versioned("WorkspaceVariantManifest", 1, {
+  workspaceId: WorkspaceId,
+  variantId: WorkspaceVariantId,
+  strategy: WorkspaceVariantIntegrationStrategy,
+  lifecycle: Type.Union([
+    Type.Literal("provisioning"),
+    Type.Literal("ready"),
+    Type.Literal("prepared"),
+    Type.Literal("integrated"),
+    Type.Literal("conflict"),
+    Type.Literal("partial-progress"),
+    Type.Literal("recovery-required"),
+  ]),
+  variantRoot: Type.String({ minLength: 1 }),
+  repositories: Type.Array(WorkspaceVariantRepository, { minItems: 1 }),
+  createdAt: IsoDateTime,
+  updatedAt: IsoDateTime,
+});
+
+export const VariantIntegrationRequestV1 = versioned("VariantIntegrationRequest", 1, {
+  workspaceId: WorkspaceId,
+  variantId: WorkspaceVariantId,
+  strategy: WorkspaceVariantIntegrationStrategy,
+  requestedAt: IsoDateTime,
+});
+
+export const VariantIntegrationResultV1 = versioned("VariantIntegrationResult", 1, {
+  workspaceId: WorkspaceId,
+  variantId: WorkspaceVariantId,
+  strategy: WorkspaceVariantIntegrationStrategy,
+  classification: Type.Union([
+    Type.Literal("integrated"),
+    Type.Literal("already-applied"),
+    Type.Literal("conflict"),
+    Type.Literal("stale-source"),
+    Type.Literal("stale-target"),
+    Type.Literal("partial-progress"),
+    Type.Literal("recovery-required"),
+  ]),
+  repositories: Type.Array(Type.Ref(IntegrationResultV1), { minItems: 1 }),
+  finishedAt: IsoDateTime,
+});
+
+export const VariantIntegrationTraceV1 = versioned("VariantIntegrationTrace", 1, {
+  workspaceId: WorkspaceId,
+  variantId: WorkspaceVariantId,
+  sequence: Type.Integer({ minimum: 1 }),
+  repositoryId: Type.Union([RepositoryId, Type.Null()]),
+  phase: Type.Union([
+    Type.Literal("intent-recorded"),
+    Type.Literal("source-observed"),
+    Type.Literal("target-observed"),
+    Type.Literal("merge-prepared"),
+    Type.Literal("ref-update-attempted"),
+    Type.Literal("ref-update-observed"),
+    Type.Literal("completed"),
+  ]),
+  expectedSha: Type.Union([GitObjectId, Type.Null()]),
+  observedSha: Type.Union([GitObjectId, Type.Null()]),
+  candidateSha: Type.Union([GitObjectId, Type.Null()]),
+  classification: Type.Union([Type.String({ minLength: 1 }), Type.Null()]),
+  recordedAt: IsoDateTime,
+});
+
 const WriterProcessWitness = Type.Object(
   {
     kind: Type.Union([Type.Literal("process"), Type.Literal("process-group")]),
@@ -320,5 +435,9 @@ export type WorkspaceProvisioningManifest = Static<typeof WorkspaceProvisioningM
 export type CompositeWorkspaceProvisioningManifest = Static<
   typeof CompositeWorkspaceProvisioningManifestV1
 >;
+export type WorkspaceVariantManifest = Static<typeof WorkspaceVariantManifestV1>;
+export type VariantIntegrationRequest = Static<typeof VariantIntegrationRequestV1>;
+export type VariantIntegrationResult = Static<typeof VariantIntegrationResultV1>;
+export type VariantIntegrationTrace = Static<typeof VariantIntegrationTraceV1>;
 export type WorkspaceWriterLease = Static<typeof WorkspaceWriterLeaseV1>;
 export type WorkspaceSynchronizationResult = Static<typeof WorkspaceSynchronizationResultV1>;

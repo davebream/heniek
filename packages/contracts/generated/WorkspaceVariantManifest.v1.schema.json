@@ -1,0 +1,289 @@
+{
+  "$id": "heniek://contract/WorkspaceVariantManifest/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "workspaceId",
+    "variantId",
+    "strategy",
+    "lifecycle",
+    "variantRoot",
+    "repositories",
+    "createdAt",
+    "updatedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "workspaceId": {
+      "minLength": 1,
+      "description": "Opaque WorkspaceId.",
+      "type": "string"
+    },
+    "variantId": {
+      "minLength": 1,
+      "description": "Opaque WorkspaceVariantId.",
+      "type": "string"
+    },
+    "strategy": {
+      "anyOf": [
+        {
+          "const": "select-best",
+          "type": "string"
+        },
+        {
+          "const": "synthesize",
+          "type": "string"
+        },
+        {
+          "const": "manual",
+          "type": "string"
+        }
+      ]
+    },
+    "lifecycle": {
+      "anyOf": [
+        {
+          "const": "provisioning",
+          "type": "string"
+        },
+        {
+          "const": "ready",
+          "type": "string"
+        },
+        {
+          "const": "prepared",
+          "type": "string"
+        },
+        {
+          "const": "integrated",
+          "type": "string"
+        },
+        {
+          "const": "conflict",
+          "type": "string"
+        },
+        {
+          "const": "partial-progress",
+          "type": "string"
+        },
+        {
+          "const": "recovery-required",
+          "type": "string"
+        }
+      ]
+    },
+    "variantRoot": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "repositories": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "repositoryId",
+          "name",
+          "access",
+          "materialization",
+          "checkoutPath",
+          "sourceCheckoutPath",
+          "targetRef",
+          "expectedTargetSha",
+          "observedHeadSha",
+          "leaseId",
+          "readOnlyBaseline",
+          "phase",
+          "candidateSha",
+          "resultSha"
+        ],
+        "properties": {
+          "repositoryId": {
+            "minLength": 1,
+            "description": "Opaque RepositoryId.",
+            "type": "string"
+          },
+          "name": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "access": {
+            "anyOf": [
+              {
+                "const": "write",
+                "type": "string"
+              },
+              {
+                "const": "read-only",
+                "type": "string"
+              }
+            ]
+          },
+          "materialization": {
+            "anyOf": [
+              {
+                "const": "worktree",
+                "type": "string"
+              },
+              {
+                "const": "clone",
+                "type": "string"
+              }
+            ]
+          },
+          "checkoutPath": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "sourceCheckoutPath": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "targetRef": {
+            "minLength": 1,
+            "maxLength": 256,
+            "type": "string"
+          },
+          "expectedTargetSha": {
+            "pattern": "^[0-9a-f]{40}(?:[0-9a-f]{24})?$",
+            "type": "string"
+          },
+          "observedHeadSha": {
+            "pattern": "^[0-9a-f]{40}(?:[0-9a-f]{24})?$",
+            "type": "string"
+          },
+          "leaseId": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "readOnlyBaseline": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                  "head",
+                  "indexTree",
+                  "trackedPatchHash",
+                  "untracked"
+                ],
+                "properties": {
+                  "head": {
+                    "pattern": "^[0-9a-f]{40}(?:[0-9a-f]{24})?$",
+                    "type": "string"
+                  },
+                  "indexTree": {
+                    "pattern": "^[0-9a-f]{40}(?:[0-9a-f]{24})?$",
+                    "type": "string"
+                  },
+                  "trackedPatchHash": {
+                    "pattern": "^[0-9a-f]{64}$",
+                    "type": "string"
+                  },
+                  "untracked": {
+                    "type": "array",
+                    "items": {
+                      "additionalProperties": false,
+                      "type": "object",
+                      "required": [
+                        "path",
+                        "hash"
+                      ],
+                      "properties": {
+                        "path": {
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "hash": {
+                          "pattern": "^[0-9a-f]{64}$",
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "phase": {
+            "anyOf": [
+              {
+                "const": "ready",
+                "type": "string"
+              },
+              {
+                "const": "prepared",
+                "type": "string"
+              },
+              {
+                "const": "integrated",
+                "type": "string"
+              },
+              {
+                "const": "already-applied",
+                "type": "string"
+              },
+              {
+                "const": "conflict",
+                "type": "string"
+              },
+              {
+                "const": "stale",
+                "type": "string"
+              },
+              {
+                "const": "recovery-required",
+                "type": "string"
+              }
+            ]
+          },
+          "candidateSha": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{40}(?:[0-9a-f]{24})?$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "resultSha": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{40}(?:[0-9a-f]{24})?$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "createdAt": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "updatedAt": {
+      "format": "date-time",
+      "type": "string"
+    }
+  }
+}

@@ -1136,6 +1136,24 @@
       "path": "generated/TaskContext.v1.schema.json"
     },
     {
+      "schemaId": "heniek://contract/VariantIntegrationRequest/v1",
+      "schemaVersion": 1,
+      "sha256": "d0c57fec9a67ab44b83a3e81eac0cfce122365a42dcce602b907ffb7a4769b04",
+      "path": "generated/VariantIntegrationRequest.v1.schema.json"
+    },
+    {
+      "schemaId": "heniek://contract/VariantIntegrationResult/v1",
+      "schemaVersion": 1,
+      "sha256": "313e0af114c04ca9bb6bb5c473d7008bf0671903c18e75683d230b0ae28658b2",
+      "path": "generated/VariantIntegrationResult.v1.schema.json"
+    },
+    {
+      "schemaId": "heniek://contract/VariantIntegrationTrace/v1",
+      "schemaVersion": 1,
+      "sha256": "325395b3a8923f936ff08a5c67b60d58b8e83d6c50e70bb4e2ed674712e6735d",
+      "path": "generated/VariantIntegrationTrace.v1.schema.json"
+    },
+    {
       "schemaId": "heniek://contract/VerifyCheck/v1",
       "schemaVersion": 1,
       "sha256": "e02774c22149725ec94915721fdafe50fe984d5fd25bea1ea14d85268eb432f0",
@@ -1182,6 +1200,12 @@
       "schemaVersion": 1,
       "sha256": "2fe27587400747272e5acf288c4ab05d0495bf216c7e3fdf1d97e0ef1278abbf",
       "path": "generated/WorkspaceSynchronizationResult.v1.schema.json"
+    },
+    {
+      "schemaId": "heniek://contract/WorkspaceVariantManifest/v1",
+      "schemaVersion": 1,
+      "sha256": "75bc2ea16a2d503c4b291ee0ed1ab43e6b57e10ac37545f1313200effdd205e3",
+      "path": "generated/WorkspaceVariantManifest.v1.schema.json"
     },
     {
       "schemaId": "heniek://contract/WorkspaceWriterLease/v1",

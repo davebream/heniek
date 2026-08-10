@@ -1,0 +1,48 @@
+{
+  "$id": "heniek://contract/VariantIntegrationRequest/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "workspaceId",
+    "variantId",
+    "strategy",
+    "requestedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "workspaceId": {
+      "minLength": 1,
+      "description": "Opaque WorkspaceId.",
+      "type": "string"
+    },
+    "variantId": {
+      "minLength": 1,
+      "description": "Opaque WorkspaceVariantId.",
+      "type": "string"
+    },
+    "strategy": {
+      "anyOf": [
+        {
+          "const": "select-best",
+          "type": "string"
+        },
+        {
+          "const": "synthesize",
+          "type": "string"
+        },
+        {
+          "const": "manual",
+          "type": "string"
+        }
+      ]
+    },
+    "requestedAt": {
+      "format": "date-time",
+      "type": "string"
+    }
+  }
+}

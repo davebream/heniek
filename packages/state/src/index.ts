@@ -387,3 +387,7 @@ export {
   updateAttemptLimits,
   type WorkspacePermission,
 } from "./scheduling/store.js";
+export {
+  createWorkspaceVariantStateStore,
+  type WorkspaceVariantStateStore,
+} from "./workspace/variant-store.js";

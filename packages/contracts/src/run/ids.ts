@@ -10,5 +10,8 @@ export type RepositoryId = Static<typeof RepositoryId>;
 export const WorkspaceId = defineIdNamespace("WorkspaceId");
 export type WorkspaceId = Static<typeof WorkspaceId>;
 
+export const WorkspaceVariantId = defineIdNamespace("WorkspaceVariantId");
+export type WorkspaceVariantId = Static<typeof WorkspaceVariantId>;
+
 export const RunId = defineIdNamespace("RunId");
 export type RunId = Static<typeof RunId>;
