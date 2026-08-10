@@ -59,6 +59,8 @@ const EXPECTED_CASE_IDS: readonly string[] = [
   "forge/mark-ready-is-idempotent",
   "forge/mark-ready-rejects-unknown-pull-request-id",
   "forge/rate-limit-is-classified",
+  "pipeline/admission-named-and-one-off-both-accept",
+  "pipeline/attachment-rejects-when-target-not-quiescent",
   "task-source/load-classifies-conflict-fault-for-stale-revision",
   "task-source/load-classifies-rate-limit-fault",
   "task-source/load-increments-revision-after-re-snapshot",

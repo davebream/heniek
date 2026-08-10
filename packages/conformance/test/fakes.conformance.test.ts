@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   EXECUTION_BACKEND_CASES,
   FORGE_BACKEND_CASES,
+  PIPELINE_RUNTIME_CASES,
   TASK_SOURCE_CASES,
 } from "../src/cases/catalogue.js";
 import type { ConformanceCapability } from "../src/contract/capability.js";
@@ -9,11 +10,13 @@ import { missingCapabilities } from "../src/contract/capability.js";
 import {
   createFakeExecutionBackendHarness,
   createFakeForgeBackendHarness,
+  createFakePipelineRuntimeHarness,
   createFakeTaskSourceHarness,
 } from "../src/fakes/index.js";
 import {
   describeExecutionBackendConformance,
   describeForgeBackendConformance,
+  describePipelineRuntimeConformance,
   describeTaskSourceConformance,
 } from "../src/runner/vitest.js";
 
@@ -50,6 +53,13 @@ describe("every fake declares every capability its own catalogue requires (RT2)"
       [],
     );
   });
+
+  it("fake-pipeline-runtime has no missing capability", () => {
+    const harness = createFakePipelineRuntimeHarness();
+    expect(
+      missingCapabilities(harness.capabilities, unionOfRequires(PIPELINE_RUNTIME_CASES)),
+    ).toEqual([]);
+  });
 });
 
 // Every case below must run — none skipped — because each fake declares
@@ -57,3 +67,4 @@ describe("every fake declares every capability its own catalogue requires (RT2)"
 describeExecutionBackendConformance(createFakeExecutionBackendHarness());
 describeTaskSourceConformance(createFakeTaskSourceHarness());
 describeForgeBackendConformance(createFakeForgeBackendHarness());
+describePipelineRuntimeConformance(createFakePipelineRuntimeHarness());

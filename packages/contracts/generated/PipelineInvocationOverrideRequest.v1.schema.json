@@ -1,0 +1,60 @@
+{
+  "$id": "heniek://contract/PipelineInvocationOverrideRequest/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "target",
+    "field",
+    "value"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "target": {
+      "anyOf": [
+        {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "kind"
+          ],
+          "properties": {
+            "kind": {
+              "const": "pipeline",
+              "type": "string"
+            }
+          }
+        },
+        {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "kind",
+            "stageId"
+          ],
+          "properties": {
+            "kind": {
+              "const": "stage",
+              "type": "string"
+            },
+            "stageId": {
+              "minLength": 1,
+              "description": "Opaque PipelineStageId.",
+              "type": "string"
+            }
+          }
+        }
+      ]
+    },
+    "field": {
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+      "type": "string"
+    },
+    "value": {}
+  }
+}

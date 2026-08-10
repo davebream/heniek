@@ -1,0 +1,108 @@
+{
+  "$id": "heniek://contract/PipelineAttachedStageDefinition/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "id",
+    "type"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "id": {
+      "minLength": 1,
+      "description": "Opaque PipelineStageId.",
+      "type": "string"
+    },
+    "type": {
+      "anyOf": [
+        {
+          "const": "agent",
+          "type": "string"
+        },
+        {
+          "const": "command",
+          "type": "string"
+        },
+        {
+          "const": "approval",
+          "type": "string"
+        },
+        {
+          "const": "integration",
+          "type": "string"
+        },
+        {
+          "const": "verify",
+          "type": "string"
+        },
+        {
+          "const": "publish",
+          "type": "string"
+        }
+      ]
+    },
+    "profile": {
+      "minLength": 1,
+      "maxLength": 1024,
+      "type": "string"
+    },
+    "mode": {
+      "anyOf": [
+        {
+          "const": "autonomous",
+          "type": "string"
+        },
+        {
+          "const": "hitl",
+          "type": "string"
+        }
+      ]
+    },
+    "optional": {
+      "type": "boolean"
+    },
+    "reads": {
+      "type": "array",
+      "items": {
+        "minLength": 1,
+        "maxLength": 1024,
+        "type": "string"
+      }
+    },
+    "writes": {
+      "type": "array",
+      "items": {
+        "minLength": 1,
+        "maxLength": 1024,
+        "type": "string"
+      }
+    },
+    "overridable": {
+      "type": "array",
+      "items": {
+        "minLength": 1,
+        "maxLength": 128,
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+        "type": "string"
+      }
+    },
+    "completion": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "require"
+      ],
+      "properties": {
+        "require": {
+          "minItems": 1,
+          "type": "array",
+          "items": {}
+        }
+      }
+    }
+  }
+}

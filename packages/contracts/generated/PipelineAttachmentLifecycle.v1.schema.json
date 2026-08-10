@@ -1,0 +1,107 @@
+{
+  "$id": "heniek://contract/PipelineAttachmentLifecycle/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "attachmentId",
+    "phase",
+    "sourceRunId",
+    "sourceStageId",
+    "targetRunId",
+    "targetStageId",
+    "requestDigest",
+    "artifactIds",
+    "recordedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "attachmentId": {
+      "minLength": 1,
+      "maxLength": 1024,
+      "type": "string"
+    },
+    "phase": {
+      "anyOf": [
+        {
+          "const": "validated",
+          "type": "string"
+        },
+        {
+          "const": "committed",
+          "type": "string"
+        },
+        {
+          "const": "rejected",
+          "type": "string"
+        },
+        {
+          "const": "idempotent-replay",
+          "type": "string"
+        }
+      ]
+    },
+    "sourceRunId": {
+      "minLength": 1,
+      "description": "Opaque RunId.",
+      "type": "string"
+    },
+    "sourceStageId": {
+      "minLength": 1,
+      "description": "Opaque PipelineStageId.",
+      "type": "string"
+    },
+    "targetRunId": {
+      "minLength": 1,
+      "description": "Opaque RunId.",
+      "type": "string"
+    },
+    "targetStageId": {
+      "minLength": 1,
+      "description": "Opaque PipelineStageId.",
+      "type": "string"
+    },
+    "requestDigest": {
+      "minLength": 64,
+      "maxLength": 64,
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "graphRevisionBefore": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "graphRevisionAfter": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "scheduleRevisionAfter": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "runRevisionAfter": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "artifactIds": {
+      "type": "array",
+      "items": {
+        "minLength": 1,
+        "description": "Opaque ArtifactId.",
+        "type": "string"
+      }
+    },
+    "recordedAt": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "detail": {
+      "minLength": 1,
+      "maxLength": 1024,
+      "type": "string"
+    }
+  }
+}

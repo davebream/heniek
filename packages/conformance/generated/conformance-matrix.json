@@ -10,7 +10,9 @@
     "fault-rate-limit",
     "fault-stale-ref",
     "fault-conflict",
-    "fault-crash-recovery"
+    "fault-crash-recovery",
+    "pipeline-admission",
+    "pipeline-attachment"
   ],
   "subjects": [
     {
@@ -52,6 +54,16 @@
         "fault-stale-ref",
         "fault-disconnect",
         "fault-rate-limit"
+      ]
+    },
+    {
+      "id": "fake-pipeline-runtime",
+      "label": "Fake PipelineRuntime",
+      "family": "PipelineRuntime",
+      "availability": "always",
+      "capabilities": [
+        "pipeline-admission",
+        "pipeline-attachment"
       ]
     },
     {
@@ -445,6 +457,28 @@
       ]
     },
     {
+      "caseId": "pipeline/admission-named-and-one-off-both-accept",
+      "family": "PipelineRuntime",
+      "requires": [
+        "pipeline-admission"
+      ],
+      "covers": [
+        "AC1:lifecycle",
+        "Q032:admission-parity"
+      ]
+    },
+    {
+      "caseId": "pipeline/attachment-rejects-when-target-not-quiescent",
+      "family": "PipelineRuntime",
+      "requires": [
+        "pipeline-attachment"
+      ],
+      "covers": [
+        "AC1:lifecycle",
+        "Q032:attachment-quiescence"
+      ]
+    },
+    {
       "caseId": "task-source/load-classifies-conflict-fault-for-stale-revision",
       "family": "TaskSource",
       "requires": [
@@ -527,22 +561,12 @@
       "covered",
       "unsupported",
       "unsupported",
-      "opt-in"
-    ],
-    [
-      "covered",
-      "unsupported",
       "unsupported",
       "opt-in"
     ],
     [
       "covered",
       "unsupported",
-      "unsupported",
-      "opt-in"
-    ],
-    [
-      "covered",
       "unsupported",
       "unsupported",
       "opt-in"
@@ -551,22 +575,12 @@
       "covered",
       "unsupported",
       "unsupported",
+      "unsupported",
       "opt-in"
     ],
     [
       "covered",
       "unsupported",
-      "unsupported",
-      "unsupported"
-    ],
-    [
-      "covered",
-      "unsupported",
-      "unsupported",
-      "unsupported"
-    ],
-    [
-      "covered",
       "unsupported",
       "unsupported",
       "opt-in"
@@ -575,22 +589,12 @@
       "covered",
       "unsupported",
       "unsupported",
-      "opt-in"
-    ],
-    [
-      "covered",
-      "unsupported",
       "unsupported",
       "opt-in"
     ],
     [
       "covered",
       "unsupported",
-      "unsupported",
-      "opt-in"
-    ],
-    [
-      "covered",
       "unsupported",
       "unsupported",
       "unsupported"
@@ -599,10 +603,12 @@
       "covered",
       "unsupported",
       "unsupported",
-      "opt-in"
+      "unsupported",
+      "unsupported"
     ],
     [
       "covered",
+      "unsupported",
       "unsupported",
       "unsupported",
       "opt-in"
@@ -611,16 +617,12 @@
       "covered",
       "unsupported",
       "unsupported",
-      "unsupported"
+      "unsupported",
+      "opt-in"
     ],
     [
       "covered",
       "unsupported",
-      "unsupported",
-      "unsupported"
-    ],
-    [
-      "covered",
       "unsupported",
       "unsupported",
       "opt-in"
@@ -629,11 +631,6 @@
       "covered",
       "unsupported",
       "unsupported",
-      "opt-in"
-    ],
-    [
-      "covered",
-      "unsupported",
       "unsupported",
       "opt-in"
     ],
@@ -641,16 +638,12 @@
       "covered",
       "unsupported",
       "unsupported",
-      "opt-in"
+      "unsupported",
+      "unsupported"
     ],
     [
       "covered",
       "unsupported",
-      "unsupported",
-      "opt-in"
-    ],
-    [
-      "covered",
       "unsupported",
       "unsupported",
       "opt-in"
@@ -659,15 +652,151 @@
       "covered",
       "unsupported",
       "unsupported",
+      "unsupported",
+      "opt-in"
+    ],
+    [
+      "covered",
+      "unsupported",
+      "unsupported",
+      "unsupported",
+      "unsupported"
+    ],
+    [
+      "covered",
+      "unsupported",
+      "unsupported",
+      "unsupported",
+      "unsupported"
+    ],
+    [
+      "covered",
+      "unsupported",
+      "unsupported",
+      "unsupported",
+      "opt-in"
+    ],
+    [
+      "covered",
+      "unsupported",
+      "unsupported",
+      "unsupported",
+      "opt-in"
+    ],
+    [
+      "covered",
+      "unsupported",
+      "unsupported",
+      "unsupported",
+      "opt-in"
+    ],
+    [
+      "covered",
+      "unsupported",
+      "unsupported",
+      "unsupported",
+      "opt-in"
+    ],
+    [
+      "covered",
+      "unsupported",
+      "unsupported",
+      "unsupported",
+      "opt-in"
+    ],
+    [
+      "covered",
+      "unsupported",
+      "unsupported",
+      "unsupported",
+      "opt-in"
+    ],
+    [
+      "covered",
+      "unsupported",
+      "unsupported",
+      "unsupported",
       "opt-in"
     ],
     [
       "unsupported",
       "unsupported",
       "covered",
+      "unsupported",
       "unsupported"
     ],
     [
+      "unsupported",
+      "unsupported",
+      "covered",
+      "unsupported",
+      "unsupported"
+    ],
+    [
+      "unsupported",
+      "unsupported",
+      "covered",
+      "unsupported",
+      "unsupported"
+    ],
+    [
+      "unsupported",
+      "unsupported",
+      "covered",
+      "unsupported",
+      "unsupported"
+    ],
+    [
+      "unsupported",
+      "unsupported",
+      "covered",
+      "unsupported",
+      "unsupported"
+    ],
+    [
+      "unsupported",
+      "unsupported",
+      "covered",
+      "unsupported",
+      "unsupported"
+    ],
+    [
+      "unsupported",
+      "unsupported",
+      "covered",
+      "unsupported",
+      "unsupported"
+    ],
+    [
+      "unsupported",
+      "unsupported",
+      "covered",
+      "unsupported",
+      "unsupported"
+    ],
+    [
+      "unsupported",
+      "unsupported",
+      "covered",
+      "unsupported",
+      "unsupported"
+    ],
+    [
+      "unsupported",
+      "unsupported",
+      "covered",
+      "unsupported",
+      "unsupported"
+    ],
+    [
+      "unsupported",
+      "unsupported",
+      "covered",
+      "unsupported",
+      "unsupported"
+    ],
+    [
+      "unsupported",
       "unsupported",
       "unsupported",
       "covered",
@@ -676,53 +805,6 @@
     [
       "unsupported",
       "unsupported",
-      "covered",
-      "unsupported"
-    ],
-    [
-      "unsupported",
-      "unsupported",
-      "covered",
-      "unsupported"
-    ],
-    [
-      "unsupported",
-      "unsupported",
-      "covered",
-      "unsupported"
-    ],
-    [
-      "unsupported",
-      "unsupported",
-      "covered",
-      "unsupported"
-    ],
-    [
-      "unsupported",
-      "unsupported",
-      "covered",
-      "unsupported"
-    ],
-    [
-      "unsupported",
-      "unsupported",
-      "covered",
-      "unsupported"
-    ],
-    [
-      "unsupported",
-      "unsupported",
-      "covered",
-      "unsupported"
-    ],
-    [
-      "unsupported",
-      "unsupported",
-      "covered",
-      "unsupported"
-    ],
-    [
-      "unsupported",
       "unsupported",
       "covered",
       "unsupported"
@@ -731,11 +813,6 @@
       "unsupported",
       "covered",
       "unsupported",
-      "unsupported"
-    ],
-    [
-      "unsupported",
-      "covered",
       "unsupported",
       "unsupported"
     ],
@@ -743,11 +820,6 @@
       "unsupported",
       "covered",
       "unsupported",
-      "unsupported"
-    ],
-    [
-      "unsupported",
-      "covered",
       "unsupported",
       "unsupported"
     ],
@@ -755,17 +827,34 @@
       "unsupported",
       "covered",
       "unsupported",
-      "unsupported"
-    ],
-    [
-      "unsupported",
-      "covered",
       "unsupported",
       "unsupported"
     ],
     [
       "unsupported",
       "covered",
+      "unsupported",
+      "unsupported",
+      "unsupported"
+    ],
+    [
+      "unsupported",
+      "covered",
+      "unsupported",
+      "unsupported",
+      "unsupported"
+    ],
+    [
+      "unsupported",
+      "covered",
+      "unsupported",
+      "unsupported",
+      "unsupported"
+    ],
+    [
+      "unsupported",
+      "covered",
+      "unsupported",
       "unsupported",
       "unsupported"
     ]

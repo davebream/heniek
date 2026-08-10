@@ -1,0 +1,75 @@
+{
+  "$id": "heniek://contract/PipelineAttachResult/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "accepted",
+    "idempotentReplay",
+    "diagnostics"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "accepted": {
+      "type": "boolean"
+    },
+    "idempotentReplay": {
+      "type": "boolean"
+    },
+    "lifecycle": {
+      "$ref": "heniek://contract/PipelineAttachmentLifecycle/v1"
+    },
+    "rejectionCode": {
+      "minLength": 1,
+      "maxLength": 1024,
+      "type": "string"
+    },
+    "diagnostics": {
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "code",
+          "severity",
+          "message"
+        ],
+        "properties": {
+          "code": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "severity": {
+            "anyOf": [
+              {
+                "const": "error",
+                "type": "string"
+              },
+              {
+                "const": "warning",
+                "type": "string"
+              },
+              {
+                "const": "info",
+                "type": "string"
+              }
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "pointer": {
+            "type": "string"
+          },
+          "suggestion": {
+            "minLength": 1,
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

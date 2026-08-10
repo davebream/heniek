@@ -1,9 +1,11 @@
 import { EXECUTION_BACKEND_CASES } from "./execution-backend.js";
 import { FORGE_BACKEND_CASES } from "./forge-backend.js";
+import { PIPELINE_RUNTIME_CASES } from "./pipeline-runtime.js";
 import { TASK_SOURCE_CASES } from "./task-source.js";
 
 export { EXECUTION_BACKEND_CASES } from "./execution-backend.js";
 export { FORGE_BACKEND_CASES } from "./forge-backend.js";
+export { PIPELINE_RUNTIME_CASES } from "./pipeline-runtime.js";
 export { TASK_SOURCE_CASES } from "./task-source.js";
 
 interface CaseLike {
@@ -26,6 +28,7 @@ const ALL_CASES: readonly CaseLike[] = [
   ...EXECUTION_BACKEND_CASES,
   ...TASK_SOURCE_CASES,
   ...FORGE_BACKEND_CASES,
+  ...PIPELINE_RUNTIME_CASES,
 ];
 
 // Asserted at module load — mirrors `versioned()`'s duplicate guard in

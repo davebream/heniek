@@ -162,6 +162,17 @@ export {
   type WitnessClassifier,
 } from "./native-bridge/store.js";
 export {
+  type AttachAdHocStageInput,
+  type AttachAdHocStageRejectionCode,
+  type AttachAdHocStageResult,
+  attachAdHocStage,
+  type PipelineAttachmentRow,
+  readPipelineAttachment,
+  readPipelineRunSnapshot,
+  type SourceArtifactLink,
+  writePipelineRunSnapshot,
+} from "./pipeline/admission-store.js";
+export {
   type FindingReportKind,
   type ListRunFindingsFilter,
   listRunFindings,

@@ -21,6 +21,12 @@ import type {
   ParentSessionAttachmentV1,
   ParentSessionDetachResultV1,
   PendingInteractionV2,
+  PipelineAttachRequestV1,
+  PipelineAttachResultV1,
+  PipelineRunRequestV1,
+  PipelineRunResultV1,
+  PipelineValidateRequestV1,
+  PipelineValidateResultV1,
   RegisteredCodebase,
   StageRunAnswerResultV2,
   StageRunMutationResultV1,
@@ -101,6 +107,18 @@ import {
   PARENT_SESSION_DETACH_SCHEMA_ID,
   PARENT_SESSION_DETACH_SCHEMA_SHA256,
   PARENT_SESSION_DETACH_V1_METHOD,
+  PIPELINE_ATTACH_METHOD,
+  PIPELINE_ATTACH_SCHEMA_ID,
+  PIPELINE_ATTACH_SCHEMA_SHA256,
+  PIPELINE_ATTACH_V1_METHOD,
+  PIPELINE_RUN_METHOD,
+  PIPELINE_RUN_SCHEMA_ID,
+  PIPELINE_RUN_SCHEMA_SHA256,
+  PIPELINE_RUN_V1_METHOD,
+  PIPELINE_VALIDATE_METHOD,
+  PIPELINE_VALIDATE_SCHEMA_ID,
+  PIPELINE_VALIDATE_SCHEMA_SHA256,
+  PIPELINE_VALIDATE_V1_METHOD,
   REGISTERED_CODEBASE_SCHEMA_ID,
   REGISTERED_CODEBASE_SCHEMA_SHA256,
   RPC_CANCEL_METHOD,
@@ -618,6 +636,27 @@ const ENGINE_CATALOGUE_REQUIREMENT: RpcRequirement = {
   wireMethod: ENGINE_CATALOGUE_V1_METHOD,
   schemaId: CAPABILITY_CATALOGUE_SCHEMA_ID,
   sha256: CAPABILITY_CATALOGUE_SCHEMA_SHA256,
+};
+
+const PIPELINE_VALIDATE_REQUIREMENT: RpcRequirement = {
+  name: PIPELINE_VALIDATE_METHOD,
+  wireMethod: PIPELINE_VALIDATE_V1_METHOD,
+  schemaId: PIPELINE_VALIDATE_SCHEMA_ID,
+  sha256: PIPELINE_VALIDATE_SCHEMA_SHA256,
+};
+
+const PIPELINE_RUN_REQUIREMENT: RpcRequirement = {
+  name: PIPELINE_RUN_METHOD,
+  wireMethod: PIPELINE_RUN_V1_METHOD,
+  schemaId: PIPELINE_RUN_SCHEMA_ID,
+  sha256: PIPELINE_RUN_SCHEMA_SHA256,
+};
+
+const PIPELINE_ATTACH_REQUIREMENT: RpcRequirement = {
+  name: PIPELINE_ATTACH_METHOD,
+  wireMethod: PIPELINE_ATTACH_V1_METHOD,
+  schemaId: PIPELINE_ATTACH_SCHEMA_ID,
+  sha256: PIPELINE_ATTACH_SCHEMA_SHA256,
 };
 
 function parseVersioned<T>(value: unknown, description: string, expectedVersion = 1): T {
@@ -1544,4 +1583,31 @@ export function fetchCapabilityCatalogueViaDaemon(
     "capability catalogue",
     options.signal,
   );
+}
+
+/** Q032 — admit a named or one-off pipeline definition (no schedule write). */
+export function validatePipelineViaDaemon(
+  home: ApplicationHome,
+  request: Static<typeof PipelineValidateRequestV1>,
+  signal?: AbortSignal,
+): Promise<Static<typeof PipelineValidateResultV1>> {
+  return domainCall(home, PIPELINE_VALIDATE_REQUIREMENT, request, "pipeline validate", signal);
+}
+
+/** Q032 — admit, create schedule, and persist the immutable run snapshot. */
+export function runPipelineViaDaemon(
+  home: ApplicationHome,
+  request: Static<typeof PipelineRunRequestV1>,
+  signal?: AbortSignal,
+): Promise<Static<typeof PipelineRunResultV1>> {
+  return domainCall(home, PIPELINE_RUN_REQUIREMENT, request, "pipeline run", signal);
+}
+
+/** Q032 — attach a completed source stage into a live target run. */
+export function attachPipelineStageViaDaemon(
+  home: ApplicationHome,
+  request: Static<typeof PipelineAttachRequestV1>,
+  signal?: AbortSignal,
+): Promise<Static<typeof PipelineAttachResultV1>> {
+  return domainCall(home, PIPELINE_ATTACH_REQUIREMENT, request, "pipeline attach", signal);
 }

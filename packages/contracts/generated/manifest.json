@@ -476,6 +476,36 @@
       "path": "generated/PendingInteraction.v2.schema.json"
     },
     {
+      "schemaId": "heniek://contract/PipelineAppliedOverride/v1",
+      "schemaVersion": 1,
+      "sha256": "261b13f0cf24282a4934396728788c1b6f9c2b43acfb7b0983aaacd4073ed8a6",
+      "path": "generated/PipelineAppliedOverride.v1.schema.json"
+    },
+    {
+      "schemaId": "heniek://contract/PipelineAttachedStageDefinition/v1",
+      "schemaVersion": 1,
+      "sha256": "bbb70b1464208d4c65393c992bd35fd0368fea05245946c93915fddf5006128c",
+      "path": "generated/PipelineAttachedStageDefinition.v1.schema.json"
+    },
+    {
+      "schemaId": "heniek://contract/PipelineAttachmentLifecycle/v1",
+      "schemaVersion": 1,
+      "sha256": "9b151c90c0e4de00c52476e7def8d85e235496fd9685469d4847bab31bcf4dca",
+      "path": "generated/PipelineAttachmentLifecycle.v1.schema.json"
+    },
+    {
+      "schemaId": "heniek://contract/PipelineAttachRequest/v1",
+      "schemaVersion": 1,
+      "sha256": "672bb2d44dff11bd497cbd6e4828521a11a8024eebc2564b2772c39abdc58d8b",
+      "path": "generated/PipelineAttachRequest.v1.schema.json"
+    },
+    {
+      "schemaId": "heniek://contract/PipelineAttachResult/v1",
+      "schemaVersion": 1,
+      "sha256": "c2b7e4ef3d5a7b2cca929e307bb9b1d5a179f225310774bce0a5f7f966afd5a5",
+      "path": "generated/PipelineAttachResult.v1.schema.json"
+    },
+    {
       "schemaId": "heniek://contract/PipelineContinuationCapsule/v1",
       "schemaVersion": 1,
       "sha256": "dc88fa4e396c08fb55c80c755b6d07c52157b720e818a810d4df7d77db1843fc",
@@ -486,6 +516,12 @@
       "schemaVersion": 1,
       "sha256": "8f13880f0509468a85ed5b7e8701e8bdddf00fae640e8c7b3fc4f24b5dec14a1",
       "path": "generated/PipelineDefinition.v1.schema.json"
+    },
+    {
+      "schemaId": "heniek://contract/PipelineDefinitionSource/v1",
+      "schemaVersion": 1,
+      "sha256": "c5f8f22062fce80778d8bd9e13113ca25242335547d4d7968e32605c962d7240",
+      "path": "generated/PipelineDefinitionSource.v1.schema.json"
     },
     {
       "schemaId": "heniek://contract/PipelineExecutionSegment/v1",
@@ -524,6 +560,12 @@
       "path": "generated/PipelineIncomingVerification.v1.schema.json"
     },
     {
+      "schemaId": "heniek://contract/PipelineInvocationOverrideRequest/v1",
+      "schemaVersion": 1,
+      "sha256": "887dd607a23d3789d3a814cf99272a7d78c26e184113d914099c3be07c6a42b3",
+      "path": "generated/PipelineInvocationOverrideRequest.v1.schema.json"
+    },
+    {
       "schemaId": "heniek://contract/PipelineRecoveryDecision/v1",
       "schemaVersion": 1,
       "sha256": "734b2e94ec44e8823002efcff3782474534599da3491bec4a509c609c26adf89",
@@ -534,6 +576,24 @@
       "schemaVersion": 1,
       "sha256": "f89c54e2fb379de9b4b94940da9e16779c6898ba5f6c2a43574ccf345045ab11",
       "path": "generated/PipelineRetryDirective.v1.schema.json"
+    },
+    {
+      "schemaId": "heniek://contract/PipelineRunRequest/v1",
+      "schemaVersion": 1,
+      "sha256": "60a16247059d2b4af15958c93e5496681200b8b98d36a804bfc71689677c6107",
+      "path": "generated/PipelineRunRequest.v1.schema.json"
+    },
+    {
+      "schemaId": "heniek://contract/PipelineRunResult/v1",
+      "schemaVersion": 1,
+      "sha256": "084191f330472f113e55bbc71ae9c75b7f961e1ae3b72993d32f0121a32817e1",
+      "path": "generated/PipelineRunResult.v1.schema.json"
+    },
+    {
+      "schemaId": "heniek://contract/PipelineRunSnapshot/v1",
+      "schemaVersion": 1,
+      "sha256": "9db8b43fa4b873b93001968a53cfe5298a97c483e9df0fbc5781e4b98f2134d4",
+      "path": "generated/PipelineRunSnapshot.v1.schema.json"
     },
     {
       "schemaId": "heniek://contract/PipelineSchedulerDecision/v1",
@@ -624,6 +684,18 @@
       "schemaVersion": 1,
       "sha256": "7ded13132b1385e5ffed72062ae9e5959966b0039dbfb76262eb9a015e3fd768",
       "path": "generated/PipelineStageTransition.v1.schema.json"
+    },
+    {
+      "schemaId": "heniek://contract/PipelineValidateRequest/v1",
+      "schemaVersion": 1,
+      "sha256": "dfb20f9ef646bc242a05c4e8094376d9f5fe60cb35a49f695a35c89aa1a208be",
+      "path": "generated/PipelineValidateRequest.v1.schema.json"
+    },
+    {
+      "schemaId": "heniek://contract/PipelineValidateResult/v1",
+      "schemaVersion": 1,
+      "sha256": "cc43b1eace8beb7509396232b797662871282cbf396da8c0b38561fc30ddd863",
+      "path": "generated/PipelineValidateResult.v1.schema.json"
     },
     {
       "schemaId": "heniek://contract/PipelineValidationResult/v1",

@@ -1,0 +1,139 @@
+{
+  "$id": "heniek://contract/PipelineAppliedOverride/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "target",
+    "field",
+    "value",
+    "source",
+    "redacted"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "target": {
+      "anyOf": [
+        {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "kind"
+          ],
+          "properties": {
+            "kind": {
+              "const": "pipeline",
+              "type": "string"
+            }
+          }
+        },
+        {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "kind",
+            "stageId"
+          ],
+          "properties": {
+            "kind": {
+              "const": "stage",
+              "type": "string"
+            },
+            "stageId": {
+              "minLength": 1,
+              "description": "Opaque PipelineStageId.",
+              "type": "string"
+            }
+          }
+        }
+      ]
+    },
+    "field": {
+      "anyOf": [
+        {
+          "const": "mode",
+          "type": "string"
+        },
+        {
+          "const": "engine",
+          "type": "string"
+        },
+        {
+          "const": "account",
+          "type": "string"
+        },
+        {
+          "const": "billing",
+          "type": "string"
+        },
+        {
+          "const": "model",
+          "type": "string"
+        },
+        {
+          "const": "effort",
+          "type": "string"
+        },
+        {
+          "const": "executor",
+          "type": "string"
+        },
+        {
+          "const": "focus",
+          "type": "string"
+        },
+        {
+          "const": "max_duration",
+          "type": "string"
+        },
+        {
+          "const": "workspace_strategy",
+          "type": "string"
+        },
+        {
+          "const": "max_pipeline_duration",
+          "type": "string"
+        },
+        {
+          "const": "max_concurrent_workers",
+          "type": "string"
+        },
+        {
+          "const": "max_repair_attempts",
+          "type": "string"
+        },
+        {
+          "const": "max_graph_revisions",
+          "type": "string"
+        }
+      ]
+    },
+    "value": {},
+    "source": {
+      "anyOf": [
+        {
+          "const": "invocation",
+          "type": "string"
+        },
+        {
+          "const": "stage-allowlist",
+          "type": "string"
+        },
+        {
+          "const": "profile-allowlist",
+          "type": "string"
+        },
+        {
+          "const": "configuration-policy",
+          "type": "string"
+        }
+      ]
+    },
+    "redacted": {
+      "type": "boolean"
+    }
+  }
+}

@@ -1,0 +1,67 @@
+{
+  "$id": "heniek://contract/PipelineAttachRequest/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "attachmentId",
+    "sourceRunId",
+    "sourceStageId",
+    "targetRunId",
+    "stage",
+    "dependantStageIds",
+    "expectedRunRevision",
+    "expectedGraphRevision",
+    "expectedScheduleRevision"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "attachmentId": {
+      "minLength": 1,
+      "maxLength": 1024,
+      "type": "string"
+    },
+    "sourceRunId": {
+      "minLength": 1,
+      "description": "Opaque RunId.",
+      "type": "string"
+    },
+    "sourceStageId": {
+      "minLength": 1,
+      "description": "Opaque PipelineStageId.",
+      "type": "string"
+    },
+    "targetRunId": {
+      "minLength": 1,
+      "description": "Opaque RunId.",
+      "type": "string"
+    },
+    "stage": {
+      "$ref": "heniek://contract/PipelineAttachedStageDefinition/v1"
+    },
+    "dependantStageIds": {
+      "uniqueItems": true,
+      "type": "array",
+      "items": {
+        "minLength": 1,
+        "description": "Opaque PipelineStageId.",
+        "type": "string"
+      }
+    },
+    "expectedRunRevision": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "expectedGraphRevision": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "expectedScheduleRevision": {
+      "minimum": 1,
+      "type": "integer"
+    }
+  }
+}
