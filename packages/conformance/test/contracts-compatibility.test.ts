@@ -180,6 +180,11 @@ const manifestPath = resolve(packageRoot, "../contracts/generated/manifest.json"
  * `ResolvedConfiguration/v1`, `ResolvedProfile/v1` and `/v2`, so one new
  * optional field would move four published digests to serve one new consumer.
  * The pipeline family inlines its own copy instead.
+ *
+ * Q035 raises the count 185 → 189 by pure addition: V2 Codebase configuration
+ * and resolved snapshots add structured setup dependencies/timeouts, while
+ * composite provisioning and effective-instruction reports receive new V1
+ * contracts. Every previously pinned schema digest remains byte-identical.
  */
 const EXPECTED_SCHEMAS: readonly {
   readonly schemaId: string;
@@ -290,6 +295,12 @@ const EXPECTED_SCHEMAS: readonly {
     path: "generated/CodebaseConfiguration.v1.schema.json",
   },
   {
+    schemaId: "heniek://contract/CodebaseConfiguration/v2",
+    schemaVersion: 2,
+    sha256: "e0df43d7215ca762f81cc04b9c6c1c95d889cf2382b28e7d6c2d051bc1291a48",
+    path: "generated/CodebaseConfiguration.v2.schema.json",
+  },
+  {
     schemaId: "heniek://contract/CodebaseDetectionResult/v1",
     schemaVersion: 1,
     sha256: "0ff6101822ed1ba516ea106ace09d8a6f15fd5c8c8a605bf6b788cb43355b210",
@@ -338,6 +349,12 @@ const EXPECTED_SCHEMAS: readonly {
     path: "generated/CodebaseRegisterRequest.v1.schema.json",
   },
   {
+    schemaId: "heniek://contract/CompositeWorkspaceProvisioningManifest/v1",
+    schemaVersion: 1,
+    sha256: "5ffaece2623950e0a315a99533fdff33c260d9fe8f1ceaf02154b86237c54826",
+    path: "generated/CompositeWorkspaceProvisioningManifest.v1.schema.json",
+  },
+  {
     schemaId: "heniek://contract/CreatePullRequestInput/v1",
     schemaVersion: 1,
     sha256: "55873424bc47a8bd87d409ef294271c8fd81d1b7a6111b92bb8501f782dba79c",
@@ -384,6 +401,12 @@ const EXPECTED_SCHEMAS: readonly {
     schemaVersion: 1,
     sha256: "1645c1a617331955c3a515bd3942e423e71e3fbc460093092fc149b0cee6e56c",
     path: "generated/DoctorReport.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/EffectiveInstructionReport/v1",
+    schemaVersion: 1,
+    sha256: "c5471a64878071057e08b3c3f8e40ad6bcf02f9078389fcb39b6fdb167b2a368",
+    path: "generated/EffectiveInstructionReport.v1.schema.json",
   },
   {
     schemaId: "heniek://contract/ExecutionAttempt/v1",
@@ -968,6 +991,12 @@ const EXPECTED_SCHEMAS: readonly {
     path: "generated/ResolvedCodebaseSnapshot.v1.schema.json",
   },
   {
+    schemaId: "heniek://contract/ResolvedCodebaseSnapshot/v2",
+    schemaVersion: 2,
+    sha256: "53cac4d5a02f5d18fc370d418381c3d90f09fd673ff089095fde3dd75bb99b65",
+    path: "generated/ResolvedCodebaseSnapshot.v2.schema.json",
+  },
+  {
     schemaId: "heniek://contract/ResolvedConfiguration/v1",
     schemaVersion: 1,
     sha256: "ab0ae9b99bb0e98c56e93665a92f049d86c3f43949f02764b0501b45e563fbd1",
@@ -1300,7 +1329,7 @@ const EXPECTED_SCHEMAS: readonly {
 ];
 
 describe("packages/contracts generated manifest is unchanged (AC4)", () => {
-  it("manifest.json lists exactly the 185 known schemas with their recorded sha256", async () => {
+  it("manifest.json lists exactly the 189 known schemas with their recorded sha256", async () => {
     const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
     expect(manifest).toEqual({
       schemaVersion: "heniek.contracts-manifest.v1",
