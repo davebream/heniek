@@ -403,6 +403,12 @@ const EXPECTED_SCHEMAS: readonly {
     path: "generated/DoctorReport.v1.schema.json",
   },
   {
+    schemaId: "heniek://contract/DoctorReport/v2",
+    schemaVersion: 2,
+    sha256: "f0628f4e37b38cfd03042960f72927b0d36234a9a27df3f8222191ce79b93b11",
+    path: "generated/DoctorReport.v2.schema.json",
+  },
+  {
     schemaId: "heniek://contract/EffectiveInstructionReport/v1",
     schemaVersion: 1,
     sha256: "c5471a64878071057e08b3c3f8e40ad6bcf02f9078389fcb39b6fdb167b2a368",

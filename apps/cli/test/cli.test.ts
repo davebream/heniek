@@ -123,8 +123,9 @@ async function startFakeDaemon(homeRoot: string) {
             methods: [
               {
                 name: required?.name,
-                methodVersion: required?.name === "stage.start" ? 2 : 1,
-                wireMethod: `${required?.name}.v${required?.name === "stage.start" ? 2 : 1}`,
+                methodVersion:
+                  required?.name === "stage.start" || required?.name === "doctor" ? 2 : 1,
+                wireMethod: `${required?.name}.v${required?.name === "stage.start" || required?.name === "doctor" ? 2 : 1}`,
                 resultSchemaId: required?.resultSchemas[0]?.schemaId,
                 resultSchemaSha256: required?.resultSchemas[0]?.sha256,
               },
@@ -227,13 +228,14 @@ async function startFakeDaemon(homeRoot: string) {
             eof: offset + chunk.byteLength === artifactBytes.byteLength,
             contentBase64: chunk.toString("base64"),
           };
-        } else if (request.method === "doctor.v1") {
+        } else if (request.method === "doctor.v2") {
           result = {
-            schemaVersion: 1,
+            schemaVersion: 2,
             health: "degraded",
             checks: ["runtime", "auth-route", "compatibility", "cleanup"].map((category) => ({
               category,
-              status: category === "cleanup" ? "warn" : "pass",
+              readState: "ok",
+              verdict: category === "cleanup" ? "warn" : "pass",
               code: `${category.toUpperCase()}_CHECK`,
               message: `${category} checked`,
             })),
@@ -543,7 +545,7 @@ describe("heniek CLI", () => {
       expect(daemon.methods).toContain("stage.start.v2");
       expect(daemon.methods).toContain("run.answer.v1");
       expect(daemon.methods.filter((method) => method === "artifact.get.v1")).toHaveLength(3);
-      expect(daemon.methods).toContain("doctor.v1");
+      expect(daemon.methods).toContain("doctor.v2");
     } finally {
       await daemon.close();
     }

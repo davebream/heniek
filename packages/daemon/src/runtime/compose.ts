@@ -54,7 +54,7 @@ import {
 import type { ApplicationHome } from "@heniek/config";
 import {
   type ArtifactId,
-  type DoctorReportV1,
+  type DoctorReportV2,
   type ExecutionBackend,
   type ExecutionBackendV7,
   ExecutionFailureV1,
@@ -103,7 +103,7 @@ import {
   removeCredential,
 } from "../auth/credential.js";
 import type { AuthenticatedCredential } from "../auth/verify.js";
-import { appendCapabilityDoctorChecks } from "../capability/doctor.js";
+import { adaptDoctorReportV2ToV1, appendCapabilityDoctorChecks } from "../capability/doctor.js";
 import type { AcquireDeps, AcquireOptions } from "../lifecycle/acquire.js";
 import { acquireClaim } from "../lifecycle/acquire.js";
 import type { LockHandle } from "../lifecycle/guard.js";
@@ -125,6 +125,7 @@ import {
   DAEMON_STATUS_METHOD,
   DAEMON_STATUS_V1_METHOD,
   DOCTOR_V1_METHOD,
+  DOCTOR_V2_METHOD,
   ENGINE_CATALOGUE_V1_METHOD,
   INBOX_LIST_V1_METHOD,
   type MethodHandler,
@@ -1000,34 +1001,34 @@ export async function startDaemon(deps: StartDaemonDeps): Promise<StartDaemonOut
   const withoutAuth = (params: Record<string, unknown>): Record<string, unknown> =>
     Object.fromEntries(Object.entries(params).filter(([key]) => key !== "auth"));
   const doctorHandler = async () => {
-    const base: Static<typeof DoctorReportV1> =
+    const base: Static<typeof DoctorReportV2> =
       executionService === undefined
         ? {
-            schemaVersion: 1,
-            health: "failed",
+            schemaVersion: 2,
+            health: "unknown",
             checks: [
               {
                 category: "runtime",
-                status: "fail",
+                readState: "not-read",
                 code: "CLAUDEXOR_BACKEND_UNCONFIGURED",
                 message: "No Claudexor execution backend is configured.",
                 remediation: "Configure the pinned Claudexor runtime and restart the daemon.",
               },
               {
                 category: "auth-route",
-                status: "fail",
+                readState: "not-read",
                 code: "AUTH_ROUTE_UNAVAILABLE",
                 message: "Subscription-route attestation cannot run without a backend.",
               },
               {
                 category: "compatibility",
-                status: "fail",
+                readState: "not-read",
                 code: "COMPATIBILITY_UNAVAILABLE",
                 message: "Claudexor compatibility cannot be checked without a backend.",
               },
               {
                 category: "cleanup",
-                status: "warn",
+                readState: "not-read",
                 code: "CLEANUP_NOT_CHECKED",
                 message: "Execution cleanup checks were not run.",
               },
@@ -1039,6 +1040,7 @@ export async function startDaemon(deps: StartDaemonDeps): Promise<StartDaemonOut
     if (catalogue === undefined) return base;
     return appendCapabilityDoctorChecks(base, catalogue);
   };
+  const doctorV1Handler = async () => adaptDoctorReportV2ToV1(await doctorHandler());
   const pipelineValidateHandler = async (params: unknown) => {
     const input = withoutAuth(recordParams(params));
     if (!isPipelineValidateRequest(input)) throw new Error("invalid pipeline validate request");
@@ -1072,7 +1074,8 @@ export async function startDaemon(deps: StartDaemonDeps): Promise<StartDaemonOut
     [CODEBASE_REGISTER_V1_METHOD, registerHandler],
     [CODEBASE_ONBOARD_PROPOSE_V1_METHOD, onboardProposeHandler],
     [CODEBASE_ONBOARD_APPLY_V1_METHOD, onboardApplyHandler],
-    [DOCTOR_V1_METHOD, doctorHandler],
+    [DOCTOR_V1_METHOD, doctorV1Handler],
+    [DOCTOR_V2_METHOD, doctorHandler],
     [PIPELINE_VALIDATE_V1_METHOD, pipelineValidateHandler],
     [PIPELINE_RUN_V1_METHOD, pipelineRunHandler],
     [PIPELINE_ATTACH_V1_METHOD, pipelineAttachHandler],

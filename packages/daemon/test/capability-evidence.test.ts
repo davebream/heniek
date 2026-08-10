@@ -66,30 +66,34 @@ describe("Q015 generated evidence drift", () => {
     const entries = await catalogueEntries();
     const report = appendCapabilityDoctorChecks(
       {
-        schemaVersion: 1,
+        schemaVersion: 2,
         health: "healthy",
         checks: [
           {
             category: "runtime",
-            status: "pass",
+            readState: "ok",
+            verdict: "pass",
             code: "CLAUDEXOR_RUNTIME_OK",
             message: "Pinned Claudexor runtime is available.",
           },
           {
             category: "auth-route",
-            status: "pass",
+            readState: "ok",
+            verdict: "pass",
             code: "AUTH_ROUTE_OK",
             message: "Subscription route is available.",
           },
           {
             category: "compatibility",
-            status: "pass",
+            readState: "ok",
+            verdict: "pass",
             code: "COMPATIBILITY_OK",
             message: "Pinned API is compatible.",
           },
           {
             category: "cleanup",
-            status: "pass",
+            readState: "ok",
+            verdict: "pass",
             code: "CLEANUP_OK",
             message: "No cleanup issues.",
           },

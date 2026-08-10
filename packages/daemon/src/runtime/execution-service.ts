@@ -1,6 +1,7 @@
 import type {
   ArtifactId,
-  DoctorReportV1,
+  DoctorReportV2,
+  ExecutionBackendDiagnosticV1,
   ExecutionBackendV2,
   ExecutionResumeRequestV1,
   InteractionAnswerSetV1,
@@ -43,6 +44,7 @@ import {
 } from "@heniek/state";
 import type { WorkspaceService } from "@heniek/workspace";
 import type { Static } from "@sinclair/typebox";
+import { doctorHealthFromChecks } from "../capability/doctor.js";
 import { finalizeStageArtifact } from "./stage-completion.js";
 
 export type DurableExecutionBackend = Omit<ExecutionBackendV2, "resume"> & {
@@ -100,7 +102,7 @@ export interface ExecutionService {
   >;
   cancel(runId: string): Promise<void>;
   result(runId: string): Promise<StageExecutionRow>;
-  doctor(): Promise<Static<typeof DoctorReportV1>>;
+  doctor(): Promise<Static<typeof DoctorReportV2>>;
   observeAll(): Promise<void>;
   drainPendingOperations(): Promise<void>;
   stop(): void;
@@ -488,18 +490,18 @@ export function createExecutionService(options: ExecutionServiceOptions): Execut
 
     async doctor() {
       const diagnosticBackend = options.backend as DurableExecutionBackend & {
-        diagnoseRuntime?: () => Promise<Static<typeof DoctorReportV1>["checks"][number]>;
-        diagnoseAuthRoute?: () => Promise<Static<typeof DoctorReportV1>["checks"][number]>;
+        diagnoseRuntime?: () => Promise<Static<typeof ExecutionBackendDiagnosticV1>>;
+        diagnoseAuthRoute?: () => Promise<Static<typeof ExecutionBackendDiagnosticV1>>;
         diagnoseCompatibility?: () => Promise<
-          readonly Static<typeof DoctorReportV1>["checks"][number][]
+          readonly Static<typeof ExecutionBackendDiagnosticV1>[]
         >;
       };
-      const checks: Static<typeof DoctorReportV1>["checks"] = [];
+      const checks: Static<typeof ExecutionBackendDiagnosticV1>[] = [];
       checks.push(
         diagnosticBackend.diagnoseRuntime === undefined
           ? {
               category: "runtime",
-              status: "warn",
+              readState: "not-read",
               code: "RUNTIME_PROBE_UNAVAILABLE",
               message: "The injected backend does not expose a pinned-runtime probe.",
             }
@@ -508,7 +510,7 @@ export function createExecutionService(options: ExecutionServiceOptions): Execut
       if (diagnosticBackend.diagnoseAuthRoute === undefined) {
         checks.push({
           category: "auth-route",
-          status: "warn",
+          readState: "not-read",
           code: "AUTH_ROUTE_PROBE_UNAVAILABLE",
           message: "The injected backend does not expose a subscription-route attestation probe.",
         });
@@ -518,7 +520,7 @@ export function createExecutionService(options: ExecutionServiceOptions): Execut
       if (diagnosticBackend.diagnoseCompatibility === undefined) {
         checks.push({
           category: "compatibility",
-          status: "warn",
+          readState: "not-read",
           code: "COMPATIBILITY_PROBE_UNAVAILABLE",
           message: "The injected backend does not expose a Claudexor compatibility probe.",
         });
@@ -536,26 +538,23 @@ export function createExecutionService(options: ExecutionServiceOptions): Execut
         dirty === 0
           ? {
               category: "cleanup",
-              status: "pass",
+              readState: "ok",
+              verdict: "pass",
               code: "EXECUTION_STATE_CLEAN",
               message:
                 "No stale process/lease witnesses, missing handles, partial imports, or unfinalized terminal executions were found.",
             }
           : {
               category: "cleanup",
-              status: "fail",
+              readState: "ok",
+              verdict: "fail",
               code: "EXECUTION_CLEANUP_REQUIRED",
               message: `${dirty} stale process/lease or execution cleanup issue(s) require reconciliation.`,
               remediation:
                 "Restart the Heniek daemon to reconcile active handles and artifact imports.",
             },
       );
-      const health = checks.some((check) => check.status === "fail")
-        ? "failed"
-        : checks.some((check) => check.status === "warn")
-          ? "degraded"
-          : "healthy";
-      return { schemaVersion: 1, health, checks };
+      return { schemaVersion: 2 as const, health: doctorHealthFromChecks(checks), checks };
     },
 
     observeAll,

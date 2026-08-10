@@ -27,6 +27,8 @@ import {
   CODEBASE_ONBOARD_PROPOSE_RESULT_SCHEMA_SHA256,
   DOCTOR_SCHEMA_ID,
   DOCTOR_SCHEMA_SHA256,
+  DOCTOR_V2_SCHEMA_ID,
+  DOCTOR_V2_SCHEMA_SHA256,
   INBOX_LIST_SCHEMA_ID,
   INBOX_LIST_SCHEMA_SHA256,
   NATIVE_STAGE_POLL_SCHEMA_ID,
@@ -100,6 +102,7 @@ import {
   DAEMON_RECOVERY_V1_METHOD,
   DAEMON_STATUS_V1_METHOD,
   DOCTOR_V1_METHOD,
+  DOCTOR_V2_METHOD,
   ENGINE_CATALOGUE_V1_METHOD,
   INBOX_LIST_V1_METHOD,
   type MethodContext,
@@ -465,6 +468,12 @@ function negotiateResult(params: Record<string, unknown>) {
       },
     ],
     doctor: [
+      {
+        methodVersion: 2,
+        schemaId: DOCTOR_V2_SCHEMA_ID,
+        sha256: DOCTOR_V2_SCHEMA_SHA256,
+        wireMethod: DOCTOR_V2_METHOD,
+      },
       {
         methodVersion: 1,
         schemaId: DOCTOR_SCHEMA_ID,

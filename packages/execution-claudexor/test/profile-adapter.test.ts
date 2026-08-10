@@ -415,7 +415,8 @@ describe("ExecutionBackendV5 profile conformance", () => {
       diff: { files: 1, additions: 2, deletions: 3 },
     });
     await expect(adapter.diagnoseAuthRoute()).resolves.toMatchObject({
-      status: "pass",
+      readState: "ok",
+      verdict: "pass",
       code: "CODEX_NATIVE_SESSION_ATTESTED",
     });
 
@@ -582,7 +583,8 @@ describe("ExecutionBackendV5 profile conformance", () => {
       },
     });
     await expect(adapter.diagnoseAuthRoute()).resolves.toMatchObject({
-      status: "pass",
+      readState: "ok",
+      verdict: "pass",
       code: "CURSOR_NATIVE_SESSION_ATTESTED",
     });
 
@@ -662,7 +664,8 @@ describe("ExecutionBackendV5 profile conformance", () => {
     });
     expect(paths).toEqual(["/v2/handshake", "/v2/harnesses/cursor/auth-readiness"]);
     await expect(adapter.diagnoseAuthRoute()).resolves.toMatchObject({
-      status: "fail",
+      readState: "ok",
+      verdict: "fail",
       code: "CURSOR_NATIVE_SESSION_UNATTESTED",
     });
   });
