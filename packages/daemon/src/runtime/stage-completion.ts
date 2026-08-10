@@ -63,6 +63,7 @@ export interface StageCompletionInput {
   readonly artifactPath: string;
   readonly bytes: Uint8Array;
   readonly mediaType: string;
+  readonly contentSchemaId?: string;
   /** Which subsystem produced this — recorded on the artifact row. */
   readonly producer: string;
   readonly sourceLineage: readonly string[];
@@ -128,7 +129,7 @@ export function finalizeStageArtifact(
         receipt,
         name: input.artifactPath,
         mediaType: input.mediaType,
-        contentSchemaId: STAGE_RESULT_CONTENT_SCHEMA_ID,
+        contentSchemaId: input.contentSchemaId ?? STAGE_RESULT_CONTENT_SCHEMA_ID,
         producer: input.producer,
         sourceLineage: [...input.sourceLineage],
       },

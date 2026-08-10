@@ -1,0 +1,99 @@
+{
+  "$id": "heniek://contract/ReviewReport/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "reportId",
+    "runId",
+    "stageId",
+    "sourceArtifactIds",
+    "markdown",
+    "createdAt",
+    "reviewKind",
+    "contextPolicy",
+    "verdict",
+    "findings"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "reportId": {
+      "minLength": 1,
+      "maxLength": 128,
+      "type": "string"
+    },
+    "runId": {
+      "minLength": 1,
+      "description": "Opaque RunId.",
+      "type": "string"
+    },
+    "stageId": {
+      "minLength": 1,
+      "description": "Opaque PipelineStageId.",
+      "type": "string"
+    },
+    "sourceArtifactIds": {
+      "uniqueItems": true,
+      "type": "array",
+      "items": {
+        "minLength": 1,
+        "description": "Opaque ArtifactId.",
+        "type": "string"
+      }
+    },
+    "markdown": {
+      "minLength": 1,
+      "maxLength": 16384,
+      "type": "string"
+    },
+    "createdAt": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "reviewKind": {
+      "anyOf": [
+        {
+          "const": "design-critique",
+          "type": "string"
+        },
+        {
+          "const": "plan-validation",
+          "type": "string"
+        },
+        {
+          "const": "code-review",
+          "type": "string"
+        }
+      ]
+    },
+    "contextPolicy": {
+      "const": "fresh",
+      "type": "string"
+    },
+    "verdict": {
+      "anyOf": [
+        {
+          "const": "ready",
+          "type": "string"
+        },
+        {
+          "const": "needs-repair",
+          "type": "string"
+        },
+        {
+          "const": "blocked",
+          "type": "string"
+        }
+      ]
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "$ref": "heniek://contract/ReviewFinding/v1"
+      }
+    }
+  }
+}

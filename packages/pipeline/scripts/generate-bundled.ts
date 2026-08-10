@@ -18,6 +18,14 @@ const generatedPath = join(packageRoot, "src", "bundled", "manifest.generated.ts
 const checkOnly = process.argv.includes("--check");
 
 const PUBLIC_FAST_PROFILES = ["task-owner", "reviewer"] as const;
+const PUBLIC_CAREFUL_PROFILES = [
+  "designer",
+  "critic",
+  "plan-reviewer",
+  "builder",
+  "code-reviewer",
+  "verifier",
+] as const;
 
 interface BundledTemplateSpec {
   readonly id: string;
@@ -32,6 +40,12 @@ const TEMPLATES: readonly BundledTemplateSpec[] = [
     version: 1,
     yamlFile: "fast.v1.yaml",
     knownProfileIds: PUBLIC_FAST_PROFILES,
+  },
+  {
+    id: "careful",
+    version: 1,
+    yamlFile: "careful.v1.yaml",
+    knownProfileIds: PUBLIC_CAREFUL_PROFILES,
   },
 ];
 

@@ -15,6 +15,7 @@ export type { BundledPipelineId, BundledPipelineManifestEntry };
 
 const PUBLIC_PROFILE_IDS_BY_TEMPLATE: Readonly<Record<string, readonly string[]>> = {
   "fast.v1": ["task-owner", "reviewer"],
+  "careful.v1": ["designer", "critic", "plan-reviewer", "builder", "code-reviewer", "verifier"],
 };
 
 function sha256(value: string): string {

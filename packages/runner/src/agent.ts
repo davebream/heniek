@@ -16,6 +16,7 @@ import { Value } from "@sinclair/typebox/value";
 import { bump, notifyStore, systemClock } from "./attempt.js";
 import { asAttemptId, asBackendExecutionId, asStageId, asWorkspaceId } from "./brands.js";
 import { redactFailureMessage } from "./redact.js";
+import { validateStructuredReviewReport } from "./structured-report.js";
 import type {
   AgentStageRunnerDeps,
   ExecutionRequest,
@@ -67,6 +68,7 @@ interface AgentAttemptState {
   readonly retryDirective?: StageRunnerRetryDirective;
   readonly segmentDirective?: StageRunnerSegmentDirective;
   readonly priorBackendExecutionId?: string;
+  readonly structuredSchemaName?: import("@heniek/contracts").ReviewReportSchemaName;
   started: boolean;
   /** Resume was requested but prior execution was missing or resume failed. */
   resumeFailed?: StageRunnerFailure;
@@ -76,6 +78,7 @@ interface AgentAttemptState {
   cleanup?: StageRunnerCleanupReport;
   validation?: StageRunnerValidationReport;
   digestMismatch: boolean;
+  structuredReportInvalid: boolean;
 }
 
 function resumeFailure(message: string, code: string): StageRunnerFailure {
@@ -164,6 +167,13 @@ export function createAgentStageRunner(deps: AgentStageRunnerDeps): StageRunner 
         ...report,
         valid: false,
         detail: "artifact digest mismatch",
+      };
+    }
+    if (state.structuredReportInvalid) {
+      report = {
+        ...report,
+        valid: false,
+        detail: "structured report validation failed",
       };
     }
     state.validation = report;
@@ -273,10 +283,14 @@ export function createAgentStageRunner(deps: AgentStageRunnerDeps): StageRunner 
           ? {}
           : { segmentDirective: input.segmentDirective }),
         ...(priorBackendExecutionId === undefined ? {} : { priorBackendExecutionId }),
+        ...(invocation.structuredSchemaName === undefined
+          ? {}
+          : { structuredSchemaName: invocation.structuredSchemaName }),
         started: false,
         timedOut: false,
         cancelled: false,
         digestMismatch: false,
+        structuredReportInvalid: false,
       });
       await notifyStore(deps.store, snapshot);
 
@@ -549,6 +563,58 @@ export function createAgentStageRunner(deps: AgentStageRunnerDeps): StageRunner 
           requirement: artifactEvidenceRequirement(artifact.path),
           payload: { artifactId: artifact.id, contentHash: digest },
         });
+        if (
+          state.structuredSchemaName !== undefined &&
+          artifact.path === state.executionRequest.artifactPath
+        ) {
+          const structured = validateStructuredReviewReport(state.structuredSchemaName, bytes, {
+            runId: state.snapshot.runId,
+            stageId: state.snapshot.stageId,
+          });
+          evidence.push({
+            schemaVersion: 1,
+            kind: "schema_check",
+            satisfied: structured.valid,
+            recordedAt: now,
+            requirement: `schema_check:${state.structuredSchemaName}`,
+            ...(structured.detail === undefined ? {} : { detail: structured.detail }),
+            payload: {
+              contentSchemaId: structured.contentSchemaId,
+              mediaType: structured.mediaType,
+            },
+          });
+          if (!structured.valid) {
+            state.structuredReportInvalid = true;
+          } else {
+            for (const write of state.writes) {
+              if (
+                write.startsWith("artifacts.") ||
+                outputs.some((item) => item.reference === write)
+              ) {
+                continue;
+              }
+              outputs.push({
+                schemaVersion: 1,
+                reference: write,
+                kind: "value",
+                value: structured.stateValue,
+              });
+            }
+            const verdictRequirement = state.requirements.find(
+              (requirement) => requirement.kind === "verdict",
+            );
+            if (verdictRequirement?.kind === "verdict") {
+              evidence.push({
+                schemaVersion: 1,
+                kind: "verdict",
+                satisfied: structured.verdictReady === true,
+                recordedAt: now,
+                requirement: `verdict:${verdictRequirement.profile}`,
+                payload: { verdictReady: structured.verdictReady ?? false },
+              });
+            }
+          }
+        }
         for (const write of state.writes) {
           if (outputs.some((binding) => binding.reference === write)) continue;
           if (write.startsWith("artifacts.") || write === artifact.path) {
