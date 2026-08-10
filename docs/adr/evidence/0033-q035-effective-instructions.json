@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "provider": "codex",
+  "generatedAt": "2026-08-10T12:00:00.000Z",
+  "readiness": "ready",
+  "reportSha256": "6534f3153dc31061440cf0b586a6f44a65fdbe51aa2849515554d2dadaa7d58f",
+  "effectiveContentSha256": "1eda45d85983dc685ebb39353c1ae8bec8f044ef3ee1b0c431227843d94992aa",
+  "sources": [
+    {
+      "sourceId": "ins-readme",
+      "kind": "shared",
+      "provider": null,
+      "location": {
+        "kind": "repository",
+        "repositoryId": "repo-api",
+        "path": "README.md"
+      },
+      "scope": "",
+      "precedence": 1,
+      "contentSha256": "9145e760673b0bb052c42796a8e7a1981eb401ca301fb47e42672d9f30dc0034"
+    },
+    {
+      "sourceId": "ins-agents",
+      "kind": "provider-native",
+      "provider": "codex",
+      "location": {
+        "kind": "repository",
+        "repositoryId": "repo-api",
+        "path": "AGENTS.md"
+      },
+      "scope": "",
+      "precedence": 2,
+      "contentSha256": "3d058b178b52f8cb9285900490c67c7af8681c61db98bc6b89fcb6849c897b3a"
+    }
+  ],
+  "unresolvedConflicts": []
+}
