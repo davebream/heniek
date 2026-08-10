@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "workspaceId": "ws-q035-evidence",
+  "codebaseId": "cb-q035-evidence",
+  "configurationSha256": "5555555555555555555555555555555555555555555555555555555555555555",
+  "lifecycle": "ready",
+  "workspaceRoot": "/var/lib/heniek/workspaces/ws-q035-evidence",
+  "repositories": [
+    {
+      "repositoryId": "repo-api",
+      "name": "api",
+      "strategy": "managed-worktree",
+      "phase": "completed",
+      "checkoutPath": "/var/lib/heniek/workspaces/ws-q035-evidence/checkouts/api",
+      "gitCommonDirectory": "/srv/codebases/api/.git",
+      "baseSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "checkoutHeadSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "materialization": {
+        "state": "succeeded",
+        "commandSha256": null,
+        "startedAt": "2026-08-10T12:00:00.000Z",
+        "finishedAt": "2026-08-10T12:00:00.000Z",
+        "exitCode": null,
+        "signal": null,
+        "timedOut": false,
+        "logPath": null,
+        "logSha256": null,
+        "logTruncated": false
+      },
+      "setup": {
+        "state": "succeeded",
+        "commandSha256": "6666666666666666666666666666666666666666666666666666666666666666",
+        "startedAt": "2026-08-10T12:00:00.000Z",
+        "finishedAt": "2026-08-10T12:00:01.000Z",
+        "exitCode": 0,
+        "signal": null,
+        "timedOut": false,
+        "logPath": "/var/lib/heniek/logs/workspaces/ws-q035-evidence-repo-api-setup.log",
+        "logSha256": "7777777777777777777777777777777777777777777777777777777777777777",
+        "logTruncated": false,
+        "blockedBy": []
+      },
+      "updatedAt": "2026-08-10T12:00:01.000Z"
+    }
+  ],
+  "effectiveInstructions": {
+    "schemaVersion": 1,
+    "provider": "codex",
+    "generatedAt": "2026-08-10T12:00:01.000Z",
+    "readiness": "ready",
+    "reportSha256": "5dd8b25f2e019795002fb2d19770a8d5def5fa6327005dcfda376e0f87dd87c2",
+    "effectiveContentSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "sources": [],
+    "unresolvedConflicts": []
+  },
+  "createdAt": "2026-08-10T12:00:00.000Z",
+  "updatedAt": "2026-08-10T12:00:01.000Z"
+}

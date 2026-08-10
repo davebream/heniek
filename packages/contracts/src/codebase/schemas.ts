@@ -91,6 +91,17 @@ export const InstructionSnapshotSchema = Type.Object(
 
 export const InstructionSnapshotV1 = versioned("InstructionSnapshot", 1, instructionSnapshotFields);
 
+/** Provider-filtered instruction provenance used by composite workspaces. */
+export const EffectiveInstructionReportV1 = versioned("EffectiveInstructionReport", 1, {
+  provider: Type.Union([Type.Literal("claude"), Type.Literal("codex"), Type.Literal("cursor")]),
+  generatedAt: IsoDateTime,
+  readiness: Type.Union([Type.Literal("ready"), Type.Literal("blocked")]),
+  reportSha256: Sha256,
+  effectiveContentSha256: Sha256,
+  sources: Type.Array(InstructionSource),
+  unresolvedConflicts: Type.Array(InstructionDiagnosticSchema),
+});
+
 export const NormalizedRemote = Type.Object(
   {
     name: Type.String({ minLength: 1 }),
@@ -206,10 +217,34 @@ const RepositoryConfiguration = Type.Object(
   { additionalProperties: false },
 );
 
+export const RepositorySetupPolicy = Type.Object(
+  {
+    command: Type.Union([Type.String({ minLength: 1, maxLength: 65536 }), Type.Null()]),
+    dependsOn: Type.Array(RepositoryId, { uniqueItems: true }),
+    timeoutMilliseconds: Type.Integer({ minimum: 1000, maximum: 86400000 }),
+  },
+  { additionalProperties: false },
+);
+
+const RepositoryConfigurationV2 = Type.Object(
+  {
+    expectedPath: Type.String({ minLength: 1 }),
+    provisioning: RepositoryProvisioningConfiguration,
+    setup: RepositorySetupPolicy,
+  },
+  { additionalProperties: false },
+);
+
 /** Authored multi-root configuration. Repository IDs are map keys for stable layered merging. */
 export const CodebaseConfigurationV1 = versioned("CodebaseConfiguration", 1, {
   codebaseId: CodebaseId,
   repositories: Type.Record(Type.String({ minLength: 1 }), RepositoryConfiguration),
+});
+
+/** Q035 structured setup policy. V1 remains frozen and is normalized at runtime. */
+export const CodebaseConfigurationV2 = versioned("CodebaseConfiguration", 2, {
+  codebaseId: CodebaseId,
+  repositories: Type.Record(Type.String({ minLength: 1 }), RepositoryConfigurationV2),
 });
 
 export const RepositoryBasePinV1 = versioned("RepositoryBasePin", 1, {
@@ -244,12 +279,33 @@ const ResolvedRepositoryConfiguration = Type.Object(
   { additionalProperties: false },
 );
 
+const ResolvedRepositoryConfigurationV2 = Type.Object(
+  {
+    repositoryId: RepositoryId,
+    name: Type.String({ minLength: 1 }),
+    path: Type.String({ minLength: 1 }),
+    provisioning: RepositoryProvisioningConfiguration,
+    setup: RepositorySetupPolicy,
+    provenance: Type.Array(ConfigurationProvenance),
+  },
+  { additionalProperties: false },
+);
+
 export const ResolvedCodebaseSnapshotV1 = versioned("ResolvedCodebaseSnapshot", 1, {
   codebaseId: CodebaseId,
   registrationSha256: Sha256,
   configurationSha256: Sha256,
   resolvedAt: IsoDateTime,
   repositories: Type.Array(ResolvedRepositoryConfiguration, { minItems: 1 }),
+  basePins: Type.Array(Type.Ref(RepositoryBasePinV1)),
+});
+
+export const ResolvedCodebaseSnapshotV2 = versioned("ResolvedCodebaseSnapshot", 2, {
+  codebaseId: CodebaseId,
+  registrationSha256: Sha256,
+  configurationSha256: Sha256,
+  resolvedAt: IsoDateTime,
+  repositories: Type.Array(ResolvedRepositoryConfigurationV2, { minItems: 1 }),
   basePins: Type.Array(Type.Ref(RepositoryBasePinV1)),
 });
 
@@ -361,13 +417,16 @@ export const CodebaseOnboardApplyResultV1 = versioned("CodebaseOnboardApplyResul
 export type CodebaseDetectionResult = Static<typeof CodebaseDetectionResultV1>;
 export type RegisteredCodebase = Static<typeof RegisteredCodebaseV1>;
 export type CodebaseConfiguration = Static<typeof CodebaseConfigurationV1>;
+export type CodebaseConfigurationV2 = Static<typeof CodebaseConfigurationV2>;
 export type RepositoryProvisioningConfiguration = Static<
   typeof RepositoryProvisioningConfiguration
 >;
 export type RepositoryBasePin = Static<typeof RepositoryBasePinV1>;
 export type ResolvedCodebaseSnapshot = Static<typeof ResolvedCodebaseSnapshotV1>;
+export type ResolvedCodebaseSnapshotV2 = Static<typeof ResolvedCodebaseSnapshotV2>;
 export type InstructionSnapshot = Static<typeof InstructionSnapshotV1>;
 export type InstructionDiagnostic = Static<typeof InstructionDiagnosticV1>;
+export type EffectiveInstructionReport = Static<typeof EffectiveInstructionReportV1>;
 export type RepositoryWorkspacePolicy = Static<typeof RepositoryWorkspacePolicyV1>;
 export type CodebaseOnboardingProposal = Static<typeof CodebaseOnboardingProposalV1>;
 export type CodebaseOnboardProposeRequest = Static<typeof CodebaseOnboardProposeRequestV1>;
