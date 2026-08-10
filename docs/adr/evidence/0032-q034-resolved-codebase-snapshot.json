@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "codebaseId": "cb-q034",
+  "registrationSha256": "3333333333333333333333333333333333333333333333333333333333333333",
+  "configurationSha256": "4444444444444444444444444444444444444444444444444444444444444444",
+  "resolvedAt": "2026-08-10T12:00:01.000Z",
+  "repositories": [
+    {
+      "repositoryId": "repo-api",
+      "name": "api",
+      "path": "/workspace/platform/api",
+      "provisioning": {
+        "strategy": "managed-worktree",
+        "remote": "origin",
+        "requestedRef": "auto",
+        "synchronization": "notify"
+      },
+      "setup": "pnpm install --frozen-lockfile",
+      "provenance": [
+        {
+          "layer": "codebase",
+          "sourcePath": "/heniek/codebases/cb-q034/workspace.yaml",
+          "pointer": "/repositories/repo-api/provisioning/remote"
+        }
+      ]
+    },
+    {
+      "repositoryId": "repo-web",
+      "name": "web",
+      "path": "/workspace/platform/web",
+      "provisioning": { "strategy": "current-checkout" },
+      "setup": null,
+      "provenance": []
+    }
+  ],
+  "basePins": [
+    {
+      "schemaVersion": 1,
+      "repositoryId": "repo-api",
+      "requestedRef": "auto",
+      "resolvedRef": "refs/heads/main",
+      "remote": "origin",
+      "fetchedRemoteIdentity": "ssh://git@example.test/acme/api",
+      "commitSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "resolvedAt": "2026-08-10T12:00:00.000Z",
+      "synchronization": "notify"
+    }
+  ]
+}
