@@ -1,0 +1,997 @@
+{
+  "schemaVersion": "heniek.q033-failure-traces/v1",
+  "failures": [
+    {
+      "scenario": "clone",
+      "first": {
+        "schemaVersion": "heniek.q033-composite-spike/v1",
+        "scenario": "clone",
+        "platform": "linux",
+        "architecture": "x64",
+        "nodeVersion": "v24.18.0",
+        "gitVersion": "git version 2.54.0",
+        "layout": "registered-clones-linked-worktrees",
+        "workspaceRoot": "$SANDBOX/workspaces/ws_q033",
+        "compositeRootIsGitRepository": false,
+        "repositoryCount": 10,
+        "semanticReadSet": [],
+        "writeSet": ["api", "web", "e2e"],
+        "crossRepositoryVerification": false,
+        "setupOrder": [],
+        "repositories": [
+          {
+            "name": "contracts",
+            "baseSha": "6848d87defd5cb29e7618320c75b5cbff0495254",
+            "checkoutHeadSha": "6848d87defd5cb29e7618320c75b5cbff0495254",
+            "phase": "checkout-created",
+            "setupAttempts": 0,
+            "writable": false,
+            "changed": false
+          },
+          {
+            "name": "shared",
+            "baseSha": "995eb9e4f6a0c9f8215137092b460d5a56bb6d87",
+            "checkoutHeadSha": "995eb9e4f6a0c9f8215137092b460d5a56bb6d87",
+            "phase": "checkout-created",
+            "setupAttempts": 0,
+            "writable": false,
+            "changed": false
+          },
+          {
+            "name": "api",
+            "baseSha": "1cd6b607822c2baf9b1bee378c01bdcc798fed7e",
+            "checkoutHeadSha": "1cd6b607822c2baf9b1bee378c01bdcc798fed7e",
+            "phase": "checkout-created",
+            "setupAttempts": 0,
+            "writable": true,
+            "changed": false
+          },
+          {
+            "name": "worker",
+            "baseSha": "e36f336434d2bf789615891d44fda1bc448cbcd5",
+            "checkoutHeadSha": null,
+            "phase": "pending",
+            "setupAttempts": 0,
+            "writable": false,
+            "changed": false
+          },
+          {
+            "name": "web",
+            "baseSha": "b397ea1c0e75e9e45caa71250987538933f101ec",
+            "checkoutHeadSha": null,
+            "phase": "pending",
+            "setupAttempts": 0,
+            "writable": true,
+            "changed": false
+          },
+          {
+            "name": "admin",
+            "baseSha": "448f273d7b4844eccc942c7509d4e43c1d30694b",
+            "checkoutHeadSha": null,
+            "phase": "pending",
+            "setupAttempts": 0,
+            "writable": false,
+            "changed": false
+          },
+          {
+            "name": "mobile",
+            "baseSha": "79ca3c27c7e116b149389b542bcb6aaabf860b73",
+            "checkoutHeadSha": null,
+            "phase": "pending",
+            "setupAttempts": 0,
+            "writable": false,
+            "changed": false
+          },
+          {
+            "name": "docs",
+            "baseSha": "97fcaa30fad67b1fc6b9591c6caf4c3970e13958",
+            "checkoutHeadSha": null,
+            "phase": "pending",
+            "setupAttempts": 0,
+            "writable": false,
+            "changed": false
+          },
+          {
+            "name": "infra",
+            "baseSha": "27c7893eb8c9f95851e95a5ccedb31a56dafd466",
+            "checkoutHeadSha": null,
+            "phase": "pending",
+            "setupAttempts": 0,
+            "writable": false,
+            "changed": false
+          },
+          {
+            "name": "e2e",
+            "baseSha": "73f8b37e4a92408f471e675d92b469d364a61b2c",
+            "checkoutHeadSha": null,
+            "phase": "pending",
+            "setupAttempts": 0,
+            "writable": true,
+            "changed": false
+          }
+        ],
+        "failures": [
+          {
+            "code": "CLONE_FAILED",
+            "phase": "clone",
+            "repository": "worker",
+            "recovered": false
+          }
+        ],
+        "metrics": {
+          "elapsedMilliseconds": 413,
+          "peakChildProcesses": 0,
+          "remainingChildProcesses": 0,
+          "logicalBytesAtPeak": 2446306,
+          "allocatedBytesAtPeak": 4714496,
+          "logicalBytesAfterCleanup": 0,
+          "allocatedBytesAfterCleanup": 0
+        },
+        "cleanup": {
+          "requested": true,
+          "completed": true,
+          "idempotent": true
+        }
+      }
+    },
+    {
+      "scenario": "setup",
+      "first": {
+        "schemaVersion": "heniek.q033-composite-spike/v1",
+        "scenario": "setup",
+        "platform": "linux",
+        "architecture": "x64",
+        "nodeVersion": "v24.18.0",
+        "gitVersion": "git version 2.54.0",
+        "layout": "registered-clones-linked-worktrees",
+        "workspaceRoot": "$SANDBOX/workspaces/ws_q033",
+        "compositeRootIsGitRepository": false,
+        "repositoryCount": 10,
+        "semanticReadSet": [
+          "contracts",
+          "shared",
+          "api",
+          "worker",
+          "web",
+          "admin",
+          "mobile",
+          "docs",
+          "infra",
+          "e2e"
+        ],
+        "writeSet": ["api", "web", "e2e"],
+        "crossRepositoryVerification": false,
+        "setupOrder": ["contracts", "shared", "api", "docs"],
+        "repositories": [
+          {
+            "name": "contracts",
+            "baseSha": "6848d87defd5cb29e7618320c75b5cbff0495254",
+            "checkoutHeadSha": "6848d87defd5cb29e7618320c75b5cbff0495254",
+            "phase": "setup-completed",
+            "setupAttempts": 1,
+            "writable": false,
+            "changed": false
+          },
+          {
+            "name": "shared",
+            "baseSha": "995eb9e4f6a0c9f8215137092b460d5a56bb6d87",
+            "checkoutHeadSha": "995eb9e4f6a0c9f8215137092b460d5a56bb6d87",
+            "phase": "setup-completed",
+            "setupAttempts": 1,
+            "writable": false,
+            "changed": false
+          },
+          {
+            "name": "api",
+            "baseSha": "1cd6b607822c2baf9b1bee378c01bdcc798fed7e",
+            "checkoutHeadSha": "1cd6b607822c2baf9b1bee378c01bdcc798fed7e",
+            "phase": "setup-failed",
+            "setupAttempts": 1,
+            "writable": true,
+            "changed": false
+          },
+          {
+            "name": "worker",
+            "baseSha": "e36f336434d2bf789615891d44fda1bc448cbcd5",
+            "checkoutHeadSha": "e36f336434d2bf789615891d44fda1bc448cbcd5",
+            "phase": "blocked",
+            "setupAttempts": 0,
+            "writable": false,
+            "changed": false
+          },
+          {
+            "name": "web",
+            "baseSha": "b397ea1c0e75e9e45caa71250987538933f101ec",
+            "checkoutHeadSha": "b397ea1c0e75e9e45caa71250987538933f101ec",
+            "phase": "blocked",
+            "setupAttempts": 0,
+            "writable": true,
+            "changed": false
+          },
+          {
+            "name": "admin",
+            "baseSha": "448f273d7b4844eccc942c7509d4e43c1d30694b",
+            "checkoutHeadSha": "448f273d7b4844eccc942c7509d4e43c1d30694b",
+            "phase": "blocked",
+            "setupAttempts": 0,
+            "writable": false,
+            "changed": false
+          },
+          {
+            "name": "mobile",
+            "baseSha": "79ca3c27c7e116b149389b542bcb6aaabf860b73",
+            "checkoutHeadSha": "79ca3c27c7e116b149389b542bcb6aaabf860b73",
+            "phase": "blocked",
+            "setupAttempts": 0,
+            "writable": false,
+            "changed": false
+          },
+          {
+            "name": "docs",
+            "baseSha": "97fcaa30fad67b1fc6b9591c6caf4c3970e13958",
+            "checkoutHeadSha": "97fcaa30fad67b1fc6b9591c6caf4c3970e13958",
+            "phase": "setup-completed",
+            "setupAttempts": 1,
+            "writable": false,
+            "changed": false
+          },
+          {
+            "name": "infra",
+            "baseSha": "27c7893eb8c9f95851e95a5ccedb31a56dafd466",
+            "checkoutHeadSha": "27c7893eb8c9f95851e95a5ccedb31a56dafd466",
+            "phase": "blocked",
+            "setupAttempts": 0,
+            "writable": false,
+            "changed": false
+          },
+          {
+            "name": "e2e",
+            "baseSha": "73f8b37e4a92408f471e675d92b469d364a61b2c",
+            "checkoutHeadSha": "73f8b37e4a92408f471e675d92b469d364a61b2c",
+            "phase": "blocked",
+            "setupAttempts": 0,
+            "writable": true,
+            "changed": false
+          }
+        ],
+        "failures": [
+          {
+            "code": "SETUP_FAILED",
+            "phase": "setup",
+            "repository": "api",
+            "recovered": false
+          }
+        ],
+        "metrics": {
+          "elapsedMilliseconds": 747,
+          "peakChildProcesses": 2,
+          "remainingChildProcesses": 0,
+          "logicalBytesAtPeak": 3520801,
+          "allocatedBytesAtPeak": 6852608,
+          "logicalBytesAfterCleanup": 0,
+          "allocatedBytesAfterCleanup": 0
+        },
+        "cleanup": {
+          "requested": true,
+          "completed": true,
+          "idempotent": true
+        }
+      }
+    },
+    {
+      "scenario": "cancel",
+      "first": {
+        "schemaVersion": "heniek.q033-composite-spike/v1",
+        "scenario": "cancel",
+        "platform": "linux",
+        "architecture": "x64",
+        "nodeVersion": "v24.18.0",
+        "gitVersion": "git version 2.54.0",
+        "layout": "registered-clones-linked-worktrees",
+        "workspaceRoot": "$SANDBOX/workspaces/ws_q033",
+        "compositeRootIsGitRepository": false,
+        "repositoryCount": 10,
+        "semanticReadSet": [
+          "contracts",
+          "shared",
+          "api",
+          "worker",
+          "web",
+          "admin",
+          "mobile",
+          "docs",
+          "infra",
+          "e2e"
+        ],
+        "writeSet": ["api", "web", "e2e"],
+        "crossRepositoryVerification": false,
+        "setupOrder": ["contracts", "shared"],
+        "repositories": [
+          {
+            "name": "contracts",
+            "baseSha": "d4a72a96cd7ec6dd01ce8064990d5927933d43ea",
+            "checkoutHeadSha": "d4a72a96cd7ec6dd01ce8064990d5927933d43ea",
+            "phase": "cancelled",
+            "setupAttempts": 1,
+            "writable": false,
+            "changed": false
+          },
+          {
+            "name": "shared",
+            "baseSha": "b7b3054bcf28b223968050f411c15a1e53b6b326",
+            "checkoutHeadSha": "b7b3054bcf28b223968050f411c15a1e53b6b326",
+            "phase": "cancelled",
+            "setupAttempts": 1,
+            "writable": false,
+            "changed": false
+          },
+          {
+            "name": "api",
+            "baseSha": "92a9b2b54f86a2ed4f97ccffee8bd80418fa6e73",
+            "checkoutHeadSha": "92a9b2b54f86a2ed4f97ccffee8bd80418fa6e73",
+            "phase": "cancelled",
+            "setupAttempts": 0,
+            "writable": true,
+            "changed": false
+          },
+          {
+            "name": "worker",
+            "baseSha": "0a1bc140b525445ed214e6a223bfc7c86e9335e6",
+            "checkoutHeadSha": "0a1bc140b525445ed214e6a223bfc7c86e9335e6",
+            "phase": "cancelled",
+            "setupAttempts": 0,
+            "writable": false,
+            "changed": false
+          },
+          {
+            "name": "web",
+            "baseSha": "1db79e3863f1e8afe7248f0928ff3a369b94febd",
+            "checkoutHeadSha": "1db79e3863f1e8afe7248f0928ff3a369b94febd",
+            "phase": "cancelled",
+            "setupAttempts": 0,
+            "writable": true,
+            "changed": false
+          },
+          {
+            "name": "admin",
+            "baseSha": "d2d8b227e48ee92935ccf61a8f84a5adb4580474",
+            "checkoutHeadSha": "d2d8b227e48ee92935ccf61a8f84a5adb4580474",
+            "phase": "cancelled",
+            "setupAttempts": 0,
+            "writable": false,
+            "changed": false
+          },
+          {
+            "name": "mobile",
+            "baseSha": "8f948820ab02cadb2fe157adbd4822f9cb6b63e9",
+            "checkoutHeadSha": "8f948820ab02cadb2fe157adbd4822f9cb6b63e9",
+            "phase": "cancelled",
+            "setupAttempts": 0,
+            "writable": false,
+            "changed": false
+          },
+          {
+            "name": "docs",
+            "baseSha": "ca9c674498fd4de3c6c83e43f3d312a83fd1ab45",
+            "checkoutHeadSha": "ca9c674498fd4de3c6c83e43f3d312a83fd1ab45",
+            "phase": "cancelled",
+            "setupAttempts": 0,
+            "writable": false,
+            "changed": false
+          },
+          {
+            "name": "infra",
+            "baseSha": "0cb38e591d7c6d2b36477fcb5c663e77beea09af",
+            "checkoutHeadSha": "0cb38e591d7c6d2b36477fcb5c663e77beea09af",
+            "phase": "cancelled",
+            "setupAttempts": 0,
+            "writable": false,
+            "changed": false
+          },
+          {
+            "name": "e2e",
+            "baseSha": "1d50ddcc3514db85ec6131b7ad00205eb99a538c",
+            "checkoutHeadSha": "1d50ddcc3514db85ec6131b7ad00205eb99a538c",
+            "phase": "cancelled",
+            "setupAttempts": 0,
+            "writable": true,
+            "changed": false
+          }
+        ],
+        "failures": [
+          {
+            "code": "CANCELLED",
+            "phase": "setup",
+            "repository": "contracts",
+            "recovered": false
+          },
+          {
+            "code": "CANCELLED",
+            "phase": "setup",
+            "repository": "shared",
+            "recovered": false
+          }
+        ],
+        "metrics": {
+          "elapsedMilliseconds": 1516,
+          "peakChildProcesses": 2,
+          "remainingChildProcesses": 0,
+          "logicalBytesAtPeak": 3516561,
+          "allocatedBytesAtPeak": 6836224,
+          "logicalBytesAfterCleanup": 0,
+          "allocatedBytesAfterCleanup": 0
+        },
+        "cleanup": {
+          "requested": true,
+          "completed": true,
+          "idempotent": true
+        }
+      }
+    },
+    {
+      "scenario": "disk-restart",
+      "first": {
+        "schemaVersion": "heniek.q033-composite-spike/v1",
+        "scenario": "disk-interrupted",
+        "platform": "linux",
+        "architecture": "x64",
+        "nodeVersion": "v24.18.0",
+        "gitVersion": "git version 2.54.0",
+        "layout": "registered-clones-linked-worktrees",
+        "workspaceRoot": "$SANDBOX/workspaces/ws_q033",
+        "compositeRootIsGitRepository": false,
+        "repositoryCount": 10,
+        "semanticReadSet": [],
+        "writeSet": ["api", "web", "e2e"],
+        "crossRepositoryVerification": false,
+        "setupOrder": [],
+        "repositories": [
+          {
+            "name": "contracts",
+            "baseSha": "8276dee473bc3654506a49225496f2d72dfc7700",
+            "checkoutHeadSha": "8276dee473bc3654506a49225496f2d72dfc7700",
+            "phase": "checkout-created",
+            "setupAttempts": 0,
+            "writable": false,
+            "changed": false
+          },
+          {
+            "name": "shared",
+            "baseSha": "46255e8b0bd23a3ead9f3330bc646d231132bb4d",
+            "checkoutHeadSha": "46255e8b0bd23a3ead9f3330bc646d231132bb4d",
+            "phase": "checkout-created",
+            "setupAttempts": 0,
+            "writable": false,
+            "changed": false
+          },
+          {
+            "name": "api",
+            "baseSha": "4f0bb0a0a2ad4c0702c0dd753e5022bb8454f6a1",
+            "checkoutHeadSha": "4f0bb0a0a2ad4c0702c0dd753e5022bb8454f6a1",
+            "phase": "checkout-created",
+            "setupAttempts": 0,
+            "writable": true,
+            "changed": false
+          },
+          {
+            "name": "worker",
+            "baseSha": "f76a60908a9c2be460588c571f7acd57ea12f020",
+            "checkoutHeadSha": "f76a60908a9c2be460588c571f7acd57ea12f020",
+            "phase": "checkout-created",
+            "setupAttempts": 0,
+            "writable": false,
+            "changed": false
+          },
+          {
+            "name": "web",
+            "baseSha": "4d471e422cc90be954750481cfed6b0225416f48",
+            "checkoutHeadSha": "4d471e422cc90be954750481cfed6b0225416f48",
+            "phase": "checkout-created",
+            "setupAttempts": 0,
+            "writable": true,
+            "changed": false
+          },
+          {
+            "name": "admin",
+            "baseSha": "ea9e2b99bfaa504a94a9895a333e92c546b2ec9b",
+            "checkoutHeadSha": "ea9e2b99bfaa504a94a9895a333e92c546b2ec9b",
+            "phase": "checkout-created",
+            "setupAttempts": 0,
+            "writable": false,
+            "changed": false
+          },
+          {
+            "name": "mobile",
+            "baseSha": "0258326d73f57a983c25f6567b1521aa1df3e38e",
+            "checkoutHeadSha": "0258326d73f57a983c25f6567b1521aa1df3e38e",
+            "phase": "registered",
+            "setupAttempts": 0,
+            "writable": false,
+            "changed": false
+          },
+          {
+            "name": "docs",
+            "baseSha": "a125f4344384a7428a811ba55fec5e2e2896f70b",
+            "checkoutHeadSha": null,
+            "phase": "pending",
+            "setupAttempts": 0,
+            "writable": false,
+            "changed": false
+          },
+          {
+            "name": "infra",
+            "baseSha": "33f0d9b789fc725519edc93520622510acdf7e2d",
+            "checkoutHeadSha": null,
+            "phase": "pending",
+            "setupAttempts": 0,
+            "writable": false,
+            "changed": false
+          },
+          {
+            "name": "e2e",
+            "baseSha": "8687cafa047281d0b70635aa88418792b2f888a0",
+            "checkoutHeadSha": null,
+            "phase": "pending",
+            "setupAttempts": 0,
+            "writable": true,
+            "changed": false
+          }
+        ],
+        "failures": [
+          {
+            "code": "ENOSPC",
+            "phase": "checkout-journal",
+            "repository": "mobile",
+            "recovered": false
+          }
+        ],
+        "metrics": {
+          "elapsedMilliseconds": 783,
+          "peakChildProcesses": 0,
+          "remainingChildProcesses": 0,
+          "logicalBytesAtPeak": 3057936,
+          "allocatedBytesAtPeak": 5926912,
+          "logicalBytesAfterCleanup": 3057936,
+          "allocatedBytesAfterCleanup": 5926912
+        },
+        "cleanup": {
+          "requested": false,
+          "completed": false,
+          "idempotent": false
+        }
+      },
+      "restart": {
+        "schemaVersion": "heniek.q033-composite-spike/v1",
+        "scenario": "disk-restart",
+        "platform": "linux",
+        "architecture": "x64",
+        "nodeVersion": "v24.18.0",
+        "gitVersion": "git version 2.54.0",
+        "layout": "registered-clones-linked-worktrees",
+        "workspaceRoot": "$SANDBOX/workspaces/ws_q033",
+        "compositeRootIsGitRepository": false,
+        "repositoryCount": 10,
+        "semanticReadSet": [
+          "contracts",
+          "shared",
+          "api",
+          "worker",
+          "web",
+          "admin",
+          "mobile",
+          "docs",
+          "infra",
+          "e2e"
+        ],
+        "writeSet": ["api", "web", "e2e"],
+        "crossRepositoryVerification": true,
+        "setupOrder": [
+          "contracts",
+          "shared",
+          "api",
+          "docs",
+          "worker",
+          "web",
+          "admin",
+          "mobile",
+          "infra",
+          "e2e"
+        ],
+        "repositories": [
+          {
+            "name": "contracts",
+            "baseSha": "8276dee473bc3654506a49225496f2d72dfc7700",
+            "checkoutHeadSha": "8276dee473bc3654506a49225496f2d72dfc7700",
+            "phase": "setup-completed",
+            "setupAttempts": 1,
+            "writable": false,
+            "changed": false
+          },
+          {
+            "name": "shared",
+            "baseSha": "46255e8b0bd23a3ead9f3330bc646d231132bb4d",
+            "checkoutHeadSha": "46255e8b0bd23a3ead9f3330bc646d231132bb4d",
+            "phase": "setup-completed",
+            "setupAttempts": 1,
+            "writable": false,
+            "changed": false
+          },
+          {
+            "name": "api",
+            "baseSha": "4f0bb0a0a2ad4c0702c0dd753e5022bb8454f6a1",
+            "checkoutHeadSha": "4f0bb0a0a2ad4c0702c0dd753e5022bb8454f6a1",
+            "phase": "setup-completed",
+            "setupAttempts": 1,
+            "writable": true,
+            "changed": true
+          },
+          {
+            "name": "worker",
+            "baseSha": "f76a60908a9c2be460588c571f7acd57ea12f020",
+            "checkoutHeadSha": "f76a60908a9c2be460588c571f7acd57ea12f020",
+            "phase": "setup-completed",
+            "setupAttempts": 1,
+            "writable": false,
+            "changed": false
+          },
+          {
+            "name": "web",
+            "baseSha": "4d471e422cc90be954750481cfed6b0225416f48",
+            "checkoutHeadSha": "4d471e422cc90be954750481cfed6b0225416f48",
+            "phase": "setup-completed",
+            "setupAttempts": 1,
+            "writable": true,
+            "changed": true
+          },
+          {
+            "name": "admin",
+            "baseSha": "ea9e2b99bfaa504a94a9895a333e92c546b2ec9b",
+            "checkoutHeadSha": "ea9e2b99bfaa504a94a9895a333e92c546b2ec9b",
+            "phase": "setup-completed",
+            "setupAttempts": 1,
+            "writable": false,
+            "changed": false
+          },
+          {
+            "name": "mobile",
+            "baseSha": "0258326d73f57a983c25f6567b1521aa1df3e38e",
+            "checkoutHeadSha": "0258326d73f57a983c25f6567b1521aa1df3e38e",
+            "phase": "setup-completed",
+            "setupAttempts": 1,
+            "writable": false,
+            "changed": false
+          },
+          {
+            "name": "docs",
+            "baseSha": "a125f4344384a7428a811ba55fec5e2e2896f70b",
+            "checkoutHeadSha": "a125f4344384a7428a811ba55fec5e2e2896f70b",
+            "phase": "setup-completed",
+            "setupAttempts": 1,
+            "writable": false,
+            "changed": false
+          },
+          {
+            "name": "infra",
+            "baseSha": "33f0d9b789fc725519edc93520622510acdf7e2d",
+            "checkoutHeadSha": "33f0d9b789fc725519edc93520622510acdf7e2d",
+            "phase": "setup-completed",
+            "setupAttempts": 1,
+            "writable": false,
+            "changed": false
+          },
+          {
+            "name": "e2e",
+            "baseSha": "8687cafa047281d0b70635aa88418792b2f888a0",
+            "checkoutHeadSha": "8687cafa047281d0b70635aa88418792b2f888a0",
+            "phase": "setup-completed",
+            "setupAttempts": 1,
+            "writable": true,
+            "changed": true
+          }
+        ],
+        "failures": [],
+        "metrics": {
+          "elapsedMilliseconds": 570,
+          "peakChildProcesses": 3,
+          "remainingChildProcesses": 0,
+          "logicalBytesAtPeak": 3547165,
+          "allocatedBytesAtPeak": 6946816,
+          "logicalBytesAfterCleanup": 0,
+          "allocatedBytesAfterCleanup": 0
+        },
+        "cleanup": {
+          "requested": true,
+          "completed": true,
+          "idempotent": true
+        }
+      },
+      "basePinPreserved": true
+    },
+    {
+      "scenario": "crash-restart",
+      "first": {
+        "schemaVersion": "heniek.q033-composite-spike/v1",
+        "scenario": "crash-interrupted",
+        "platform": "linux",
+        "architecture": "x64",
+        "nodeVersion": "v24.18.0",
+        "gitVersion": "git version 2.54.0",
+        "layout": "registered-clones-linked-worktrees",
+        "workspaceRoot": "$SANDBOX/workspaces/ws_q033",
+        "compositeRootIsGitRepository": false,
+        "repositoryCount": 10,
+        "semanticReadSet": [],
+        "writeSet": ["api", "web", "e2e"],
+        "crossRepositoryVerification": false,
+        "setupOrder": [],
+        "repositories": [
+          {
+            "name": "contracts",
+            "baseSha": "96bd6e6886d63bcd18076a59a4095849b9ca22bc",
+            "checkoutHeadSha": "96bd6e6886d63bcd18076a59a4095849b9ca22bc",
+            "phase": "checkout-created",
+            "setupAttempts": 0,
+            "writable": false,
+            "changed": false
+          },
+          {
+            "name": "shared",
+            "baseSha": "08fa5dd212c8173a80f6791bfc75b587038bcb4a",
+            "checkoutHeadSha": "08fa5dd212c8173a80f6791bfc75b587038bcb4a",
+            "phase": "checkout-created",
+            "setupAttempts": 0,
+            "writable": false,
+            "changed": false
+          },
+          {
+            "name": "api",
+            "baseSha": "ee1cb87becb1fd2beb124cca56f494627e25a66b",
+            "checkoutHeadSha": "ee1cb87becb1fd2beb124cca56f494627e25a66b",
+            "phase": "checkout-created",
+            "setupAttempts": 0,
+            "writable": true,
+            "changed": false
+          },
+          {
+            "name": "worker",
+            "baseSha": "29b7ea6b5a685f9d731b008cca0953099a2b07b2",
+            "checkoutHeadSha": "29b7ea6b5a685f9d731b008cca0953099a2b07b2",
+            "phase": "checkout-created",
+            "setupAttempts": 0,
+            "writable": false,
+            "changed": false
+          },
+          {
+            "name": "web",
+            "baseSha": "eba78ddc3ba3263e1c1d31fd8a9a6cd453547bb2",
+            "checkoutHeadSha": "eba78ddc3ba3263e1c1d31fd8a9a6cd453547bb2",
+            "phase": "checkout-created",
+            "setupAttempts": 0,
+            "writable": true,
+            "changed": false
+          },
+          {
+            "name": "admin",
+            "baseSha": "16e796af49b0eefabccd2cdd0a01b3e16c5f1bcf",
+            "checkoutHeadSha": "16e796af49b0eefabccd2cdd0a01b3e16c5f1bcf",
+            "phase": "checkout-created",
+            "setupAttempts": 0,
+            "writable": false,
+            "changed": false
+          },
+          {
+            "name": "mobile",
+            "baseSha": "9196cdfbdb57264ad56d9e685de9d0ab6e333021",
+            "checkoutHeadSha": "9196cdfbdb57264ad56d9e685de9d0ab6e333021",
+            "phase": "registered",
+            "setupAttempts": 0,
+            "writable": false,
+            "changed": false
+          },
+          {
+            "name": "docs",
+            "baseSha": "d629a43cc80c9e6dbd946e9bdda1282c3c8823f7",
+            "checkoutHeadSha": null,
+            "phase": "pending",
+            "setupAttempts": 0,
+            "writable": false,
+            "changed": false
+          },
+          {
+            "name": "infra",
+            "baseSha": "cd79bcd7cbdc936135e54d5d6460f93f62cc39c3",
+            "checkoutHeadSha": null,
+            "phase": "pending",
+            "setupAttempts": 0,
+            "writable": false,
+            "changed": false
+          },
+          {
+            "name": "e2e",
+            "baseSha": "8eedb0662f6e66cc5db10a62003e912ac533ace8",
+            "checkoutHeadSha": null,
+            "phase": "pending",
+            "setupAttempts": 0,
+            "writable": true,
+            "changed": false
+          }
+        ],
+        "failures": [
+          {
+            "code": "PROCESS_INTERRUPTED",
+            "phase": "checkout-journal",
+            "repository": "mobile",
+            "recovered": false
+          }
+        ],
+        "metrics": {
+          "elapsedMilliseconds": 519,
+          "peakChildProcesses": 0,
+          "remainingChildProcesses": 0,
+          "logicalBytesAtPeak": 3057939,
+          "allocatedBytesAtPeak": 5926912,
+          "logicalBytesAfterCleanup": 3057939,
+          "allocatedBytesAfterCleanup": 5926912
+        },
+        "cleanup": {
+          "requested": false,
+          "completed": false,
+          "idempotent": false
+        }
+      },
+      "restart": {
+        "schemaVersion": "heniek.q033-composite-spike/v1",
+        "scenario": "crash-restart",
+        "platform": "linux",
+        "architecture": "x64",
+        "nodeVersion": "v24.18.0",
+        "gitVersion": "git version 2.54.0",
+        "layout": "registered-clones-linked-worktrees",
+        "workspaceRoot": "$SANDBOX/workspaces/ws_q033",
+        "compositeRootIsGitRepository": false,
+        "repositoryCount": 10,
+        "semanticReadSet": [
+          "contracts",
+          "shared",
+          "api",
+          "worker",
+          "web",
+          "admin",
+          "mobile",
+          "docs",
+          "infra",
+          "e2e"
+        ],
+        "writeSet": ["api", "web", "e2e"],
+        "crossRepositoryVerification": true,
+        "setupOrder": [
+          "contracts",
+          "shared",
+          "api",
+          "docs",
+          "worker",
+          "web",
+          "admin",
+          "mobile",
+          "infra",
+          "e2e"
+        ],
+        "repositories": [
+          {
+            "name": "contracts",
+            "baseSha": "96bd6e6886d63bcd18076a59a4095849b9ca22bc",
+            "checkoutHeadSha": "96bd6e6886d63bcd18076a59a4095849b9ca22bc",
+            "phase": "setup-completed",
+            "setupAttempts": 1,
+            "writable": false,
+            "changed": false
+          },
+          {
+            "name": "shared",
+            "baseSha": "08fa5dd212c8173a80f6791bfc75b587038bcb4a",
+            "checkoutHeadSha": "08fa5dd212c8173a80f6791bfc75b587038bcb4a",
+            "phase": "setup-completed",
+            "setupAttempts": 1,
+            "writable": false,
+            "changed": false
+          },
+          {
+            "name": "api",
+            "baseSha": "ee1cb87becb1fd2beb124cca56f494627e25a66b",
+            "checkoutHeadSha": "ee1cb87becb1fd2beb124cca56f494627e25a66b",
+            "phase": "setup-completed",
+            "setupAttempts": 1,
+            "writable": true,
+            "changed": true
+          },
+          {
+            "name": "worker",
+            "baseSha": "29b7ea6b5a685f9d731b008cca0953099a2b07b2",
+            "checkoutHeadSha": "29b7ea6b5a685f9d731b008cca0953099a2b07b2",
+            "phase": "setup-completed",
+            "setupAttempts": 1,
+            "writable": false,
+            "changed": false
+          },
+          {
+            "name": "web",
+            "baseSha": "eba78ddc3ba3263e1c1d31fd8a9a6cd453547bb2",
+            "checkoutHeadSha": "eba78ddc3ba3263e1c1d31fd8a9a6cd453547bb2",
+            "phase": "setup-completed",
+            "setupAttempts": 1,
+            "writable": true,
+            "changed": true
+          },
+          {
+            "name": "admin",
+            "baseSha": "16e796af49b0eefabccd2cdd0a01b3e16c5f1bcf",
+            "checkoutHeadSha": "16e796af49b0eefabccd2cdd0a01b3e16c5f1bcf",
+            "phase": "setup-completed",
+            "setupAttempts": 1,
+            "writable": false,
+            "changed": false
+          },
+          {
+            "name": "mobile",
+            "baseSha": "9196cdfbdb57264ad56d9e685de9d0ab6e333021",
+            "checkoutHeadSha": "9196cdfbdb57264ad56d9e685de9d0ab6e333021",
+            "phase": "setup-completed",
+            "setupAttempts": 1,
+            "writable": false,
+            "changed": false
+          },
+          {
+            "name": "docs",
+            "baseSha": "d629a43cc80c9e6dbd946e9bdda1282c3c8823f7",
+            "checkoutHeadSha": "d629a43cc80c9e6dbd946e9bdda1282c3c8823f7",
+            "phase": "setup-completed",
+            "setupAttempts": 1,
+            "writable": false,
+            "changed": false
+          },
+          {
+            "name": "infra",
+            "baseSha": "cd79bcd7cbdc936135e54d5d6460f93f62cc39c3",
+            "checkoutHeadSha": "cd79bcd7cbdc936135e54d5d6460f93f62cc39c3",
+            "phase": "setup-completed",
+            "setupAttempts": 1,
+            "writable": false,
+            "changed": false
+          },
+          {
+            "name": "e2e",
+            "baseSha": "8eedb0662f6e66cc5db10a62003e912ac533ace8",
+            "checkoutHeadSha": "8eedb0662f6e66cc5db10a62003e912ac533ace8",
+            "phase": "setup-completed",
+            "setupAttempts": 1,
+            "writable": true,
+            "changed": true
+          }
+        ],
+        "failures": [],
+        "metrics": {
+          "elapsedMilliseconds": 556,
+          "peakChildProcesses": 3,
+          "remainingChildProcesses": 0,
+          "logicalBytesAtPeak": 3547170,
+          "allocatedBytesAtPeak": 6946816,
+          "logicalBytesAfterCleanup": 0,
+          "allocatedBytesAfterCleanup": 0
+        },
+        "cleanup": {
+          "requested": true,
+          "completed": true,
+          "idempotent": true
+        }
+      },
+      "basePinPreserved": true
+    },
+    {
+      "scenario": "corrupt-journal-restart",
+      "first": {
+        "code": "JOURNAL_CORRUPT",
+        "phase": "restart"
+      }
+    }
+  ]
+}

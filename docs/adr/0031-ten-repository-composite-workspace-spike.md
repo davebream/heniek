@@ -7,9 +7,9 @@
   §12.6 provisioning
 - Evidence:
   [`evidence/0031-q033-composite-manifest-macos.json`](evidence/0031-q033-composite-manifest-macos.json),
-  `0031-q033-composite-manifest-linux.json` (CI artifact promoted before merge),
+  [`evidence/0031-q033-composite-manifest-linux.json`](evidence/0031-q033-composite-manifest-linux.json),
   [`evidence/0031-q033-failure-traces-macos.json`](evidence/0031-q033-failure-traces-macos.json),
-  `0031-q033-failure-traces-linux.json` (CI artifact promoted before merge),
+  [`evidence/0031-q033-failure-traces-linux.json`](evidence/0031-q033-failure-traces-linux.json),
   [`evidence/0031-q033-command-results.md`](evidence/0031-q033-command-results.md)
 
 ## Context

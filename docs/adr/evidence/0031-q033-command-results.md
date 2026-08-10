@@ -38,11 +38,19 @@ Full local result:
 - TypeScript — pass;
 - Vitest — 2,245 passed, 9 skipped, 0 failed.
 
-GitHub run links are recorded after the retained Linux artifact is promoted from the two-platform CI
-matrix.
-
 ## CI evidence
 
-The `q033-spike` matrix runs the same command on `macos-latest` and `ubuntu-latest`, uploads each raw
-manifest/failure trace, and gates the existing required `quality` job. Exact run links and the Linux
-measurements are added before merge.
+The first [two-platform evidence run](https://github.com/davebream/heniek/actions/runs/31373624857)
+completed both spike jobs successfully and supplied the retained Linux files.
+
+Linux environment and observations:
+
+- Ubuntu (`linux`, x64), Node.js `v24.18.0`, Git `2.54.0`;
+- ten semantic reads, three scoped writes, and cross-repository verification passed;
+- setup peak: 3 child processes; remaining after every scenario: 0;
+- peak sandbox allocation: 6,893,568 bytes; after cleanup: 0 bytes;
+- all six retained failure/restart scenarios behaved equivalently to macOS.
+
+The `q033-spike` matrix uploads each platform's raw manifest/failure trace and gates the existing
+required `quality` job. The final evidence commit is validated by a second complete matrix before
+merge.
