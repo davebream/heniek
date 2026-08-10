@@ -3,6 +3,7 @@ import { ArtifactId } from "../artifact/index.js";
 import { ProfileExecutionMode } from "../configuration/index.js";
 import {
   ExecutionAttemptV1,
+  ExecutionBackendDiagnosticV1,
   PendingInteractionV2,
   SchedulingDecisionV1,
   SchedulingDecisionV2,
@@ -513,4 +514,19 @@ export const DoctorReportV1 = versioned("DoctorReport", 1, {
     ),
     { minItems: 4 },
   ),
+});
+
+/**
+ * Canonical doctor report with split-axis checks. Aggregate health adds
+ * `"unknown"` when any check was unread or failed to read, so absence of
+ * evidence is never coerced into a completed `failed` verdict.
+ */
+export const DoctorReportV2 = versioned("DoctorReport", 2, {
+  health: Type.Union([
+    Type.Literal("healthy"),
+    Type.Literal("degraded"),
+    Type.Literal("failed"),
+    Type.Literal("unknown"),
+  ]),
+  checks: Type.Array(ExecutionBackendDiagnosticV1, { minItems: 4 }),
 });

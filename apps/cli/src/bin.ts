@@ -10,7 +10,7 @@ import {
   fetchArtifactViaDaemon,
   fetchCapabilityCatalogueViaDaemon,
   fetchDaemonStatus,
-  fetchDoctorReportViaDaemon,
+  fetchDoctorReportV2ViaDaemon,
   fetchRunResultViaDaemon,
   fetchRunStatusViaDaemon,
   HeniekClientError,
@@ -593,21 +593,28 @@ async function runArtifactGet(argv: readonly string[], json: boolean): Promise<n
 
 async function runDoctor(json: boolean): Promise<number> {
   try {
-    const report = await fetchDoctorReportViaDaemon(applicationHome());
+    const report = await fetchDoctorReportV2ViaDaemon(applicationHome());
+    const ok = report.health === "healthy" || report.health === "degraded";
     if (json)
       writeJson({
         schemaVersion: 1,
-        ok: report.health !== "failed",
+        ok,
         command: "doctor",
         result: report,
       });
     else {
       process.stdout.write(`Heniek doctor: ${report.health}\n`);
       for (const check of report.checks) {
-        process.stdout.write(`  [${check.status}] ${check.category}: ${check.message}\n`);
+        const label =
+          check.readState === "ok"
+            ? check.verdict
+            : check.readState === "failed"
+              ? "read-failed"
+              : "not-read";
+        process.stdout.write(`  [${label}] ${check.category}: ${check.message}\n`);
       }
     }
-    return report.health === "failed" ? 1 : 0;
+    return ok ? 0 : 1;
   } catch (error) {
     const failure = clientFailure(error, "Heniek doctor failed.");
     renderError(

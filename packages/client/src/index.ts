@@ -9,6 +9,7 @@ import type {
   CodebaseOnboardApplyResult,
   CodebaseOnboardProposeResult,
   DoctorReportV1,
+  DoctorReportV2,
   ExecutionFailureV1,
   ExternalStageResultV1,
   InteractionAnswerSetV1,
@@ -75,6 +76,9 @@ import {
   DOCTOR_SCHEMA_ID,
   DOCTOR_SCHEMA_SHA256,
   DOCTOR_V1_METHOD,
+  DOCTOR_V2_METHOD,
+  DOCTOR_V2_SCHEMA_ID,
+  DOCTOR_V2_SCHEMA_SHA256,
   ENGINE_CATALOGUE_METHOD,
   ENGINE_CATALOGUE_V1_METHOD,
   INBOX_LIST_METHOD,
@@ -629,6 +633,14 @@ const DOCTOR_REQUIREMENT: RpcRequirement = {
   wireMethod: DOCTOR_V1_METHOD,
   schemaId: DOCTOR_SCHEMA_ID,
   sha256: DOCTOR_SCHEMA_SHA256,
+};
+
+const DOCTOR_V2_REQUIREMENT: RpcRequirement = {
+  name: DOCTOR_METHOD,
+  methodVersion: 2,
+  wireMethod: DOCTOR_V2_METHOD,
+  schemaId: DOCTOR_V2_SCHEMA_ID,
+  sha256: DOCTOR_V2_SCHEMA_SHA256,
 };
 
 const ENGINE_CATALOGUE_REQUIREMENT: RpcRequirement = {
@@ -1570,6 +1582,12 @@ export function fetchDoctorReportViaDaemon(
   home: ApplicationHome,
 ): Promise<Static<typeof DoctorReportV1>> {
   return domainCall(home, DOCTOR_REQUIREMENT, {}, "doctor");
+}
+
+export function fetchDoctorReportV2ViaDaemon(
+  home: ApplicationHome,
+): Promise<Static<typeof DoctorReportV2>> {
+  return domainCall(home, DOCTOR_V2_REQUIREMENT, {}, "doctor");
 }
 
 export function fetchCapabilityCatalogueViaDaemon(

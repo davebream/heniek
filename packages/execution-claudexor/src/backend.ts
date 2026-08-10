@@ -30,6 +30,7 @@ import {
 } from "./diagnostics.js";
 import {
   CLAUDEXOR_PROTOCOL_MAJOR,
+  ClaudexorCompatibilityError,
   type ClaudexorEngineIdentity,
   claudexorHeaders,
   parseHandshake,
@@ -468,29 +469,57 @@ export function createClaudexorExecutionBackend(
   }
 
   /**
-   * Attest one harness's selected subscription route.
+   * Classify one harness's selected subscription route.
    *
    * Every one of the six comparisons is load-bearing: Claudexor echoes the
    * request back, so checking only `readiness` would accept an answer about a
    * different harness or a different auth source than the one asked for.
    */
-  async function subscriptionRouteAttested(harness: ProfileHarness): Promise<boolean> {
+  async function classifySubscriptionRoute(
+    harness: ProfileHarness,
+  ): Promise<
+    | { readonly kind: "not-read" }
+    | { readonly kind: "failed" }
+    | { readonly kind: "negative" }
+    | { readonly kind: "attested" }
+  > {
     const source = SUBSCRIPTION_AUTH_SOURCES[harness];
-    const response = await callJson(
-      "POST",
-      `/v2/harnesses/${encodeURIComponent(harness)}/auth-readiness`,
-      "authReadiness",
-      { authRequest: "subscription", source },
-    );
+    let response: unknown;
+    try {
+      response = await callJson(
+        "POST",
+        `/v2/harnesses/${encodeURIComponent(harness)}/auth-readiness`,
+        "authReadiness",
+        { authRequest: "subscription", source },
+      );
+    } catch (error) {
+      if (error instanceof ClaudexorControlError) return { kind: "failed" };
+      return { kind: "not-read" };
+    }
+    if (!isRecord(response)) return { kind: "failed" };
+    for (const key of ["harnessId", "authRequest", "requestedSource", "readiness"] as const) {
+      if (!(key in response)) return { kind: "failed" };
+    }
     const readiness = field(response, "readiness");
-    return (
+    if (!isRecord(readiness)) return { kind: "failed" };
+    for (const key of ["source", "availability", "verification"] as const) {
+      if (!(key in readiness)) return { kind: "failed" };
+    }
+    if (
       field(response, "harnessId") === harness &&
       field(response, "authRequest") === "subscription" &&
       field(response, "requestedSource") === source &&
       field(readiness, "source") === source &&
       field(readiness, "availability") === "available" &&
       field(readiness, "verification") === "passed"
-    );
+    ) {
+      return { kind: "attested" };
+    }
+    return { kind: "negative" };
+  }
+
+  async function subscriptionRouteAttested(harness: ProfileHarness): Promise<boolean> {
+    return (await classifySubscriptionRoute(harness)).kind === "attested";
   }
 
   async function requireSubscriptionRoute(harness: ProfileHarness): Promise<void> {
@@ -1054,73 +1083,121 @@ export function createClaudexorExecutionBackend(
     },
 
     async diagnoseCompatibility() {
+      const incompatible = (
+        readState: "not-read" | "failed" | "ok",
+        message: string,
+      ): readonly ClaudexorDiagnostic[] => [
+        readState === "ok"
+          ? {
+              category: "compatibility" as const,
+              readState: "ok" as const,
+              verdict: "fail" as const,
+              code: "CLAUDEXOR_INCOMPATIBLE",
+              message,
+              remediation: `Start selected Claudexor ${options.expectedEngine.version} and verify its local control endpoint.`,
+            }
+          : {
+              category: "compatibility" as const,
+              readState,
+              code: "CLAUDEXOR_INCOMPATIBLE",
+              message,
+              remediation: `Start selected Claudexor ${options.expectedEngine.version} and verify its local control endpoint.`,
+            },
+      ];
+      handshakeComplete = false;
       try {
-        handshakeComplete = false;
         await handshake();
-        const response = await callJson("GET", "/v2/operations", "operations");
-        const operations = field(response, "operations");
-        const descriptors = Array.isArray(operations) ? operations : [];
-        const available = new Set(
-          descriptors.flatMap((entry) => {
-            const method = field(entry, "method");
-            const path = field(entry, "path");
-            return typeof method === "string" && typeof path === "string"
-              ? [`${method.toUpperCase()} ${path}`]
-              : [];
-          }),
-        );
-        const missing = REQUIRED_OPERATIONS.filter((operation) => !available.has(operation));
-        if (missing.length > 0) {
-          return [
-            {
-              category: "compatibility" as const,
-              status: "fail" as const,
-              code: "CLAUDEXOR_OPERATIONS_MISSING",
-              message: `${missing.length} required Claudexor operation(s) are unavailable.`,
-              remediation: `Use selected Claudexor ${options.expectedEngine.version}/${options.expectedEngine.buildSha}.`,
-            },
-          ];
+      } catch (error) {
+        if (error instanceof ClaudexorControlError) {
+          return incompatible("failed", "Claudexor handshake was refused by the control endpoint.");
         }
-        const policyMismatch = Object.entries(REQUIRED_OPERATION_IDEMPOTENCY).filter(
-          ([operation, expected]) => {
-            const descriptor = descriptors.find((entry) => {
-              const method = field(entry, "method");
-              const path = field(entry, "path");
-              return `${String(method).toUpperCase()} ${String(path)}` === operation;
-            });
-            return field(descriptor, "idempotency") !== expected;
-          },
-        );
-        if (policyMismatch.length > 0) {
-          return [
-            {
-              category: "compatibility" as const,
-              status: "fail" as const,
-              code: "CLAUDEXOR_IDEMPOTENCY_INCOMPATIBLE",
-              message: `${policyMismatch.length} required Claudexor idempotency declaration(s) are incompatible.`,
-              remediation: `Use selected Claudexor ${options.expectedEngine.version}/${options.expectedEngine.buildSha}.`,
-            },
-          ];
+        if (error instanceof ClaudexorCompatibilityError) {
+          if (error.code === "MALFORMED_RESPONSE" || error.code === "OPERATIONS_PATH_INVALID") {
+            return incompatible(
+              "failed",
+              "Claudexor handshake returned a malformed or incomplete envelope.",
+            );
+          }
+          return incompatible("ok", "Claudexor handshake or operation compatibility failed.");
         }
+        return incompatible(
+          "not-read",
+          "Claudexor handshake could not start against the control endpoint.",
+        );
+      }
+      let response: unknown;
+      try {
+        response = await callJson("GET", "/v2/operations", "operations");
+      } catch (error) {
+        if (error instanceof ClaudexorControlError) {
+          return incompatible(
+            "failed",
+            "Claudexor operations probe was refused by the control endpoint.",
+          );
+        }
+        return incompatible("not-read", "Claudexor operations probe could not start.");
+      }
+      const operations = field(response, "operations");
+      if (!Array.isArray(operations)) {
+        return incompatible(
+          "failed",
+          "Claudexor operations probe returned a malformed operations envelope.",
+        );
+      }
+      const descriptors = operations;
+      const available = new Set(
+        descriptors.flatMap((entry) => {
+          const method = field(entry, "method");
+          const path = field(entry, "path");
+          return typeof method === "string" && typeof path === "string"
+            ? [`${method.toUpperCase()} ${path}`]
+            : [];
+        }),
+      );
+      const missing = REQUIRED_OPERATIONS.filter((operation) => !available.has(operation));
+      if (missing.length > 0) {
         return [
           {
             category: "compatibility" as const,
-            status: "pass" as const,
-            code: "CLAUDEXOR_COMPATIBLE",
-            message: `Selected Claudexor ${options.expectedEngine.version} exposes the required /v2 operations.`,
-          },
-        ];
-      } catch {
-        return [
-          {
-            category: "compatibility" as const,
-            status: "fail" as const,
-            code: "CLAUDEXOR_INCOMPATIBLE",
-            message: "Claudexor handshake or operation compatibility failed.",
-            remediation: `Start selected Claudexor ${options.expectedEngine.version} and verify its local control endpoint.`,
+            readState: "ok" as const,
+            verdict: "fail" as const,
+            code: "CLAUDEXOR_OPERATIONS_MISSING",
+            message: `${missing.length} required Claudexor operation(s) are unavailable.`,
+            remediation: `Use selected Claudexor ${options.expectedEngine.version}/${options.expectedEngine.buildSha}.`,
           },
         ];
       }
+      const policyMismatch = Object.entries(REQUIRED_OPERATION_IDEMPOTENCY).filter(
+        ([operation, expected]) => {
+          const descriptor = descriptors.find((entry) => {
+            const method = field(entry, "method");
+            const path = field(entry, "path");
+            return `${String(method).toUpperCase()} ${String(path)}` === operation;
+          });
+          return field(descriptor, "idempotency") !== expected;
+        },
+      );
+      if (policyMismatch.length > 0) {
+        return [
+          {
+            category: "compatibility" as const,
+            readState: "ok" as const,
+            verdict: "fail" as const,
+            code: "CLAUDEXOR_IDEMPOTENCY_INCOMPATIBLE",
+            message: `${policyMismatch.length} required Claudexor idempotency declaration(s) are incompatible.`,
+            remediation: `Use selected Claudexor ${options.expectedEngine.version}/${options.expectedEngine.buildSha}.`,
+          },
+        ];
+      }
+      return [
+        {
+          category: "compatibility" as const,
+          readState: "ok" as const,
+          verdict: "pass" as const,
+          code: "CLAUDEXOR_COMPATIBLE",
+          message: `Selected Claudexor ${options.expectedEngine.version} exposes the required /v2 operations.`,
+        },
+      ];
     },
 
     diagnoseRuntime() {
@@ -1134,79 +1211,194 @@ export function createClaudexorExecutionBackend(
           ...(options.claudeCommand === undefined ? {} : { command: options.claudeCommand }),
           ...(options.diagnosticRunner === undefined ? {} : { run: options.diagnosticRunner }),
         });
-        if (local.status !== "pass") return local;
+        if (!(local.readState === "ok" && local.verdict === "pass")) return local;
         try {
           await handshake();
-          if (!(await subscriptionRouteAttested("claude"))) {
-            throw new Error("unattested");
+        } catch (error) {
+          if (error instanceof ClaudexorControlError) {
+            return {
+              category: "auth-route" as const,
+              readState: "failed" as const,
+              code: "CLAUDEXOR_SUBSCRIPTION_ROUTE_UNREADY",
+              message: "Claudexor refused the subscription-route attestation request.",
+              remediation:
+                "Start the pinned runtime with the Q004 isolated subscription carrier and rerun heniek doctor.",
+            };
           }
-          return local;
-        } catch {
+          if (error instanceof ClaudexorCompatibilityError) {
+            if (error.code === "MALFORMED_RESPONSE" || error.code === "OPERATIONS_PATH_INVALID") {
+              return {
+                category: "auth-route" as const,
+                readState: "failed" as const,
+                code: "CLAUDEXOR_SUBSCRIPTION_ROUTE_UNREADY",
+                message:
+                  "Claudexor returned a malformed handshake while attesting the subscription route.",
+                remediation:
+                  "Start the pinned runtime with the Q004 isolated subscription carrier and rerun heniek doctor.",
+              };
+            }
+            return {
+              category: "auth-route" as const,
+              readState: "ok" as const,
+              verdict: "fail" as const,
+              code: "CLAUDEXOR_SUBSCRIPTION_ROUTE_UNREADY",
+              message:
+                "Claudexor did not attest the isolated OAuth-token subscription source as ready.",
+              remediation:
+                "Start the pinned runtime with the Q004 isolated subscription carrier and rerun heniek doctor.",
+            };
+          }
           return {
             category: "auth-route" as const,
-            status: "fail" as const,
+            readState: "not-read" as const,
             code: "CLAUDEXOR_SUBSCRIPTION_ROUTE_UNREADY",
-            message:
-              "Claudexor did not attest the isolated OAuth-token subscription source as ready.",
+            message: "Claudexor subscription-route attestation could not start.",
             remediation:
               "Start the pinned runtime with the Q004 isolated subscription carrier and rerun heniek doctor.",
           };
         }
+        const classification = await classifySubscriptionRoute("claude");
+        if (classification.kind === "attested") return local;
+        if (classification.kind === "not-read") {
+          return {
+            category: "auth-route" as const,
+            readState: "not-read" as const,
+            code: "CLAUDEXOR_SUBSCRIPTION_ROUTE_UNREADY",
+            message: "Claudexor subscription-route attestation could not start.",
+            remediation:
+              "Start the pinned runtime with the Q004 isolated subscription carrier and rerun heniek doctor.",
+          };
+        }
+        if (classification.kind === "failed") {
+          return {
+            category: "auth-route" as const,
+            readState: "failed" as const,
+            code: "CLAUDEXOR_SUBSCRIPTION_ROUTE_UNREADY",
+            message:
+              "Claudexor returned a refused or incomplete OAuth-token subscription readiness envelope.",
+            remediation:
+              "Start the pinned runtime with the Q004 isolated subscription carrier and rerun heniek doctor.",
+          };
+        }
+        return {
+          category: "auth-route" as const,
+          readState: "ok" as const,
+          verdict: "fail" as const,
+          code: "CLAUDEXOR_SUBSCRIPTION_ROUTE_UNREADY",
+          message:
+            "Claudexor did not attest the isolated OAuth-token subscription source as ready.",
+          remediation:
+            "Start the pinned runtime with the Q004 isolated subscription carrier and rerun heniek doctor.",
+        };
       })();
     },
 
     diagnoseCodexAuthRoute() {
-      return (async () => {
-        try {
-          await handshake();
-          if (!(await subscriptionRouteAttested("codex"))) {
-            throw new Error("unattested");
-          }
-          return {
-            category: "auth-route" as const,
-            status: "pass" as const,
-            code: "CODEX_NATIVE_SESSION_ATTESTED",
-            message: "Claudexor attested a native Codex ChatGPT subscription session.",
-          };
-        } catch {
-          return {
-            category: "auth-route" as const,
-            status: "fail" as const,
-            code: "CODEX_NATIVE_SESSION_UNATTESTED",
-            message: "Claudexor did not attest a native Codex ChatGPT subscription session.",
-            remediation: "Sign in to Codex through Claudexor and rerun heniek doctor.",
-          };
-        }
-      })();
+      return diagnoseNativeSessionRoute("codex", {
+        attestedCode: "CODEX_NATIVE_SESSION_ATTESTED",
+        attestedMessage: "Claudexor attested a native Codex ChatGPT subscription session.",
+        unattestedCode: "CODEX_NATIVE_SESSION_UNATTESTED",
+        unattestedMessage: "Claudexor did not attest a native Codex ChatGPT subscription session.",
+        remediation: "Sign in to Codex through Claudexor and rerun heniek doctor.",
+      });
     },
 
     diagnoseCursorAuthRoute() {
-      return (async () => {
-        try {
-          await handshake();
-          if (!(await subscriptionRouteAttested("cursor"))) {
-            throw new Error("unattested");
-          }
-          return {
-            category: "auth-route" as const,
-            status: "pass" as const,
-            code: "CURSOR_NATIVE_SESSION_ATTESTED",
-            message: "Claudexor attested a native Cursor subscription session.",
-          };
-        } catch {
-          return {
-            category: "auth-route" as const,
-            status: "fail" as const,
-            code: "CURSOR_NATIVE_SESSION_UNATTESTED",
-            message: "Claudexor did not attest a native Cursor subscription session.",
-            // Cursor's login is keychain-backed and read through the daemon's
-            // own HOME, so a daemon started with a scratch HOME reports this
-            // even when the user is genuinely signed in.
-            remediation:
-              "Sign in with `cursor-agent login`, ensure the Claudexor daemon runs under your real HOME, then rerun heniek doctor.",
-          };
-        }
-      })();
+      return diagnoseNativeSessionRoute("cursor", {
+        attestedCode: "CURSOR_NATIVE_SESSION_ATTESTED",
+        attestedMessage: "Claudexor attested a native Cursor subscription session.",
+        unattestedCode: "CURSOR_NATIVE_SESSION_UNATTESTED",
+        unattestedMessage: "Claudexor did not attest a native Cursor subscription session.",
+        remediation:
+          "Sign in with `cursor-agent login`, ensure the Claudexor daemon runs under your real HOME, then rerun heniek doctor.",
+      });
     },
   };
+
+  async function diagnoseNativeSessionRoute(
+    harness: "codex" | "cursor",
+    copy: {
+      readonly attestedCode: string;
+      readonly attestedMessage: string;
+      readonly unattestedCode: string;
+      readonly unattestedMessage: string;
+      readonly remediation: string;
+    },
+  ): Promise<ClaudexorDiagnostic> {
+    try {
+      await handshake();
+    } catch (error) {
+      if (error instanceof ClaudexorControlError) {
+        return {
+          category: "auth-route",
+          readState: "failed",
+          code: copy.unattestedCode,
+          message: copy.unattestedMessage,
+          remediation: copy.remediation,
+        };
+      }
+      if (error instanceof ClaudexorCompatibilityError) {
+        if (error.code === "MALFORMED_RESPONSE" || error.code === "OPERATIONS_PATH_INVALID") {
+          return {
+            category: "auth-route",
+            readState: "failed",
+            code: copy.unattestedCode,
+            message: copy.unattestedMessage,
+            remediation: copy.remediation,
+          };
+        }
+        return {
+          category: "auth-route",
+          readState: "ok",
+          verdict: "fail",
+          code: copy.unattestedCode,
+          message: copy.unattestedMessage,
+          remediation: copy.remediation,
+        };
+      }
+      return {
+        category: "auth-route",
+        readState: "not-read",
+        code: copy.unattestedCode,
+        message: copy.unattestedMessage,
+        remediation: copy.remediation,
+      };
+    }
+    const classification = await classifySubscriptionRoute(harness);
+    if (classification.kind === "attested") {
+      return {
+        category: "auth-route",
+        readState: "ok",
+        verdict: "pass",
+        code: copy.attestedCode,
+        message: copy.attestedMessage,
+      };
+    }
+    if (classification.kind === "not-read") {
+      return {
+        category: "auth-route",
+        readState: "not-read",
+        code: copy.unattestedCode,
+        message: copy.unattestedMessage,
+        remediation: copy.remediation,
+      };
+    }
+    if (classification.kind === "failed") {
+      return {
+        category: "auth-route",
+        readState: "failed",
+        code: copy.unattestedCode,
+        message: copy.unattestedMessage,
+        remediation: copy.remediation,
+      };
+    }
+    return {
+      category: "auth-route",
+      readState: "ok",
+      verdict: "fail",
+      code: copy.unattestedCode,
+      message: copy.unattestedMessage,
+      remediation: copy.remediation,
+    };
+  }
 }

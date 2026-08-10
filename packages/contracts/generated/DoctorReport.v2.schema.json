@@ -1,0 +1,165 @@
+{
+  "$id": "heniek://contract/DoctorReport/v2",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "health",
+    "checks"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 2,
+      "type": "number"
+    },
+    "health": {
+      "anyOf": [
+        {
+          "const": "healthy",
+          "type": "string"
+        },
+        {
+          "const": "degraded",
+          "type": "string"
+        },
+        {
+          "const": "failed",
+          "type": "string"
+        },
+        {
+          "const": "unknown",
+          "type": "string"
+        }
+      ]
+    },
+    "checks": {
+      "minItems": 4,
+      "type": "array",
+      "items": {
+        "anyOf": [
+          {
+            "additionalProperties": false,
+            "type": "object",
+            "required": [
+              "category",
+              "code",
+              "message",
+              "readState",
+              "verdict"
+            ],
+            "properties": {
+              "category": {
+                "anyOf": [
+                  {
+                    "const": "runtime",
+                    "type": "string"
+                  },
+                  {
+                    "const": "auth-route",
+                    "type": "string"
+                  },
+                  {
+                    "const": "compatibility",
+                    "type": "string"
+                  },
+                  {
+                    "const": "cleanup",
+                    "type": "string"
+                  }
+                ]
+              },
+              "code": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "message": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "remediation": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "readState": {
+                "const": "ok",
+                "type": "string"
+              },
+              "verdict": {
+                "anyOf": [
+                  {
+                    "const": "pass",
+                    "type": "string"
+                  },
+                  {
+                    "const": "warn",
+                    "type": "string"
+                  },
+                  {
+                    "const": "fail",
+                    "type": "string"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "additionalProperties": false,
+            "type": "object",
+            "required": [
+              "category",
+              "code",
+              "message",
+              "readState"
+            ],
+            "properties": {
+              "category": {
+                "anyOf": [
+                  {
+                    "const": "runtime",
+                    "type": "string"
+                  },
+                  {
+                    "const": "auth-route",
+                    "type": "string"
+                  },
+                  {
+                    "const": "compatibility",
+                    "type": "string"
+                  },
+                  {
+                    "const": "cleanup",
+                    "type": "string"
+                  }
+                ]
+              },
+              "code": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "message": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "remediation": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "readState": {
+                "anyOf": [
+                  {
+                    "const": "not-read",
+                    "type": "string"
+                  },
+                  {
+                    "const": "failed",
+                    "type": "string"
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

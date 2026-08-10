@@ -864,3 +864,59 @@ export const ExternalStageResultV1 = versioned("ExternalStageResult", 1, {
     pattern: "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\u0000).+$",
   }),
 });
+
+/**
+ * Provider-neutral diagnostic read provenance (issue #122).
+ *
+ * A completed probe carries `readState: "ok"` and a verdict. Incomplete
+ * probes omit `verdict` entirely: `not-read` means the probe never started
+ * (spawn/transport/unavailable), and `failed` means it started but exited,
+ * was refused, or returned a malformed/partial envelope.
+ */
+export const DiagnosticVerdict = Type.Union([
+  Type.Literal("pass"),
+  Type.Literal("warn"),
+  Type.Literal("fail"),
+]);
+
+export const DiagnosticReadState = Type.Union([
+  Type.Literal("ok"),
+  Type.Literal("not-read"),
+  Type.Literal("failed"),
+]);
+
+const ExecutionBackendDiagnosticCategory = Type.Union([
+  Type.Literal("runtime"),
+  Type.Literal("auth-route"),
+  Type.Literal("compatibility"),
+  Type.Literal("cleanup"),
+]);
+
+const ExecutionBackendDiagnosticBase = {
+  category: ExecutionBackendDiagnosticCategory,
+  code: Type.String({ minLength: 1 }),
+  message: Type.String({ minLength: 1 }),
+  remediation: Type.Optional(Type.String({ minLength: 1 })),
+};
+
+/**
+ * Split-axis diagnostic result. Illegal combinations (a verdict on
+ * `not-read`/`failed`, or a missing verdict on `ok`) are unrepresentable.
+ */
+export const ExecutionBackendDiagnosticV1 = Type.Union([
+  Type.Object(
+    {
+      ...ExecutionBackendDiagnosticBase,
+      readState: Type.Literal("ok"),
+      verdict: DiagnosticVerdict,
+    },
+    { additionalProperties: false },
+  ),
+  Type.Object(
+    {
+      ...ExecutionBackendDiagnosticBase,
+      readState: Type.Union([Type.Literal("not-read"), Type.Literal("failed")]),
+    },
+    { additionalProperties: false },
+  ),
+]);

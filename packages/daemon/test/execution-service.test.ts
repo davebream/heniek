@@ -447,7 +447,7 @@ describe("Q012 durable execution service", () => {
     await expect(service.doctor()).resolves.toMatchObject({
       health: "failed",
       checks: expect.arrayContaining([
-        expect.objectContaining({ category: "cleanup", status: "fail" }),
+        expect.objectContaining({ category: "cleanup", readState: "ok", verdict: "fail" }),
       ]),
     });
 
@@ -458,9 +458,9 @@ describe("Q012 durable execution service", () => {
       status: "waiting_on_user",
     });
     await expect(service.doctor()).resolves.toMatchObject({
-      health: "degraded",
+      health: "unknown",
       checks: expect.arrayContaining([
-        expect.objectContaining({ category: "cleanup", status: "pass" }),
+        expect.objectContaining({ category: "cleanup", readState: "ok", verdict: "pass" }),
       ]),
     });
     await service.cancel(stranded[0]?.runId ?? "");

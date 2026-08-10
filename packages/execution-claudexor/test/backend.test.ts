@@ -80,7 +80,7 @@ describe("Claudexor ExecutionBackendV2", () => {
       },
     });
     await expect(backend.diagnoseCompatibility()).resolves.toMatchObject([
-      { status: "pass", code: "CLAUDEXOR_COMPATIBLE" },
+      { readState: "ok", verdict: "pass", code: "CLAUDEXOR_COMPATIBLE" },
     ]);
   });
 
@@ -348,12 +348,20 @@ describe("Claudexor ExecutionBackendV2", () => {
         };
       },
     });
-    await expect(backend.diagnoseRuntime()).resolves.toMatchObject({ status: "pass" });
+    await expect(backend.diagnoseRuntime()).resolves.toMatchObject({
+      readState: "ok",
+      verdict: "pass",
+    });
     await expect(backend.diagnoseCompatibility()).resolves.toEqual([
-      expect.objectContaining({ status: "pass", code: "CLAUDEXOR_COMPATIBLE" }),
+      expect.objectContaining({
+        readState: "ok",
+        verdict: "pass",
+        code: "CLAUDEXOR_COMPATIBLE",
+      }),
     ]);
     await expect(backend.diagnoseAuthRoute()).resolves.toMatchObject({
-      status: "pass",
+      readState: "ok",
+      verdict: "pass",
       code: "SUBSCRIPTION_ROUTE_ATTESTED",
     });
     expect(seenEnvironments).toHaveLength(1);
@@ -377,14 +385,20 @@ describe("Claudexor ExecutionBackendV2", () => {
     });
     await expect(backend.diagnoseRuntime()).resolves.toMatchObject({
       category: "runtime",
-      status: "fail",
+      readState: "ok",
+      verdict: "fail",
     });
     await expect(backend.diagnoseAuthRoute()).resolves.toMatchObject({
       category: "auth-route",
-      status: "fail",
+      readState: "not-read",
     });
     await expect(backend.diagnoseCompatibility()).resolves.toEqual([
-      expect.objectContaining({ category: "compatibility", status: "fail" }),
+      expect.objectContaining({
+        category: "compatibility",
+        readState: "ok",
+        verdict: "fail",
+        code: "CLAUDEXOR_OPERATIONS_MISSING",
+      }),
     ]);
   });
 });
