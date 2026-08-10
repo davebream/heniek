@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 1,
+  "codebaseId": "cb-q034",
+  "name": "platform",
+  "rootPath": "/workspace/platform",
+  "sourceRepositoryPath": "/workspace/platform/api",
+  "topologySha256": "1111111111111111111111111111111111111111111111111111111111111111",
+  "repositories": [
+    {
+      "repositoryId": "repo-api",
+      "name": "api",
+      "path": "/workspace/platform/api",
+      "gitCommonDirectory": "/workspace/platform/api/.git",
+      "remotes": [
+        {
+          "name": "origin",
+          "fetchUrl": "ssh://git@example.test/acme/api",
+          "pushUrl": "ssh://git@example.test/acme/api",
+          "defaultBranch": "main"
+        }
+      ],
+      "defaultRemote": "origin",
+      "defaultBranch": "main"
+    },
+    {
+      "repositoryId": "repo-web",
+      "name": "web",
+      "path": "/workspace/platform/web",
+      "gitCommonDirectory": "/workspace/platform/web/.git",
+      "remotes": [
+        {
+          "name": "origin",
+          "fetchUrl": "ssh://git@example.test/acme/web",
+          "pushUrl": "ssh://git@example.test/acme/web",
+          "defaultBranch": "main"
+        }
+      ],
+      "defaultRemote": "origin",
+      "defaultBranch": "main"
+    },
+    {
+      "repositoryId": "repo-admin",
+      "name": "admin",
+      "path": "/workspace/platform/admin",
+      "gitCommonDirectory": "/workspace/platform/admin/.git",
+      "remotes": [
+        {
+          "name": "origin",
+          "fetchUrl": "ssh://git@example.test/acme/admin",
+          "pushUrl": "ssh://git@example.test/acme/admin",
+          "defaultBranch": "main"
+        }
+      ],
+      "defaultRemote": "origin",
+      "defaultBranch": "main"
+    },
+    {
+      "repositoryId": "repo-shared-client",
+      "name": "shared-client",
+      "path": "/workspace/platform/shared-client",
+      "gitCommonDirectory": "/workspace/platform/shared-client/.git",
+      "remotes": [
+        {
+          "name": "origin",
+          "fetchUrl": "ssh://git@example.test/acme/shared-client",
+          "pushUrl": "ssh://git@example.test/acme/shared-client",
+          "defaultBranch": "main"
+        }
+      ],
+      "defaultRemote": "origin",
+      "defaultBranch": "main"
+    }
+  ],
+  "instructionSnapshot": {
+    "schemaVersion": 1,
+    "snapshotSha256": "2222222222222222222222222222222222222222222222222222222222222222",
+    "capturedAt": "2026-08-10T12:00:00.000Z",
+    "readiness": "ready",
+    "sources": [],
+    "diagnostics": []
+  },
+  "diagnostics": [],
+  "readiness": "ready",
+  "registeredAt": "2026-08-10T12:00:00.000Z",
+  "configurationSha256": "3333333333333333333333333333333333333333333333333333333333333333"
+}

@@ -1,0 +1,75 @@
+{
+  "$id": "heniek://contract/RepositoryBasePin/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "repositoryId",
+    "requestedRef",
+    "resolvedRef",
+    "remote",
+    "fetchedRemoteIdentity",
+    "commitSha",
+    "resolvedAt",
+    "synchronization"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "repositoryId": {
+      "minLength": 1,
+      "description": "Opaque RepositoryId.",
+      "type": "string"
+    },
+    "requestedRef": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "resolvedRef": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "remote": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "fetchedRemoteIdentity": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "commitSha": {
+      "pattern": "^[0-9a-f]{40}(?:[0-9a-f]{24})?$",
+      "type": "string"
+    },
+    "resolvedAt": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "synchronization": {
+      "anyOf": [
+        {
+          "const": "notify",
+          "type": "string"
+        },
+        {
+          "const": "pinned",
+          "type": "string"
+        },
+        {
+          "const": "rebase-before-build",
+          "type": "string"
+        },
+        {
+          "const": "merge-before-build",
+          "type": "string"
+        },
+        {
+          "const": "custom",
+          "type": "string"
+        }
+      ]
+    }
+  }
+}

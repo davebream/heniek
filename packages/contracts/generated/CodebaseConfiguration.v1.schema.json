@@ -1,0 +1,156 @@
+{
+  "$id": "heniek://contract/CodebaseConfiguration/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "codebaseId",
+    "repositories"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "codebaseId": {
+      "minLength": 1,
+      "description": "Opaque CodebaseId.",
+      "type": "string"
+    },
+    "repositories": {
+      "type": "object",
+      "patternProperties": {
+        "^(.*)$": {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "expectedPath",
+            "provisioning",
+            "setup"
+          ],
+          "properties": {
+            "expectedPath": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "provisioning": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "strategy",
+                    "remote",
+                    "requestedRef",
+                    "synchronization"
+                  ],
+                  "properties": {
+                    "strategy": {
+                      "const": "managed-worktree",
+                      "type": "string"
+                    },
+                    "remote": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "requestedRef": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "synchronization": {
+                      "anyOf": [
+                        {
+                          "const": "notify",
+                          "type": "string"
+                        },
+                        {
+                          "const": "pinned",
+                          "type": "string"
+                        },
+                        {
+                          "const": "rebase-before-build",
+                          "type": "string"
+                        },
+                        {
+                          "const": "merge-before-build",
+                          "type": "string"
+                        },
+                        {
+                          "const": "custom",
+                          "type": "string"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "strategy"
+                  ],
+                  "properties": {
+                    "strategy": {
+                      "const": "current-checkout",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "strategy",
+                    "checkoutPath"
+                  ],
+                  "properties": {
+                    "strategy": {
+                      "const": "existing-checkout",
+                      "type": "string"
+                    },
+                    "checkoutPath": {
+                      "minLength": 1,
+                      "pattern": "^/",
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "strategy",
+                    "command"
+                  ],
+                  "properties": {
+                    "strategy": {
+                      "const": "custom",
+                      "type": "string"
+                    },
+                    "command": {
+                      "minLength": 1,
+                      "maxLength": 65536,
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            },
+            "setup": {
+              "anyOf": [
+                {
+                  "minLength": 1,
+                  "maxLength": 65536,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  }
+}

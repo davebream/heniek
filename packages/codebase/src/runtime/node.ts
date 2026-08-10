@@ -3,6 +3,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { mkdir, readdir, readFile, realpath, rename, stat, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, resolve } from "node:path";
 import { promisify } from "node:util";
+import type { BaseResolutionCommandResult, BaseResolutionGitPort } from "../configuration.js";
 import type {
   ClockPort,
   CodebaseFileSystem,
@@ -126,6 +127,43 @@ export function createNodeGitPort(): GitPort {
           ? []
           : filesOutput.split("\0").filter(Boolean).sort();
       return { path, gitCommonDirectory, remotes, defaultRemote, defaultBranch, visibleFiles };
+    },
+  };
+}
+
+function commandFailure(stderr: string): BaseResolutionCommandResult["kind"] {
+  const normalized = stderr.toLowerCase();
+  if (
+    normalized.includes("authentication failed") ||
+    normalized.includes("permission denied") ||
+    normalized.includes("could not read username") ||
+    normalized.includes("access denied")
+  ) {
+    return "unauthorized";
+  }
+  if (
+    normalized.includes("not found") ||
+    normalized.includes("couldn't find remote ref") ||
+    normalized.includes("does not appear to be a git repository")
+  ) {
+    return "missing";
+  }
+  return "failed";
+}
+
+export function createNodeBaseResolutionGitPort(): BaseResolutionGitPort {
+  return {
+    async run(repositoryPath, args) {
+      try {
+        const result = await execFile("git", ["-C", repositoryPath, ...args], {
+          encoding: "utf8",
+          maxBuffer: 8 * 1024 * 1024,
+        });
+        return { kind: "ok", stdout: result.stdout.trim() };
+      } catch (error) {
+        const value = error as { stderr?: string };
+        return { kind: commandFailure(value.stderr ?? ""), stdout: "" };
+      }
     },
   };
 }

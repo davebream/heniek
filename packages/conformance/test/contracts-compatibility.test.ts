@@ -284,6 +284,12 @@ const EXPECTED_SCHEMAS: readonly {
     path: "generated/CliStatusSuccess.v1.schema.json",
   },
   {
+    schemaId: "heniek://contract/CodebaseConfiguration/v1",
+    schemaVersion: 1,
+    sha256: "60bb6bb0518723af3f0f5f5c7b9f700ecdbef807272773ebb4e14f28c14f15d3",
+    path: "generated/CodebaseConfiguration.v1.schema.json",
+  },
+  {
     schemaId: "heniek://contract/CodebaseDetectionResult/v1",
     schemaVersion: 1,
     sha256: "0ff6101822ed1ba516ea106ace09d8a6f15fd5c8c8a605bf6b788cb43355b210",
@@ -938,10 +944,28 @@ const EXPECTED_SCHEMAS: readonly {
     path: "generated/RepairReport.v1.schema.json",
   },
   {
+    schemaId: "heniek://contract/RepositoryBasePin/v1",
+    schemaVersion: 1,
+    sha256: "d4cfe74e4c94af3bba8febd934597cd1f1284f390e5a94454448b0686d4c3983",
+    path: "generated/RepositoryBasePin.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/RepositoryProvisioningConfiguration/v1",
+    schemaVersion: 1,
+    sha256: "67b9a3201dc51625c2c98278ffe3d9a670889f8398951ff56fe9e36bcf512bd3",
+    path: "generated/RepositoryProvisioningConfiguration.v1.schema.json",
+  },
+  {
     schemaId: "heniek://contract/RepositoryWorkspacePolicy/v1",
     schemaVersion: 1,
     sha256: "5cf03fd921bc9cece3ae33d6866b69db566784db22e547a5fd5e19e3c85cefe2",
     path: "generated/RepositoryWorkspacePolicy.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/ResolvedCodebaseSnapshot/v1",
+    schemaVersion: 1,
+    sha256: "d6df95b17c9ffe21f793f28affa88dd2debbe81cc57028a4a29f4591c310d50e",
+    path: "generated/ResolvedCodebaseSnapshot.v1.schema.json",
   },
   {
     schemaId: "heniek://contract/ResolvedConfiguration/v1",
@@ -1276,7 +1300,7 @@ const EXPECTED_SCHEMAS: readonly {
 ];
 
 describe("packages/contracts generated manifest is unchanged (AC4)", () => {
-  it("manifest.json lists exactly the 181 known schemas with their recorded sha256", async () => {
+  it("manifest.json lists exactly the 185 known schemas with their recorded sha256", async () => {
     const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
     expect(manifest).toEqual({
       schemaVersion: "heniek.contracts-manifest.v1",
