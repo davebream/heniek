@@ -1,0 +1,28 @@
+schemaVersion: 1
+codebaseId: cb-q034
+repositories:
+  repo-api:
+    expectedPath: /workspace/platform/api
+    provisioning:
+      strategy: managed-worktree
+      remote: origin
+      requestedRef: auto
+      synchronization: notify
+    setup: pnpm install --frozen-lockfile
+  repo-web:
+    expectedPath: /workspace/platform/web
+    provisioning:
+      strategy: current-checkout
+    setup: null
+  repo-admin:
+    expectedPath: /workspace/platform/admin
+    provisioning:
+      strategy: existing-checkout
+      checkoutPath: /checkouts/platform-admin
+    setup: bundle install
+  repo-shared-client:
+    expectedPath: /workspace/platform/shared-client
+    provisioning:
+      strategy: custom
+      command: bin/materialize-shared-client
+    setup: pnpm install --frozen-lockfile
