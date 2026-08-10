@@ -18,12 +18,56 @@ The canonical scope is [Product Specification v0.2](docs/product/product-spec-v0
 Original specifications and naming records remain under `docs/provenance` and
 `docs/product` for auditability.
 
+## How Heniek relates to TAKT and Claudexor
+
+Two open-source tools solve neighboring problems, so it is worth stating the
+boundary precisely. Heniek sits one layer above both, and depends on one of them
+at runtime.
+
+[TAKT](https://github.com/nrslib/takt) coordinates agent work inside a single
+repository. It keeps a first-in-first-out task queue in `.takt/tasks.yaml`,
+drains it with a worker pool, runs each task through a declarative YAML state
+machine in its own worktree, and can open a draft pull request when a task
+finishes.
+
+[Claudexor](https://github.com/razzant/claudexor) executes agent turns against a
+single project. It owns the vendor CLI adapters, credential profiles spanning
+several subscriptions, quota and cost accounting, best-of-N candidate races, and
+arbitration between them.
+
+Heniek treats execution as replaceable and starts at delivery:
+
+- the unit of work is one feature across a **Codebase** of one or many
+  repositories, not a task inside one repository;
+- execution tasks form a **dependency graph**, and a task becomes eligible only
+  once its predecessors have been integrated into the repository integration
+  branches and combined verification has passed, not once a worker is free;
+- a hidden dependency discovered mid-run **revises the graph**, preserves
+  completed safe work, and replans the remainder;
+- a **logical stage is not a model session**: adjacent stages on one profile
+  fuse into a single live session, and a long stage hands off between sessions
+  through a durable continuation capsule that the next session must verify
+  against Git before continuing;
+- orchestration state lives **outside** the repositories being changed, so work
+  survives the parent conversation, the terminal, and a machine restart.
+
+Claudexor is Heniek's first `ExecutionBackend`, reached only through its
+versioned `/v2` control API behind an anti-corruption adapter. TAKT is a
+development-time design reference and not a dependency. Both relationships are
+recorded in the
+[development reference charter](docs/reference/development-references.md).
+
+If your work is a stream of independent single-repository tasks, TAKT's queue
+already covers it. Heniek is for the case where one feature crosses several
+repositories and the order in which its parts land matters.
+
 ## Current status
 
-Milestones M0 and M1, covering queue items Q001–Q012, are complete. The Q012
-vertical slice is dogfoodable from a source checkout: it can run one external
-Claudexor stage end to end and exercise restart and doctor behavior. This is an
-engineering checkpoint, not the point at which Heniek is generally usable.
+Milestones M0 through M3, covering queue items Q001–Q032, are complete, and M4
+is in progress through Q034. The bundled `fast` and `careful` pipelines run end
+to end from a source checkout, which is the first repeatable multi-stage
+workflow. This is an engineering checkpoint, not the point at which Heniek is
+generally usable.
 
 What works today:
 
@@ -31,21 +75,31 @@ What works today:
   conformance fixtures;
 - layered local configuration, secret-store boundaries, SQLite projections, an
   append-only event journal, and immutable artifacts;
-- a single-instance authenticated daemon with Unix-socket JSON-RPC and a
-  minimal CLI handshake/status path;
+- a single-instance authenticated daemon with Unix-socket JSON-RPC, crash
+  recovery, and a CLI handshake/status path;
+- named accounts, workers, roles, and profiles, with account queues,
+  concurrency limits, fallback chains, and a subscription billing guard;
+- Claude Code, Codex CLI, and Cursor CLI execution through profile adapters, a
+  native Claude bridge, and a managed Claudexor `/v2` runtime;
+- durable interactions with an inbox, answer, and resume across daemon restarts;
+- YAML pipeline definitions with diagnostics, deterministic scheduling, the
+  fixed stage state machine, bounded repair, segment fusion, and smart
+  continuation capsules;
 - single-repository Codebase detection, workspace provisioning, base sync, and
-  writer leases;
-- one replaceable Claudexor `/v2` execution path with restart and diagnostic
-  coverage.
+  writer leases, plus multi-root Codebase configuration and immutable base pins.
 
 What is still missing:
 
-- general engine profiles and multi-engine execution;
-- user-selectable and bundled multi-stage pipelines;
-- epic planning, multi-repository waves, review loops, and delivery automation;
-- the TUI, local dashboard, standalone binaries, and an installation/update
-  path;
-- the full security, compatibility, and platform acceptance required for v1.
+- composite workspace provisioning, isolated variants, whole-Codebase analysis,
+  and combined multi-repository verification;
+- epic task hierarchies, DAG validation, parallel task waves, autonomous graph
+  revision, integration branches, and reconciliation;
+- GitHub task synchronization and linked single- and multi-repository draft-PR
+  delivery;
+- the Claude MCP/plugin surface, the complete CLI, the TUI, the local dashboard,
+  notifications, and retention/export/backup;
+- standalone binaries, an installation/update path, and the full security,
+  compatibility, and platform acceptance required for v1.
 
 There is no supported package, binary, hosted service, or compatibility promise.
 Nothing in this repository is currently published to npm.
