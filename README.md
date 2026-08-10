@@ -16,7 +16,9 @@ state outside the repositories it manages.
 
 The canonical scope is [Product Specification v0.2](docs/product/product-spec-v0.2.md).
 Original specifications and naming records remain under `docs/provenance` and
-`docs/product` for auditability.
+`docs/product` for auditability. Explanatory notes on individual design
+decisions, written for readers who are not tracking the backlog, live in
+[`docs/design-notes`](docs/design-notes).
 
 ## How Heniek relates to TAKT and Claudexor
 
