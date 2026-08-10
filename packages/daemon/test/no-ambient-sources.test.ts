@@ -97,6 +97,7 @@ const EXPECTED_EXEMPTIONS: readonly string[] = [
    * confine, not a borderline case.
    */
   "runtime/native-bridge-service.ts",
+  "runtime/pipeline-admission-service.ts",
   /*
    * The pipeline runner coordinator (Q026). Ambient for the same reasons as
    * scheduling-service / native-bridge: `node:fs` for attempt runtime dirs and

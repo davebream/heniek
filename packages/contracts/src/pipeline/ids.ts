@@ -84,3 +84,10 @@ export type PipelineContinuationCapsuleId = Static<typeof PipelineContinuationCa
  */
 export const PipelineIncomingVerificationId = defineIdNamespace("PipelineIncomingVerificationId");
 export type PipelineIncomingVerificationId = Static<typeof PipelineIncomingVerificationId>;
+
+/**
+ * One ad-hoc attachment request identity (Q032). Caller-supplied and stable
+ * across identical retries; conflicting payloads under the same id are rejected.
+ */
+export const PipelineAttachmentId = defineIdNamespace("PipelineAttachmentId");
+export type PipelineAttachmentId = Static<typeof PipelineAttachmentId>;

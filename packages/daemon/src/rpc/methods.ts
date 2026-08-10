@@ -29,6 +29,9 @@ export {
   NATIVE_STAGE_SUBMIT_V1_METHOD,
   PARENT_SESSION_ATTACH_V1_METHOD,
   PARENT_SESSION_DETACH_V1_METHOD,
+  PIPELINE_ATTACH_V1_METHOD,
+  PIPELINE_RUN_V1_METHOD,
+  PIPELINE_VALIDATE_V1_METHOD,
   RUN_ANSWER_V1_METHOD,
   RUN_ANSWER_V2_METHOD,
   RUN_CANCEL_V1_METHOD,
@@ -77,6 +80,9 @@ export const AUTHENTICATED_METHODS = [
   "nativeStage.question",
   "nativeStage.submit",
   "nativeStage.status",
+  "pipeline.validate",
+  "pipeline.run",
+  "pipeline.attach",
 ] as const;
 
 export interface MethodContext {

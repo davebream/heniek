@@ -66,5 +66,9 @@
   "17": {
     "name": "pipeline-findings",
     "statementHash": "285f260169cd8bdd682d9705e6aa0161f5450a825f7ef487ccf5e1f2bb798700"
+  },
+  "18": {
+    "name": "pipeline-admission",
+    "statementHash": "c6089fd448b955e9211a8ea84383c325c9d01e1762e601a5c5ae11e25caef3a4"
   }
 }

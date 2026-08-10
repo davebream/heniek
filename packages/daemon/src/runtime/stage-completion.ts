@@ -85,20 +85,28 @@ export interface StageCompletionOutcome {
   readonly byteLength: number;
 }
 
+/**
+ * Pure contract check on a stage's declared result envelope. Attachment and
+ * finalize share this so an unvalidated summary never becomes an alias target.
+ */
+export function validateStageResultContract(summary: string, artifactPath: string): void {
+  if (
+    !Value.Check(ExternalStageResultV1, {
+      schemaVersion: 1,
+      summary,
+      artifactPath,
+    })
+  ) {
+    throw new StageResultContractError("terminal result does not satisfy ExternalStageResult/v1");
+  }
+}
+
 export function finalizeStageArtifact(
   db: StateDatabase,
   artifactStore: ArtifactStore,
   input: StageCompletionInput,
 ): StageCompletionOutcome {
-  if (
-    !Value.Check(ExternalStageResultV1, {
-      schemaVersion: 1,
-      summary: input.summary,
-      artifactPath: input.artifactPath,
-    })
-  ) {
-    throw new StageResultContractError("terminal result does not satisfy ExternalStageResult/v1");
-  }
+  validateStageResultContract(input.summary, input.artifactPath);
 
   if (
     input.declaredByteLength !== undefined &&

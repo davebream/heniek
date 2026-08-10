@@ -15,6 +15,8 @@ export const CONFORMANCE_CAPABILITIES = [
   "fault-stale-ref",
   "fault-conflict",
   "fault-crash-recovery",
+  "pipeline-admission",
+  "pipeline-attachment",
 ] as const;
 
 export type ConformanceCapability = (typeof CONFORMANCE_CAPABILITIES)[number];

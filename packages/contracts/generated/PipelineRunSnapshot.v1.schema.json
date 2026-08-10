@@ -1,0 +1,109 @@
+{
+  "$id": "heniek://contract/PipelineRunSnapshot/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "runId",
+    "pipelineId",
+    "source",
+    "baseGraph",
+    "effectiveGraph",
+    "baseGraphDigest",
+    "effectiveGraphDigest",
+    "resolvedProfiles",
+    "requestedOverrides",
+    "appliedOverrides",
+    "effectiveLimits",
+    "recordedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "runId": {
+      "minLength": 1,
+      "description": "Opaque RunId.",
+      "type": "string"
+    },
+    "pipelineId": {
+      "minLength": 1,
+      "description": "Opaque PipelineId.",
+      "type": "string"
+    },
+    "source": {
+      "$ref": "heniek://contract/PipelineDefinitionSource/v1"
+    },
+    "baseGraph": {
+      "$ref": "heniek://contract/PipelineGraph/v1"
+    },
+    "effectiveGraph": {
+      "$ref": "heniek://contract/PipelineGraph/v1"
+    },
+    "baseGraphDigest": {
+      "minLength": 64,
+      "maxLength": 64,
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "effectiveGraphDigest": {
+      "minLength": 64,
+      "maxLength": 64,
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "resolvedProfiles": {
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "stageId",
+          "profileId",
+          "digest"
+        ],
+        "properties": {
+          "stageId": {
+            "minLength": 1,
+            "description": "Opaque PipelineStageId.",
+            "type": "string"
+          },
+          "profileId": {
+            "minLength": 1,
+            "maxLength": 1024,
+            "type": "string"
+          },
+          "digest": {
+            "minLength": 64,
+            "maxLength": 64,
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          }
+        }
+      }
+    },
+    "requestedOverrides": {
+      "type": "array",
+      "items": {
+        "$ref": "heniek://contract/PipelineInvocationOverrideRequest/v1"
+      }
+    },
+    "appliedOverrides": {
+      "type": "array",
+      "items": {
+        "$ref": "heniek://contract/PipelineAppliedOverride/v1"
+      }
+    },
+    "effectiveLimits": {
+      "type": "object",
+      "patternProperties": {
+        "^(.*)$": {}
+      }
+    },
+    "recordedAt": {
+      "format": "date-time",
+      "type": "string"
+    }
+  }
+}

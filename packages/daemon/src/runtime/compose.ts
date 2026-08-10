@@ -135,6 +135,9 @@ import {
   NATIVE_STAGE_SUBMIT_V1_METHOD,
   PARENT_SESSION_ATTACH_V1_METHOD,
   PARENT_SESSION_DETACH_V1_METHOD,
+  PIPELINE_ATTACH_V1_METHOD,
+  PIPELINE_RUN_V1_METHOD,
+  PIPELINE_VALIDATE_V1_METHOD,
   RUN_ANSWER_V1_METHOD,
   RUN_ANSWER_V2_METHOD,
   RUN_CANCEL_V1_METHOD,
@@ -163,6 +166,14 @@ import { createSystemHostWitness } from "./host-witness.js";
 import { createNodeLockFileSystem } from "./lock-filesystem.js";
 import { createHmacSha256MacProvider } from "./mac.js";
 import { createNativeBridgeService, type NativeBridgeService } from "./native-bridge-service.js";
+import {
+  handlePipelineAttach,
+  handlePipelineRun,
+  handlePipelineValidate,
+  isPipelineAttachRequest,
+  isPipelineRunRequest,
+  isPipelineValidateRequest,
+} from "./pipeline-admission-service.js";
 import {
   createPipelineRunnerService,
   type PipelineRunnerService,
@@ -1028,6 +1039,30 @@ export async function startDaemon(deps: StartDaemonDeps): Promise<StartDaemonOut
     if (catalogue === undefined) return base;
     return appendCapabilityDoctorChecks(base, catalogue);
   };
+  const pipelineValidateHandler = async (params: unknown) => {
+    const input = withoutAuth(recordParams(params));
+    if (!isPipelineValidateRequest(input)) throw new Error("invalid pipeline validate request");
+    return handlePipelineValidate({ request: input, home });
+  };
+  const pipelineRunHandler = async (params: unknown) => {
+    const input = withoutAuth(recordParams(params));
+    if (!isPipelineRunRequest(input)) throw new Error("invalid pipeline run request");
+    return handlePipelineRun({
+      request: input,
+      home,
+      db: workspaceDatabase,
+      now: clock.nowIso(),
+    });
+  };
+  const pipelineAttachHandler = async (params: unknown) => {
+    const input = withoutAuth(recordParams(params));
+    if (!isPipelineAttachRequest(input)) throw new Error("invalid pipeline attach request");
+    return handlePipelineAttach({
+      request: input,
+      db: workspaceDatabase,
+      now: clock.nowIso(),
+    });
+  };
   const entries: Array<readonly [string, MethodHandler]> = [
     [DAEMON_STATUS_METHOD, statusHandler],
     [DAEMON_STATUS_V1_METHOD, statusHandler],
@@ -1038,6 +1073,9 @@ export async function startDaemon(deps: StartDaemonDeps): Promise<StartDaemonOut
     [CODEBASE_ONBOARD_PROPOSE_V1_METHOD, onboardProposeHandler],
     [CODEBASE_ONBOARD_APPLY_V1_METHOD, onboardApplyHandler],
     [DOCTOR_V1_METHOD, doctorHandler],
+    [PIPELINE_VALIDATE_V1_METHOD, pipelineValidateHandler],
+    [PIPELINE_RUN_V1_METHOD, pipelineRunHandler],
+    [PIPELINE_ATTACH_V1_METHOD, pipelineAttachHandler],
   ];
   if (capabilityService !== undefined) {
     entries.push([

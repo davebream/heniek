@@ -61,7 +61,7 @@ describe("migration 16 — pipeline fusion", () => {
   it("creates fusion tables on a fresh database", () => {
     runMigrationList(db, MIGRATIONS, 16);
     expect(readUserVersion(internalHandle(db))).toBe(16);
-    expect(currentSchemaVersion()).toBe(17);
+    expect(currentSchemaVersion()).toBe(18);
     const names = new Set(
       internalHandle(db)
         .prepare("SELECT name FROM sqlite_schema WHERE type = 'table'")

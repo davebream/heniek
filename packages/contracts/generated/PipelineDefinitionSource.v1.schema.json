@@ -1,0 +1,53 @@
+{
+  "$id": "heniek://contract/PipelineDefinitionSource/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "kind",
+    "identity",
+    "digest"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "kind": {
+      "anyOf": [
+        {
+          "const": "bundled",
+          "type": "string"
+        },
+        {
+          "const": "global",
+          "type": "string"
+        },
+        {
+          "const": "codebase-override",
+          "type": "string"
+        },
+        {
+          "const": "one-off",
+          "type": "string"
+        }
+      ]
+    },
+    "identity": {
+      "minLength": 1,
+      "maxLength": 1024,
+      "type": "string"
+    },
+    "digest": {
+      "minLength": 64,
+      "maxLength": 64,
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "path": {
+      "minLength": 1,
+      "maxLength": 1024,
+      "type": "string"
+    }
+  }
+}

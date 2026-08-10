@@ -1,0 +1,30 @@
+{
+  "accepted": true,
+  "pipelineId": "fast",
+  "source": {
+    "schemaVersion": 1,
+    "kind": "bundled",
+    "identity": "fast.v1",
+    "digest": "89fe1b201d9590376080aac94abc474640c9034a73f1464768e31ad07c4afacb",
+    "path": "bundled:fast.v1"
+  },
+  "baseGraphDigest": "8650b9e6d60a5cd31b8f261189abaebb2b7948fc1119579dc547e4cc534b469b",
+  "effectiveGraphDigest": "de2827ba896e93e44bb8534a4457b7eeb08e4008d1b2ffe28394b5cd50541581",
+  "appliedOverrides": [
+    {
+      "schemaVersion": 1,
+      "target": {
+        "kind": "pipeline"
+      },
+      "field": "max_repair_attempts",
+      "value": 1,
+      "source": "configuration-policy",
+      "redacted": false
+    }
+  ],
+  "effectiveLimits": {
+    "maxRepairAttempts": 1
+  },
+  "stageIds": ["build", "deliberate", "publish", "risk-review", "verify"],
+  "snapshotSchemaVersion": 1
+}

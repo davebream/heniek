@@ -67,6 +67,12 @@ export const DOCTOR_METHOD = "doctor";
 export const DOCTOR_V1_METHOD = "doctor.v1";
 export const ENGINE_CATALOGUE_METHOD = "engine.catalogue";
 export const ENGINE_CATALOGUE_V1_METHOD = "engine.catalogue.v1";
+export const PIPELINE_VALIDATE_METHOD = "pipeline.validate";
+export const PIPELINE_VALIDATE_V1_METHOD = "pipeline.validate.v1";
+export const PIPELINE_RUN_METHOD = "pipeline.run";
+export const PIPELINE_RUN_V1_METHOD = "pipeline.run.v1";
+export const PIPELINE_ATTACH_METHOD = "pipeline.attach";
+export const PIPELINE_ATTACH_V1_METHOD = "pipeline.attach.v1";
 export const RPC_CANCEL_METHOD = "rpc.cancel";
 
 export const ERROR_CODES = {
@@ -199,6 +205,17 @@ export const NATIVE_STAGE_SUBMIT_SCHEMA_SHA256 =
 export const NATIVE_STAGE_STATUS_SCHEMA_ID = "heniek://contract/NativeStageStatusResult/v1";
 export const NATIVE_STAGE_STATUS_SCHEMA_SHA256 =
   "18900c67f5cc173368e22f630e8f468ea7d98b834ad1997bd6ed8f8ce22bfa82";
+
+/** Q032 pipeline admission RPCs — result schema pins from the contracts manifest. */
+export const PIPELINE_VALIDATE_SCHEMA_ID = "heniek://contract/PipelineValidateResult/v1";
+export const PIPELINE_VALIDATE_SCHEMA_SHA256 =
+  "cc43b1eace8beb7509396232b797662871282cbf396da8c0b38561fc30ddd863";
+export const PIPELINE_RUN_SCHEMA_ID = "heniek://contract/PipelineRunResult/v1";
+export const PIPELINE_RUN_SCHEMA_SHA256 =
+  "084191f330472f113e55bbc71ae9c75b7f961e1ae3b72993d32f0121a32817e1";
+export const PIPELINE_ATTACH_SCHEMA_ID = "heniek://contract/PipelineAttachResult/v1";
+export const PIPELINE_ATTACH_SCHEMA_SHA256 =
+  "c2b7e4ef3d5a7b2cca929e307bb9b1d5a179f225310774bce0a5f7f966afd5a5";
 
 function hex(bytes: Uint8Array): string {
   return Buffer.from(bytes).toString("hex");

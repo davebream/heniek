@@ -3,10 +3,15 @@ import type { ConformanceCapability } from "./contract/capability.js";
 import { CONFORMANCE_CAPABILITIES, missingCapabilities } from "./contract/capability.js";
 import { FAKE_EXECUTION_BACKEND_CAPABILITIES } from "./fakes/execution-backend.js";
 import { FAKE_FORGE_BACKEND_CAPABILITIES } from "./fakes/forge-backend.js";
+import { FAKE_PIPELINE_RUNTIME_CAPABILITIES } from "./fakes/pipeline-runtime.js";
 import { FAKE_TASK_SOURCE_CAPABILITIES } from "./fakes/task-source.js";
 import { SMOKE_SUBPROCESS_CAPABILITIES } from "./smoke/subprocess-execution-backend.js";
 
-export type ConformanceFamily = "ExecutionBackend" | "TaskSource" | "ForgeBackend";
+export type ConformanceFamily =
+  | "ExecutionBackend"
+  | "TaskSource"
+  | "ForgeBackend"
+  | "PipelineRuntime";
 
 export interface SubjectDeclaration {
   readonly id: string;
@@ -51,6 +56,13 @@ export const SUBJECT_DECLARATIONS: readonly SubjectDeclaration[] = [
     capabilities: FAKE_FORGE_BACKEND_CAPABILITIES,
   },
   {
+    id: "fake-pipeline-runtime",
+    label: "Fake PipelineRuntime",
+    family: "PipelineRuntime",
+    availability: "always",
+    capabilities: FAKE_PIPELINE_RUNTIME_CAPABILITIES,
+  },
+  {
     id: "smoke-subprocess-execution-backend",
     label: "Smoke subprocess ExecutionBackend (opt-in)",
     family: "ExecutionBackend",
@@ -75,7 +87,7 @@ export const SUBJECT_DECLARATIONS: readonly SubjectDeclaration[] = [
   },
 ];
 
-/** Maps a case id's family prefix (`execution/…`, `task-source/…`, `forge/…`) to a `ConformanceFamily`. */
+/** Maps a case id's family prefix (`execution/…`, `task-source/…`, `forge/…`, `pipeline/…`) to a `ConformanceFamily`. */
 function familyOf(caseId: string): ConformanceFamily {
   if (caseId.startsWith("execution/")) {
     return "ExecutionBackend";
@@ -85,6 +97,9 @@ function familyOf(caseId: string): ConformanceFamily {
   }
   if (caseId.startsWith("forge/")) {
     return "ForgeBackend";
+  }
+  if (caseId.startsWith("pipeline/")) {
+    return "PipelineRuntime";
   }
   throw new Error(`Cannot determine conformance family for case id: ${caseId}`);
 }

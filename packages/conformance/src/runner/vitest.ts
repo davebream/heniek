@@ -3,8 +3,10 @@ import { describe, it } from "vitest";
 import {
   EXECUTION_BACKEND_CASES,
   FORGE_BACKEND_CASES,
+  PIPELINE_RUNTIME_CASES,
   TASK_SOURCE_CASES,
 } from "../cases/catalogue.js";
+import type { PipelineRuntime } from "../cases/pipeline-runtime.js";
 import type {
   ExecutionArrangement,
   ForgeArrangement,
@@ -13,6 +15,7 @@ import type {
 import { missingCapabilities } from "../contract/capability.js";
 import type { ConformanceCase } from "../contract/case.js";
 import type { ConformanceHarness } from "../contract/harness.js";
+import type { PipelineRuntimeArrangement } from "../contract/pipeline-runtime.js";
 import { DEFAULT_SEED, type Seed } from "../kernel/seed.js";
 import { runConformanceCase } from "./case-context.js";
 
@@ -66,4 +69,11 @@ export function describeForgeBackendConformance(
   options?: DescribeConformanceOptions,
 ): void {
   describeFamily("ForgeBackend", FORGE_BACKEND_CASES, harness, options);
+}
+
+export function describePipelineRuntimeConformance(
+  harness: ConformanceHarness<PipelineRuntime, PipelineRuntimeArrangement>,
+  options?: DescribeConformanceOptions,
+): void {
+  describeFamily("PipelineRuntime", PIPELINE_RUNTIME_CASES, harness, options);
 }

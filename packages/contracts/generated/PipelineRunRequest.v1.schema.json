@@ -1,0 +1,101 @@
+{
+  "$id": "heniek://contract/PipelineRunRequest/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "runId",
+    "codebaseId",
+    "source"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "runId": {
+      "minLength": 1,
+      "description": "Opaque RunId.",
+      "type": "string"
+    },
+    "codebaseId": {
+      "minLength": 1,
+      "description": "Opaque CodebaseId.",
+      "type": "string"
+    },
+    "source": {
+      "anyOf": [
+        {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "kind",
+            "pipelineId"
+          ],
+          "properties": {
+            "kind": {
+              "const": "named",
+              "type": "string"
+            },
+            "pipelineId": {
+              "minLength": 1,
+              "description": "Opaque PipelineId.",
+              "type": "string"
+            }
+          }
+        },
+        {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "kind",
+            "definitionText",
+            "format"
+          ],
+          "properties": {
+            "kind": {
+              "const": "one-off",
+              "type": "string"
+            },
+            "definitionText": {
+              "minLength": 1,
+              "maxLength": 1048576,
+              "type": "string"
+            },
+            "format": {
+              "anyOf": [
+                {
+                  "const": "yaml",
+                  "type": "string"
+                },
+                {
+                  "const": "json",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "overrides": {
+      "type": "array",
+      "items": {
+        "$ref": "heniek://contract/PipelineInvocationOverrideRequest/v1"
+      }
+    },
+    "knownProfileIds": {
+      "uniqueItems": true,
+      "type": "array",
+      "items": {
+        "minLength": 1,
+        "maxLength": 1024,
+        "type": "string"
+      }
+    },
+    "deadlineAt": {
+      "format": "date-time",
+      "type": "string"
+    }
+  }
+}

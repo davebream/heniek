@@ -1,0 +1,96 @@
+{
+  "$id": "heniek://contract/PipelineValidateResult/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "accepted",
+    "appliedOverrides",
+    "diagnostics"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "accepted": {
+      "type": "boolean"
+    },
+    "pipelineId": {
+      "minLength": 1,
+      "description": "Opaque PipelineId.",
+      "type": "string"
+    },
+    "source": {
+      "$ref": "heniek://contract/PipelineDefinitionSource/v1"
+    },
+    "baseGraph": {
+      "$ref": "heniek://contract/PipelineGraph/v1"
+    },
+    "effectiveGraph": {
+      "$ref": "heniek://contract/PipelineGraph/v1"
+    },
+    "baseGraphDigest": {
+      "minLength": 64,
+      "maxLength": 64,
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "effectiveGraphDigest": {
+      "minLength": 64,
+      "maxLength": 64,
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "appliedOverrides": {
+      "type": "array",
+      "items": {
+        "$ref": "heniek://contract/PipelineAppliedOverride/v1"
+      }
+    },
+    "diagnostics": {
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "code",
+          "severity",
+          "message"
+        ],
+        "properties": {
+          "code": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "severity": {
+            "anyOf": [
+              {
+                "const": "error",
+                "type": "string"
+              },
+              {
+                "const": "warning",
+                "type": "string"
+              },
+              {
+                "const": "info",
+                "type": "string"
+              }
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "pointer": {
+            "type": "string"
+          },
+          "suggestion": {
+            "minLength": 1,
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}
