@@ -4,6 +4,7 @@ import { VerifyCheckV1 } from "../pipeline/operations.js";
 import { CodebaseId, RepositoryId } from "../run/ids.js";
 
 const Sha256 = Type.String({ pattern: "^[0-9a-f]{64}$" });
+const GitCommitSha = Type.String({ pattern: "^[0-9a-f]{40}(?:[0-9a-f]{24})?$" });
 const IsoDateTime = Type.String({ format: "date-time" });
 const SafeRelativePath = Type.String({
   minLength: 1,
@@ -153,6 +154,105 @@ export const RegisteredCodebaseV1 = versioned("RegisteredCodebase", 1, {
   configurationSha256: Sha256,
 });
 
+const SynchronizationPolicy = Type.Union([
+  Type.Literal("notify"),
+  Type.Literal("pinned"),
+  Type.Literal("rebase-before-build"),
+  Type.Literal("merge-before-build"),
+  Type.Literal("custom"),
+]);
+
+/** Per-repository provisioning settings. Q034 validates every variant but only resolves managed pins. */
+export const RepositoryProvisioningConfiguration = Type.Union([
+  Type.Object(
+    {
+      strategy: Type.Literal("managed-worktree"),
+      remote: Type.String({ minLength: 1 }),
+      requestedRef: Type.String({ minLength: 1 }),
+      synchronization: SynchronizationPolicy,
+    },
+    { additionalProperties: false },
+  ),
+  Type.Object({ strategy: Type.Literal("current-checkout") }, { additionalProperties: false }),
+  Type.Object(
+    {
+      strategy: Type.Literal("existing-checkout"),
+      checkoutPath: Type.String({ minLength: 1, pattern: "^/" }),
+    },
+    { additionalProperties: false },
+  ),
+  Type.Object(
+    {
+      strategy: Type.Literal("custom"),
+      command: Type.String({ minLength: 1, maxLength: 65536 }),
+    },
+    { additionalProperties: false },
+  ),
+]);
+
+/** Standalone versioned form for consumers that exchange one provisioning configuration. */
+export const RepositoryProvisioningConfigurationV1 = versioned(
+  "RepositoryProvisioningConfiguration",
+  1,
+  { configuration: RepositoryProvisioningConfiguration },
+);
+
+const RepositoryConfiguration = Type.Object(
+  {
+    expectedPath: Type.String({ minLength: 1 }),
+    provisioning: RepositoryProvisioningConfiguration,
+    setup: Type.Union([Type.String({ minLength: 1, maxLength: 65536 }), Type.Null()]),
+  },
+  { additionalProperties: false },
+);
+
+/** Authored multi-root configuration. Repository IDs are map keys for stable layered merging. */
+export const CodebaseConfigurationV1 = versioned("CodebaseConfiguration", 1, {
+  codebaseId: CodebaseId,
+  repositories: Type.Record(Type.String({ minLength: 1 }), RepositoryConfiguration),
+});
+
+export const RepositoryBasePinV1 = versioned("RepositoryBasePin", 1, {
+  repositoryId: RepositoryId,
+  requestedRef: Type.String({ minLength: 1 }),
+  resolvedRef: Type.String({ minLength: 1 }),
+  remote: Type.String({ minLength: 1 }),
+  fetchedRemoteIdentity: Type.String({ minLength: 1 }),
+  commitSha: GitCommitSha,
+  resolvedAt: IsoDateTime,
+  synchronization: SynchronizationPolicy,
+});
+
+const ConfigurationProvenance = Type.Object(
+  {
+    layer: Type.String({ minLength: 1 }),
+    sourcePath: Type.String({ minLength: 1 }),
+    pointer: Type.String(),
+  },
+  { additionalProperties: false },
+);
+
+const ResolvedRepositoryConfiguration = Type.Object(
+  {
+    repositoryId: RepositoryId,
+    name: Type.String({ minLength: 1 }),
+    path: Type.String({ minLength: 1 }),
+    provisioning: RepositoryProvisioningConfiguration,
+    setup: Type.Union([Type.String({ minLength: 1, maxLength: 65536 }), Type.Null()]),
+    provenance: Type.Array(ConfigurationProvenance),
+  },
+  { additionalProperties: false },
+);
+
+export const ResolvedCodebaseSnapshotV1 = versioned("ResolvedCodebaseSnapshot", 1, {
+  codebaseId: CodebaseId,
+  registrationSha256: Sha256,
+  configurationSha256: Sha256,
+  resolvedAt: IsoDateTime,
+  repositories: Type.Array(ResolvedRepositoryConfiguration, { minItems: 1 }),
+  basePins: Type.Array(Type.Ref(RepositoryBasePinV1)),
+});
+
 export const CodebaseDetectRequestV1 = versioned("CodebaseDetectRequest", 1, {
   roots: Type.Array(Type.String({ minLength: 1 }), { minItems: 1 }),
   sourceRepositoryPath: Type.Union([Type.String({ minLength: 1 }), Type.Null()]),
@@ -260,6 +360,12 @@ export const CodebaseOnboardApplyResultV1 = versioned("CodebaseOnboardApplyResul
 
 export type CodebaseDetectionResult = Static<typeof CodebaseDetectionResultV1>;
 export type RegisteredCodebase = Static<typeof RegisteredCodebaseV1>;
+export type CodebaseConfiguration = Static<typeof CodebaseConfigurationV1>;
+export type RepositoryProvisioningConfiguration = Static<
+  typeof RepositoryProvisioningConfiguration
+>;
+export type RepositoryBasePin = Static<typeof RepositoryBasePinV1>;
+export type ResolvedCodebaseSnapshot = Static<typeof ResolvedCodebaseSnapshotV1>;
 export type InstructionSnapshot = Static<typeof InstructionSnapshotV1>;
 export type InstructionDiagnostic = Static<typeof InstructionDiagnosticV1>;
 export type RepositoryWorkspacePolicy = Static<typeof RepositoryWorkspacePolicyV1>;

@@ -1,0 +1,214 @@
+{
+  "$id": "heniek://contract/ResolvedCodebaseSnapshot/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "codebaseId",
+    "registrationSha256",
+    "configurationSha256",
+    "resolvedAt",
+    "repositories",
+    "basePins"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "codebaseId": {
+      "minLength": 1,
+      "description": "Opaque CodebaseId.",
+      "type": "string"
+    },
+    "registrationSha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "configurationSha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "resolvedAt": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "repositories": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "repositoryId",
+          "name",
+          "path",
+          "provisioning",
+          "setup",
+          "provenance"
+        ],
+        "properties": {
+          "repositoryId": {
+            "minLength": 1,
+            "description": "Opaque RepositoryId.",
+            "type": "string"
+          },
+          "name": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "path": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "provisioning": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                  "strategy",
+                  "remote",
+                  "requestedRef",
+                  "synchronization"
+                ],
+                "properties": {
+                  "strategy": {
+                    "const": "managed-worktree",
+                    "type": "string"
+                  },
+                  "remote": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "requestedRef": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "synchronization": {
+                    "anyOf": [
+                      {
+                        "const": "notify",
+                        "type": "string"
+                      },
+                      {
+                        "const": "pinned",
+                        "type": "string"
+                      },
+                      {
+                        "const": "rebase-before-build",
+                        "type": "string"
+                      },
+                      {
+                        "const": "merge-before-build",
+                        "type": "string"
+                      },
+                      {
+                        "const": "custom",
+                        "type": "string"
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                  "strategy"
+                ],
+                "properties": {
+                  "strategy": {
+                    "const": "current-checkout",
+                    "type": "string"
+                  }
+                }
+              },
+              {
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                  "strategy",
+                  "checkoutPath"
+                ],
+                "properties": {
+                  "strategy": {
+                    "const": "existing-checkout",
+                    "type": "string"
+                  },
+                  "checkoutPath": {
+                    "minLength": 1,
+                    "pattern": "^/",
+                    "type": "string"
+                  }
+                }
+              },
+              {
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                  "strategy",
+                  "command"
+                ],
+                "properties": {
+                  "strategy": {
+                    "const": "custom",
+                    "type": "string"
+                  },
+                  "command": {
+                    "minLength": 1,
+                    "maxLength": 65536,
+                    "type": "string"
+                  }
+                }
+              }
+            ]
+          },
+          "setup": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "maxLength": 65536,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "provenance": {
+            "type": "array",
+            "items": {
+              "additionalProperties": false,
+              "type": "object",
+              "required": [
+                "layer",
+                "sourcePath",
+                "pointer"
+              ],
+              "properties": {
+                "layer": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "sourcePath": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "pointer": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "basePins": {
+      "type": "array",
+      "items": {
+        "$ref": "heniek://contract/RepositoryBasePin/v1"
+      }
+    }
+  }
+}
