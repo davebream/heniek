@@ -12,7 +12,7 @@ allowBuilds:
 # Constrained to ^3.1.5 rather than >=3.1.5: ajv declares fast-uri ^3.0.1, so an
 # unbounded range resolves fast-uri 4.x and silently violates that peer range.
 overrides:
-  fast-uri: "^3.1.5"
+  fast-uri: "^4.0.0"
 
 catalog:
   "@sinclair/typebox": 0.34.52
