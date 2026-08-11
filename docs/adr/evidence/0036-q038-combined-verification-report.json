@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "reportId": "q038-cross-repository-fan-in",
+  "workspaceId": "workspace-q038-evidence",
+  "variantId": "variant-q038-evidence",
+  "classification": "failed",
+  "checks": [
+    {
+      "checkId": "api-test",
+      "scope": "repository",
+      "repositoryId": "repo-api",
+      "argv": ["pnpm", "test"],
+      "cwd": "/evidence/composite/api",
+      "expectedExitCode": 0,
+      "actualExitCode": 1,
+      "required": true,
+      "outcome": "failed",
+      "logPath": "/evidence/logs/api-test.log",
+      "logSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "startedAt": "2026-08-12T12:00:00.000Z",
+      "finishedAt": "2026-08-12T12:00:01.000Z"
+    },
+    {
+      "checkId": "web-test",
+      "scope": "repository",
+      "repositoryId": "repo-web",
+      "argv": ["pnpm", "test"],
+      "cwd": "/evidence/composite/web",
+      "expectedExitCode": 0,
+      "actualExitCode": 0,
+      "required": true,
+      "outcome": "passed",
+      "logPath": "/evidence/logs/web-test.log",
+      "logSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "startedAt": "2026-08-12T12:00:00.000Z",
+      "finishedAt": "2026-08-12T12:00:01.000Z"
+    },
+    {
+      "checkId": "whole-codebase-test",
+      "scope": "whole-codebase",
+      "repositoryId": null,
+      "argv": ["pnpm", "check"],
+      "cwd": "/evidence/composite",
+      "expectedExitCode": 0,
+      "actualExitCode": 0,
+      "required": true,
+      "outcome": "passed",
+      "logPath": "/evidence/logs/whole-codebase-test.log",
+      "logSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "startedAt": "2026-08-12T12:00:00.000Z",
+      "finishedAt": "2026-08-12T12:00:02.000Z"
+    }
+  ],
+  "failedRepositoryIds": ["repo-api"],
+  "wholeCodebaseFailed": false,
+  "startedAt": "2026-08-12T12:00:00.000Z",
+  "finishedAt": "2026-08-12T12:00:02.000Z"
+}
