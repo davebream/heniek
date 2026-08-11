@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "scenario": "source issue repository differs from the derived primary repository",
+  "packet": {
+    "packetId": "analysis_q037_evidence",
+    "codebaseId": "codebase_heniek",
+    "workspaceId": "workspace_q037_evidence",
+    "sourceRepositoryId": "repo_docs",
+    "configurationSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "effectiveInstructions": {
+      "contentCopiedIntoRuntimeState": false,
+      "locations": [
+        {
+          "repositoryId": "repo_api",
+          "path": "AGENTS.md",
+          "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      ]
+    },
+    "repositories": [
+      {
+        "repositoryId": "repo_api",
+        "baseKind": "managed-pin",
+        "baseSha": "1111111111111111111111111111111111111111",
+        "observedEntries": 1482,
+        "emittedEntries": 1482,
+        "truncated": false
+      },
+      {
+        "repositoryId": "repo_docs",
+        "baseKind": "adopted-head",
+        "baseSha": "2222222222222222222222222222222222222222",
+        "observedEntries": 10217,
+        "emittedEntries": 10000,
+        "truncated": true
+      },
+      {
+        "repositoryId": "repo_web",
+        "baseKind": "managed-pin",
+        "baseSha": "3333333333333333333333333333333333333333",
+        "observedEntries": 936,
+        "emittedEntries": 936,
+        "truncated": false
+      }
+    ]
+  },
+  "derivedTask": {
+    "primaryRepositoryId": "repo_api",
+    "sourceRepositoryWasUsedAsPrimary": false,
+    "allRegisteredRepositoriesWereAnalyzed": true
+  },
+  "limits": {
+    "maxEntriesPerRepository": 10000,
+    "maxEncodedMetadataBytesPerRepository": 1048576
+  }
+}

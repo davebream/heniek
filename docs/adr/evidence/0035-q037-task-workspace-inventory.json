@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "scenario": "one task writes two repositories and replans after a read-only mutation",
+  "taskRevision": {
+    "taskId": "execution_task_q037_evidence",
+    "revision": 1,
+    "primaryRepositoryId": "repo_api",
+    "readSet": ["repo_api", "repo_docs", "repo_web"],
+    "writeSet": ["repo_api", "repo_web"],
+    "excludedRepositories": [],
+    "verificationRepositories": ["repo_api", "repo_web"]
+  },
+  "binding": {
+    "variantId": "variant_q037_revision_1",
+    "repositories": [
+      {
+        "repositoryId": "repo_api",
+        "access": "write",
+        "expectedHeadSha": "1111111111111111111111111111111111111111",
+        "leaseId": "lease_api_revision_1",
+        "fencingRevision": 7
+      },
+      {
+        "repositoryId": "repo_docs",
+        "access": "read-only",
+        "expectedHeadSha": "2222222222222222222222222222222222222222",
+        "leaseId": null,
+        "fencingRevision": null
+      },
+      {
+        "repositoryId": "repo_web",
+        "access": "write",
+        "expectedHeadSha": "3333333333333333333333333333333333333333",
+        "leaseId": "lease_web_revision_1",
+        "fencingRevision": 3
+      }
+    ]
+  },
+  "diffInventory": {
+    "classification": "replanning-required",
+    "repositories": [
+      {
+        "repositoryId": "repo_api",
+        "access": "write",
+        "changedPaths": [{ "path": "src/api.ts", "states": ["committed"] }],
+        "undeclaredWrite": false,
+        "truncated": false
+      },
+      {
+        "repositoryId": "repo_docs",
+        "access": "read-only",
+        "changedPaths": [{ "path": "notes/decision.md", "states": ["untracked"] }],
+        "undeclaredWrite": true,
+        "truncated": false
+      },
+      {
+        "repositoryId": "repo_web",
+        "access": "write",
+        "changedPaths": [{ "path": "src/client.ts", "states": ["staged", "unstaged"] }],
+        "undeclaredWrite": false,
+        "truncated": false
+      }
+    ],
+    "undeclaredWriteRepositories": ["repo_docs"],
+    "integrationAllowed": false,
+    "typedResult": "UNDECLARED_WRITE"
+  },
+  "controlledReplanning": {
+    "taskRevision": 2,
+    "readSet": ["repo_api", "repo_docs", "repo_web"],
+    "writeSet": ["repo_api", "repo_docs", "repo_web"],
+    "variantId": "variant_q037_revision_2",
+    "freshWriterLeasesRequired": true,
+    "dirtyRevisionOneVariantPreserved": true
+  }
+}
