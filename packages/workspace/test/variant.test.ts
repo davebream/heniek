@@ -382,4 +382,59 @@ describe("Q036 composite workspace variants", () => {
       (await exec("git", ["-C", api.path, "rev-parse", "refs/heads/main"])).stdout.trim(),
     ).not.toBe(api.sha);
   });
+
+  it("materializes only the declared Q037 read set while keeping writes a subset", async () => {
+    const root = await mkdtemp(join(tmpdir(), "heniek-variant-read-set-"));
+    roots.push(root);
+    const api = await repositoryFixture(root, "api");
+    const identity = await repositoryFixture(root, "identity");
+    const web = await repositoryFixture(root, "web");
+    const workspaceId = "ws_read_set" as WorkspaceId;
+    const service = createCompositeWorkspaceVariantService({
+      workspacesDirectory: join(root, "workspaces"),
+      clock: { nowIso: () => "2026-08-12T10:00:00.000Z" },
+      leases: leaseService(),
+    });
+    const manifest = await service.provision({
+      workspaceId,
+      variantId: "variant_read_set" as WorkspaceVariantId,
+      composite: composite(root, workspaceId, [api, identity, web]),
+      readRepositoryIds: [api.repositoryId, identity.repositoryId],
+      writeRepositoryIds: [identity.repositoryId],
+      targets: [api, identity, web].map((repository) => ({
+        repositoryId: repository.repositoryId,
+        targetRef: "refs/heads/main",
+        expectedSha: repository.sha,
+      })),
+      strategy: "manual",
+      owner,
+      leaseTtlMilliseconds: 60_000,
+    });
+
+    expect(manifest.repositories.map((repository) => repository.repositoryId)).toEqual([
+      api.repositoryId,
+      identity.repositoryId,
+    ]);
+    expect(manifest.repositories.map((repository) => repository.access)).toEqual([
+      "read-only",
+      "write",
+    ]);
+    await expect(
+      service.provision({
+        workspaceId,
+        variantId: "variant_invalid_set" as WorkspaceVariantId,
+        composite: composite(root, workspaceId, [api, identity, web]),
+        readRepositoryIds: [api.repositoryId],
+        writeRepositoryIds: [identity.repositoryId],
+        targets: [api, identity].map((repository) => ({
+          repositoryId: repository.repositoryId,
+          targetRef: "refs/heads/main",
+          expectedSha: repository.sha,
+        })),
+        strategy: "manual",
+        owner,
+        leaseTtlMilliseconds: 60_000,
+      }),
+    ).rejects.toMatchObject({ code: "INVALID_CONFIGURATION" });
+  });
 });
