@@ -17,6 +17,8 @@ export type WorkspaceErrorCode =
   | "LEASE_OWNER_UNKNOWN"
   | "SETUP_FAILED"
   | "INSTRUCTION_CHANGED"
+  | "TASK_REVISION_INVALID"
+  | "UNDECLARED_WRITE"
   | "RECOVERY_REQUIRED";
 
 export class WorkspaceError extends Error {

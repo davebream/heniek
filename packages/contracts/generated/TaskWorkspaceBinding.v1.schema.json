@@ -1,0 +1,108 @@
+{
+  "$id": "heniek://contract/TaskWorkspaceBinding/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "workspaceId",
+    "variantId",
+    "taskId",
+    "taskRevision",
+    "taskRevisionSha256",
+    "repositories",
+    "boundAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "workspaceId": {
+      "minLength": 1,
+      "description": "Opaque WorkspaceId.",
+      "type": "string"
+    },
+    "variantId": {
+      "minLength": 1,
+      "description": "Opaque WorkspaceVariantId.",
+      "type": "string"
+    },
+    "taskId": {
+      "minLength": 1,
+      "description": "Opaque ExecutionTaskId.",
+      "type": "string"
+    },
+    "taskRevision": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "taskRevisionSha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "repositories": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "repositoryId",
+          "access",
+          "expectedHeadSha",
+          "leaseId",
+          "fencingRevision"
+        ],
+        "properties": {
+          "repositoryId": {
+            "minLength": 1,
+            "description": "Opaque RepositoryId.",
+            "type": "string"
+          },
+          "access": {
+            "anyOf": [
+              {
+                "const": "write",
+                "type": "string"
+              },
+              {
+                "const": "read-only",
+                "type": "string"
+              }
+            ]
+          },
+          "expectedHeadSha": {
+            "pattern": "^[0-9a-f]{40}(?:[0-9a-f]{24})?$",
+            "type": "string"
+          },
+          "leaseId": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "fencingRevision": {
+            "anyOf": [
+              {
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "boundAt": {
+      "format": "date-time",
+      "type": "string"
+    }
+  }
+}
