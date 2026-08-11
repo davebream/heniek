@@ -35,6 +35,8 @@ export interface ProvisionWorkspaceVariantInput {
   readonly workspaceId: WorkspaceId;
   readonly variantId: WorkspaceVariantId;
   readonly composite: CompositeWorkspaceProvisioningManifest;
+  /** Q037 narrows materialization; omitted preserves Q036's all-repository behavior. */
+  readonly readRepositoryIds?: readonly RepositoryId[];
   readonly writeRepositoryIds: readonly RepositoryId[];
   readonly targets: readonly VariantTargetRef[];
   readonly strategy: WorkspaceVariantManifest["strategy"];
@@ -234,18 +236,33 @@ export function createCompositeWorkspaceVariantService(
           "Variant write targets must be unique and non-empty.",
         );
       }
-      const targets = new Map(input.targets.map((target) => [target.repositoryId, target]));
-      const repositories = input.composite.repositories.toSorted((a, b) =>
+      const allRepositories = input.composite.repositories.toSorted((a, b) =>
         a.repositoryId.localeCompare(b.repositoryId),
       );
+      const readRepositoryIds =
+        input.readRepositoryIds ?? allRepositories.map((repository) => repository.repositoryId);
+      const reads = new Set(readRepositoryIds);
+      if (reads.size !== readRepositoryIds.length || reads.size === 0) {
+        throw new WorkspaceError(
+          "INVALID_CONFIGURATION",
+          "Variant read targets must be unique and non-empty.",
+        );
+      }
       if (
-        [...writes].some((id) => !repositories.some((repository) => repository.repositoryId === id))
+        [...reads].some(
+          (id) => !allRepositories.some((repository) => repository.repositoryId === id),
+        ) ||
+        [...writes].some((id) => !reads.has(id))
       ) {
         throw new WorkspaceError(
           "INVALID_CONFIGURATION",
-          "Variant write target is not in the composite workspace.",
+          "Variant repository sets are outside the composite workspace or writes are not readable.",
         );
       }
+      const repositories = allRepositories.filter((repository) =>
+        reads.has(repository.repositoryId),
+      );
+      const targets = new Map(input.targets.map((target) => [target.repositoryId, target]));
       if (repositories.some((repository) => !targets.has(repository.repositoryId))) {
         throw new WorkspaceError(
           "INVALID_CONFIGURATION",

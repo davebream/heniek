@@ -1,0 +1,207 @@
+{
+  "$id": "heniek://contract/ExecutionTaskRevision/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "taskId",
+    "revision",
+    "revisionSha256",
+    "predecessorRevisionSha256",
+    "analysisPacketId",
+    "analysisPacketSha256",
+    "objective",
+    "rationale",
+    "primaryRepositoryId",
+    "readSet",
+    "writeSet",
+    "excludedRepositories",
+    "dependencies",
+    "artifacts",
+    "verification",
+    "createdAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "taskId": {
+      "minLength": 1,
+      "description": "Opaque ExecutionTaskId.",
+      "type": "string"
+    },
+    "revision": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "revisionSha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "predecessorRevisionSha256": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "analysisPacketId": {
+      "minLength": 1,
+      "description": "Opaque AnalysisPacketId.",
+      "type": "string"
+    },
+    "analysisPacketSha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "objective": {
+      "minLength": 1,
+      "maxLength": 65536,
+      "type": "string"
+    },
+    "rationale": {
+      "minLength": 1,
+      "maxLength": 65536,
+      "type": "string"
+    },
+    "primaryRepositoryId": {
+      "minLength": 1,
+      "description": "Opaque RepositoryId.",
+      "type": "string"
+    },
+    "readSet": {
+      "minItems": 1,
+      "uniqueItems": true,
+      "type": "array",
+      "items": {
+        "minLength": 1,
+        "description": "Opaque RepositoryId.",
+        "type": "string"
+      }
+    },
+    "writeSet": {
+      "uniqueItems": true,
+      "type": "array",
+      "items": {
+        "minLength": 1,
+        "description": "Opaque RepositoryId.",
+        "type": "string"
+      }
+    },
+    "excludedRepositories": {
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "repositoryId",
+          "rationale"
+        ],
+        "properties": {
+          "repositoryId": {
+            "minLength": 1,
+            "description": "Opaque RepositoryId.",
+            "type": "string"
+          },
+          "rationale": {
+            "minLength": 1,
+            "maxLength": 8192,
+            "type": "string"
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "uniqueItems": true,
+      "type": "array",
+      "items": {
+        "minLength": 1,
+        "description": "Opaque ExecutionTaskId.",
+        "type": "string"
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "contract",
+          "repositoryId",
+          "path",
+          "required"
+        ],
+        "properties": {
+          "name": {
+            "minLength": 1,
+            "maxLength": 128,
+            "type": "string"
+          },
+          "contract": {
+            "minLength": 1,
+            "maxLength": 1024,
+            "type": "string"
+          },
+          "repositoryId": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "description": "Opaque RepositoryId.",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "path": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\u0000).+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "required": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "verification": {
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "repositoryId",
+          "check"
+        ],
+        "properties": {
+          "repositoryId": {
+            "minLength": 1,
+            "description": "Opaque RepositoryId.",
+            "type": "string"
+          },
+          "check": {
+            "$ref": "heniek://contract/VerifyCheck/v1"
+          }
+        }
+      }
+    },
+    "createdAt": {
+      "format": "date-time",
+      "type": "string"
+    }
+  }
+}

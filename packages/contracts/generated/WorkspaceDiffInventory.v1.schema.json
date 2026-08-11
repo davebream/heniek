@@ -1,0 +1,180 @@
+{
+  "$id": "heniek://contract/WorkspaceDiffInventory/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "workspaceId",
+    "variantId",
+    "taskId",
+    "taskRevision",
+    "taskRevisionSha256",
+    "classification",
+    "repositories",
+    "undeclaredWriteRepositories",
+    "recordedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "workspaceId": {
+      "minLength": 1,
+      "description": "Opaque WorkspaceId.",
+      "type": "string"
+    },
+    "variantId": {
+      "minLength": 1,
+      "description": "Opaque WorkspaceVariantId.",
+      "type": "string"
+    },
+    "taskId": {
+      "minLength": 1,
+      "description": "Opaque ExecutionTaskId.",
+      "type": "string"
+    },
+    "taskRevision": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "taskRevisionSha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "classification": {
+      "anyOf": [
+        {
+          "const": "clean",
+          "type": "string"
+        },
+        {
+          "const": "declared-changes",
+          "type": "string"
+        },
+        {
+          "const": "replanning-required",
+          "type": "string"
+        }
+      ]
+    },
+    "repositories": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "repositoryId",
+          "access",
+          "baseSha",
+          "headSha",
+          "changedPaths",
+          "observedChangedPaths",
+          "emittedBytes",
+          "truncated",
+          "undeclaredWrite"
+        ],
+        "properties": {
+          "repositoryId": {
+            "minLength": 1,
+            "description": "Opaque RepositoryId.",
+            "type": "string"
+          },
+          "access": {
+            "anyOf": [
+              {
+                "const": "write",
+                "type": "string"
+              },
+              {
+                "const": "read-only",
+                "type": "string"
+              }
+            ]
+          },
+          "baseSha": {
+            "pattern": "^[0-9a-f]{40}(?:[0-9a-f]{24})?$",
+            "type": "string"
+          },
+          "headSha": {
+            "pattern": "^[0-9a-f]{40}(?:[0-9a-f]{24})?$",
+            "type": "string"
+          },
+          "changedPaths": {
+            "maxItems": 10000,
+            "type": "array",
+            "items": {
+              "additionalProperties": false,
+              "type": "object",
+              "required": [
+                "path",
+                "states"
+              ],
+              "properties": {
+                "path": {
+                  "minLength": 1,
+                  "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\u0000).+$",
+                  "type": "string"
+                },
+                "states": {
+                  "minItems": 1,
+                  "uniqueItems": true,
+                  "type": "array",
+                  "items": {
+                    "anyOf": [
+                      {
+                        "const": "committed",
+                        "type": "string"
+                      },
+                      {
+                        "const": "staged",
+                        "type": "string"
+                      },
+                      {
+                        "const": "unstaged",
+                        "type": "string"
+                      },
+                      {
+                        "const": "untracked",
+                        "type": "string"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "observedChangedPaths": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "emittedBytes": {
+            "minimum": 0,
+            "maximum": 1048576,
+            "type": "integer"
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "undeclaredWrite": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "undeclaredWriteRepositories": {
+      "uniqueItems": true,
+      "type": "array",
+      "items": {
+        "minLength": 1,
+        "description": "Opaque RepositoryId.",
+        "type": "string"
+      }
+    },
+    "recordedAt": {
+      "format": "date-time",
+      "type": "string"
+    }
+  }
+}

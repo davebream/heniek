@@ -1,0 +1,215 @@
+{
+  "$id": "heniek://contract/WholeCodebaseAnalysisPacket/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "packetId",
+    "codebaseId",
+    "workspaceId",
+    "sourceRepositoryId",
+    "registrationSha256",
+    "configurationSha256",
+    "effectiveInstructions",
+    "repositories",
+    "createdAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "packetId": {
+      "minLength": 1,
+      "description": "Opaque AnalysisPacketId.",
+      "type": "string"
+    },
+    "codebaseId": {
+      "minLength": 1,
+      "description": "Opaque CodebaseId.",
+      "type": "string"
+    },
+    "workspaceId": {
+      "minLength": 1,
+      "description": "Opaque WorkspaceId.",
+      "type": "string"
+    },
+    "sourceRepositoryId": {
+      "minLength": 1,
+      "description": "Opaque RepositoryId.",
+      "type": "string"
+    },
+    "registrationSha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "configurationSha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "effectiveInstructions": {
+      "$ref": "heniek://contract/EffectiveInstructionReport/v1"
+    },
+    "repositories": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "repositoryId",
+          "name",
+          "checkoutPath",
+          "base",
+          "index"
+        ],
+        "properties": {
+          "repositoryId": {
+            "minLength": 1,
+            "description": "Opaque RepositoryId.",
+            "type": "string"
+          },
+          "name": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "checkoutPath": {
+            "minLength": 1,
+            "pattern": "^/",
+            "type": "string"
+          },
+          "base": {
+            "additionalProperties": false,
+            "type": "object",
+            "required": [
+              "kind",
+              "sha"
+            ],
+            "properties": {
+              "kind": {
+                "anyOf": [
+                  {
+                    "const": "managed-pin",
+                    "type": "string"
+                  },
+                  {
+                    "const": "adopted-head",
+                    "type": "string"
+                  }
+                ]
+              },
+              "sha": {
+                "pattern": "^[0-9a-f]{40}(?:[0-9a-f]{24})?$",
+                "type": "string"
+              }
+            }
+          },
+          "index": {
+            "additionalProperties": false,
+            "type": "object",
+            "required": [
+              "maxEntries",
+              "maxBytes",
+              "observedEntries",
+              "observedBytes",
+              "emittedEntries",
+              "emittedBytes",
+              "truncated",
+              "entries"
+            ],
+            "properties": {
+              "maxEntries": {
+                "minimum": 1,
+                "maximum": 10000,
+                "type": "integer"
+              },
+              "maxBytes": {
+                "minimum": 1,
+                "maximum": 1048576,
+                "type": "integer"
+              },
+              "observedEntries": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "observedBytes": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "emittedEntries": {
+                "minimum": 0,
+                "maximum": 10000,
+                "type": "integer"
+              },
+              "emittedBytes": {
+                "minimum": 0,
+                "maximum": 1048576,
+                "type": "integer"
+              },
+              "truncated": {
+                "type": "boolean"
+              },
+              "entries": {
+                "maxItems": 10000,
+                "type": "array",
+                "items": {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "path",
+                    "mode",
+                    "type",
+                    "objectId",
+                    "byteLength"
+                  ],
+                  "properties": {
+                    "path": {
+                      "minLength": 1,
+                      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\u0000).+$",
+                      "type": "string"
+                    },
+                    "mode": {
+                      "pattern": "^[0-7]{6}$",
+                      "type": "string"
+                    },
+                    "type": {
+                      "anyOf": [
+                        {
+                          "const": "blob",
+                          "type": "string"
+                        },
+                        {
+                          "const": "commit",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "objectId": {
+                      "pattern": "^[0-9a-f]{40}(?:[0-9a-f]{24})?$",
+                      "type": "string"
+                    },
+                    "byteLength": {
+                      "anyOf": [
+                        {
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "createdAt": {
+      "format": "date-time",
+      "type": "string"
+    }
+  }
+}

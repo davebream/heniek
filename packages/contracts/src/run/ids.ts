@@ -15,3 +15,6 @@ export type WorkspaceVariantId = Static<typeof WorkspaceVariantId>;
 
 export const RunId = defineIdNamespace("RunId");
 export type RunId = Static<typeof RunId>;
+
+export const AnalysisPacketId = defineIdNamespace("AnalysisPacketId");
+export type AnalysisPacketId = Static<typeof AnalysisPacketId>;
