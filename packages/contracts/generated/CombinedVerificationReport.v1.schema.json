@@ -1,0 +1,190 @@
+{
+  "$id": "heniek://contract/CombinedVerificationReport/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "reportId",
+    "workspaceId",
+    "variantId",
+    "classification",
+    "checks",
+    "failedRepositoryIds",
+    "wholeCodebaseFailed",
+    "startedAt",
+    "finishedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "reportId": {
+      "minLength": 1,
+      "maxLength": 128,
+      "type": "string"
+    },
+    "workspaceId": {
+      "minLength": 1,
+      "description": "Opaque WorkspaceId.",
+      "type": "string"
+    },
+    "variantId": {
+      "minLength": 1,
+      "description": "Opaque WorkspaceVariantId.",
+      "type": "string"
+    },
+    "classification": {
+      "anyOf": [
+        {
+          "const": "passed",
+          "type": "string"
+        },
+        {
+          "const": "failed",
+          "type": "string"
+        }
+      ]
+    },
+    "checks": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "checkId",
+          "scope",
+          "repositoryId",
+          "argv",
+          "cwd",
+          "expectedExitCode",
+          "actualExitCode",
+          "required",
+          "outcome",
+          "logPath",
+          "logSha256",
+          "startedAt",
+          "finishedAt"
+        ],
+        "properties": {
+          "checkId": {
+            "minLength": 1,
+            "maxLength": 128,
+            "type": "string"
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "const": "repository",
+                "type": "string"
+              },
+              {
+                "const": "whole-codebase",
+                "type": "string"
+              }
+            ]
+          },
+          "repositoryId": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "description": "Opaque RepositoryId.",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "argv": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "cwd": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "expectedExitCode": {
+            "minimum": 0,
+            "maximum": 255,
+            "type": "integer"
+          },
+          "actualExitCode": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "const": "passed",
+                "type": "string"
+              },
+              {
+                "const": "failed",
+                "type": "string"
+              },
+              {
+                "const": "timed-out",
+                "type": "string"
+              },
+              {
+                "const": "execution-error",
+                "type": "string"
+              }
+            ]
+          },
+          "logPath": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "logSha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "startedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "finishedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        }
+      }
+    },
+    "failedRepositoryIds": {
+      "uniqueItems": true,
+      "type": "array",
+      "items": {
+        "minLength": 1,
+        "description": "Opaque RepositoryId.",
+        "type": "string"
+      }
+    },
+    "wholeCodebaseFailed": {
+      "type": "boolean"
+    },
+    "startedAt": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "finishedAt": {
+      "format": "date-time",
+      "type": "string"
+    }
+  }
+}

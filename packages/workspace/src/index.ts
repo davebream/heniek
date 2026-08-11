@@ -2,6 +2,7 @@ export * from "./composite.js";
 export * from "./errors.js";
 export * from "./git-integration.js";
 export * from "./lease.js";
+export * from "./lifecycle.js";
 export * from "./runtime/node.js";
 export * from "./safety.js";
 export * from "./service.js";
