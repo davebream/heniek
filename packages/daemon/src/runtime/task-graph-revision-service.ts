@@ -1,4 +1,5 @@
 import type {
+  HiddenDependencyFinding,
   RunId,
   TaskDagV2,
   TaskGraphRevisionProposal,
@@ -33,6 +34,7 @@ export interface SubmitTaskGraphRevisionInput {
   readonly proposal: TaskGraphRevisionProposal;
   readonly taskStates: readonly TaskPlanningState[];
   readonly maxGraphRevisions: number;
+  readonly hiddenDependencyFinding?: HiddenDependencyFinding;
 }
 
 export interface TaskGraphRevisionService {

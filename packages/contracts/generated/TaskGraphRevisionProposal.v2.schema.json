@@ -1,0 +1,227 @@
+{
+  "$id": "heniek://contract/TaskGraphRevisionProposal/v2",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "runId",
+    "graphId",
+    "expectedGraphRevision",
+    "expectedRevisionSha256",
+    "proposedDag",
+    "changes",
+    "requirementMappings",
+    "rationale",
+    "evidenceArtifactIds",
+    "proposedAt",
+    "trigger"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 2,
+      "type": "number"
+    },
+    "runId": {
+      "minLength": 1,
+      "description": "Opaque RunId.",
+      "type": "string"
+    },
+    "graphId": {
+      "minLength": 1,
+      "description": "Opaque TaskGraphId.",
+      "type": "string"
+    },
+    "expectedGraphRevision": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "expectedRevisionSha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "proposedDag": {
+      "$ref": "heniek://contract/TaskDag/v2"
+    },
+    "changes": {
+      "minItems": 1,
+      "maxItems": 4096,
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind",
+          "beforeTaskIds",
+          "afterTaskIds",
+          "rationale",
+          "evidenceArtifactIds"
+        ],
+        "properties": {
+          "kind": {
+            "anyOf": [
+              {
+                "const": "add",
+                "type": "string"
+              },
+              {
+                "const": "split",
+                "type": "string"
+              },
+              {
+                "const": "merge",
+                "type": "string"
+              },
+              {
+                "const": "reorder",
+                "type": "string"
+              },
+              {
+                "const": "supersede",
+                "type": "string"
+              }
+            ]
+          },
+          "beforeTaskIds": {
+            "uniqueItems": true,
+            "maxItems": 4096,
+            "type": "array",
+            "items": {
+              "minLength": 1,
+              "description": "Opaque ExecutionTaskId.",
+              "type": "string"
+            }
+          },
+          "afterTaskIds": {
+            "uniqueItems": true,
+            "maxItems": 4096,
+            "type": "array",
+            "items": {
+              "minLength": 1,
+              "description": "Opaque ExecutionTaskId.",
+              "type": "string"
+            }
+          },
+          "rationale": {
+            "minLength": 1,
+            "maxLength": 65536,
+            "type": "string"
+          },
+          "evidenceArtifactIds": {
+            "minItems": 1,
+            "uniqueItems": true,
+            "type": "array",
+            "items": {
+              "minLength": 1,
+              "description": "Opaque ArtifactId.",
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "requirementMappings": {
+      "minItems": 1,
+      "maxItems": 4096,
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "sourceWorkItemId",
+          "requirementId",
+          "beforeTaskIds",
+          "afterTaskIds",
+          "rationale"
+        ],
+        "properties": {
+          "sourceWorkItemId": {
+            "minLength": 1,
+            "description": "Opaque SourceWorkItemId.",
+            "type": "string"
+          },
+          "requirementId": {
+            "minLength": 1,
+            "maxLength": 256,
+            "type": "string"
+          },
+          "beforeTaskIds": {
+            "uniqueItems": true,
+            "maxItems": 4096,
+            "type": "array",
+            "items": {
+              "minLength": 1,
+              "description": "Opaque ExecutionTaskId.",
+              "type": "string"
+            }
+          },
+          "afterTaskIds": {
+            "minItems": 1,
+            "uniqueItems": true,
+            "maxItems": 4096,
+            "type": "array",
+            "items": {
+              "minLength": 1,
+              "description": "Opaque ExecutionTaskId.",
+              "type": "string"
+            }
+          },
+          "rationale": {
+            "minLength": 1,
+            "maxLength": 65536,
+            "type": "string"
+          }
+        }
+      }
+    },
+    "rationale": {
+      "minLength": 1,
+      "maxLength": 65536,
+      "type": "string"
+    },
+    "evidenceArtifactIds": {
+      "minItems": 1,
+      "uniqueItems": true,
+      "type": "array",
+      "items": {
+        "minLength": 1,
+        "description": "Opaque ArtifactId.",
+        "type": "string"
+      }
+    },
+    "proposedAt": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "trigger": {
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "kind",
+        "findingId",
+        "interruptedTaskIds"
+      ],
+      "properties": {
+        "kind": {
+          "const": "hidden_dependency",
+          "type": "string"
+        },
+        "findingId": {
+          "minLength": 1,
+          "maxLength": 256,
+          "type": "string"
+        },
+        "interruptedTaskIds": {
+          "minItems": 1,
+          "uniqueItems": true,
+          "maxItems": 4096,
+          "type": "array",
+          "items": {
+            "minLength": 1,
+            "description": "Opaque ExecutionTaskId.",
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

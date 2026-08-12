@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type {
+  HiddenDependencyFinding,
   TaskDagDiagnostic,
   TaskDagV2,
   TaskGraphChange,
@@ -233,6 +234,7 @@ function operationSemanticDiagnostics(
 export interface TaskGraphRevisionValidationContext {
   readonly current: TaskGraphRevisionRecord;
   readonly taskStates: readonly TaskPlanningState[];
+  readonly hiddenDependencyFinding?: HiddenDependencyFinding;
   readonly maxGraphRevisions: number;
   readonly decisionId: string;
   readonly decidedAt: string;
@@ -305,6 +307,87 @@ export function validateTaskGraphRevision(
   const beforeNodes = new Map(beforeDag.nodes.map((node) => [node.task.taskId, node]));
   const afterNodes = new Map(afterDag.nodes.map((node) => [node.task.taskId, node]));
   const states = new Map(context.taskStates.map((state) => [state.taskId, state]));
+  const finding = context.hiddenDependencyFinding;
+  const hiddenTrigger = proposal.schemaVersion === 2 ? proposal.trigger : undefined;
+
+  if (hiddenTrigger !== undefined) {
+    if (
+      finding === undefined ||
+      finding.findingId !== hiddenTrigger.findingId ||
+      finding.runId !== proposal.runId ||
+      finding.graphId !== proposal.graphId ||
+      finding.graphRevision !== proposal.expectedGraphRevision ||
+      finding.revisionSha256 !== proposal.expectedRevisionSha256
+    ) {
+      diagnostics.push(
+        diagnostic(
+          "task-graph-revision.hidden-dependency-evidence-mismatch",
+          "Hidden-dependency revision does not cite matching immutable finding evidence.",
+          hiddenTrigger.interruptedTaskIds,
+        ),
+      );
+    } else if (
+      hiddenTrigger.interruptedTaskIds.length !== finding.affectedTaskIds.length ||
+      hiddenTrigger.interruptedTaskIds.some(
+        (taskId) => !finding.affectedTaskIds.includes(taskId),
+      ) ||
+      finding.evidenceArtifactIds.some(
+        (artifactId) => !proposal.evidenceArtifactIds.includes(artifactId),
+      )
+    ) {
+      diagnostics.push(
+        diagnostic(
+          "task-graph-revision.hidden-dependency-evidence-incomplete",
+          "Hidden-dependency revision omits affected tasks or evidence from its finding.",
+          hiddenTrigger.interruptedTaskIds,
+        ),
+      );
+    }
+    for (const taskId of hiddenTrigger.interruptedTaskIds) {
+      const supersede = proposal.changes.find(
+        (change) =>
+          change.kind === "supersede" &&
+          change.beforeTaskIds.length === 1 &&
+          change.beforeTaskIds[0] === taskId &&
+          change.afterTaskIds.length === 1,
+      );
+      if (
+        !beforeNodes.has(taskId) ||
+        afterNodes.has(taskId) ||
+        states.get(taskId)?.outcome !== "cancelled" ||
+        supersede === undefined
+      ) {
+        diagnostics.push(
+          diagnostic(
+            "task-graph-revision.hidden-dependency-task-not-quiesced",
+            `Interrupted task "${taskId}" must be cancelled and explicitly superseded.`,
+            [taskId],
+          ),
+        );
+      }
+    }
+    for (const change of proposal.changes.filter((candidate) => candidate.kind === "supersede")) {
+      const taskId = change.beforeTaskIds.length === 1 ? change.beforeTaskIds[0] : undefined;
+      if (
+        taskId === undefined ||
+        change.afterTaskIds.length !== 1 ||
+        !hiddenTrigger.interruptedTaskIds.includes(taskId) ||
+        finding?.affectedTaskIds.includes(taskId) !== true ||
+        states.get(taskId)?.outcome !== "cancelled" ||
+        finding.evidenceArtifactIds.some(
+          (artifactId) => !change.evidenceArtifactIds.includes(artifactId),
+        )
+      ) {
+        diagnostics.push(
+          diagnostic(
+            "task-graph-revision.hidden-dependency-supersede-unauthorized",
+            "V2 supersede operations may replace only cancelled tasks linked to the finding.",
+            change.beforeTaskIds,
+          ),
+        );
+      }
+    }
+  }
 
   if (proposal.runId !== current.runId)
     diagnostics.push(
@@ -371,7 +454,23 @@ export function validateTaskGraphRevision(
     if (state === undefined) continue;
     if (state.outcome !== "not_started") {
       const successor = afterNodes.get(taskId);
-      if (canonicalJson(node) !== canonicalJson(successor)) {
+      const supersede = proposal.changes.find(
+        (change) =>
+          change.kind === "supersede" &&
+          change.beforeTaskIds.length === 1 &&
+          change.beforeTaskIds[0] === taskId &&
+          change.afterTaskIds.length === 1,
+      );
+      const authorizedInterruptedRemoval =
+        successor === undefined &&
+        state.outcome === "cancelled" &&
+        hiddenTrigger?.interruptedTaskIds.includes(taskId) === true &&
+        finding?.affectedTaskIds.includes(taskId) === true &&
+        supersede !== undefined &&
+        finding.evidenceArtifactIds.every((artifactId) =>
+          supersede.evidenceArtifactIds.includes(artifactId),
+        );
+      if (canonicalJson(node) !== canonicalJson(successor) && !authorizedInterruptedRemoval) {
         diagnostics.push(
           diagnostic(
             "task-graph-revision.started-task",
@@ -551,16 +650,17 @@ export function validateTaskGraphRevision(
       evidenceArtifactIds: proposal.evidenceArtifactIds,
       decisionId: context.decisionId,
       committedAt: context.decidedAt,
+      ...(hiddenTrigger === undefined ? {} : { trigger: hiddenTrigger }),
     };
     proposedRevisionSha256 = taskGraphRevisionSha256(core);
     record = {
-      schemaVersion: 1,
+      schemaVersion: proposal.schemaVersion,
       ...core,
       revisionSha256: proposedRevisionSha256,
     } as TaskGraphRevisionRecord;
   }
   const decision = {
-    schemaVersion: 1,
+    schemaVersion: proposal.schemaVersion,
     decisionId: context.decisionId,
     runId: proposal.runId,
     graphId: proposal.graphId,
@@ -577,6 +677,7 @@ export function validateTaskGraphRevision(
     taskStates: [...context.taskStates].sort((a, b) => compare(a.taskId, b.taskId)),
     maxGraphRevisions: context.maxGraphRevisions,
     decidedAt: context.decidedAt,
+    ...(hiddenTrigger === undefined ? {} : { trigger: hiddenTrigger }),
   } as TaskGraphRevisionDecision;
   return { decision, record };
 }

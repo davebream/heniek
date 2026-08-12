@@ -397,6 +397,12 @@ export {
   type TaskIntegrationTransitionInput,
 } from "./task-graph/integration-store.js";
 export {
+  type AdvanceHiddenDependencyReplanInput,
+  createHiddenDependencyReplanStateStore,
+  type HiddenDependencyReplanStateStore,
+  type RecordHiddenDependencyReplanInput,
+} from "./task-graph/replanning-store.js";
+export {
   createTaskGraphRevisionStateStore,
   type ProposeTaskGraphRevisionInput,
   type TaskGraphRevisionStateStore,

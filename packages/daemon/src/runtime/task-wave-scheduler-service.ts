@@ -300,7 +300,10 @@ export function createTaskWaveSchedulerService(
         dag: input.dag,
         waveOrdinal,
         unresolvedGraphRevision: input.unresolvedGraphRevision ?? false,
-        tasks: store.planningStates(input.runId),
+        tasks: store.planningStates(
+          input.runId,
+          input.dag.nodes.map((node) => node.task.taskId),
+        ),
         profiles: input.profiles,
         accounts: input.accounts.map((account) => ({
           ...account,
