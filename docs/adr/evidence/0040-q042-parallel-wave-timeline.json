@@ -1,0 +1,45 @@
+{
+  "evidenceVersion": "heniek.q042.parallel-wave.v1",
+  "scenario": "independent complete pipelines overlap while a dependant remains pending",
+  "graphRevision": 1,
+  "maxConcurrentWorkers": 2,
+  "timeline": [
+    {
+      "at": "2026-08-12T12:00:00.000Z",
+      "event": "wave_planned",
+      "selectedTaskIds": ["task-a", "task-b"],
+      "deferredTaskIds": ["task-c"]
+    },
+    {
+      "at": "2026-08-12T12:00:01.000Z",
+      "event": "pipeline_start_entered",
+      "taskId": "task-a",
+      "activeStarts": 1
+    },
+    {
+      "at": "2026-08-12T12:00:01.000Z",
+      "event": "pipeline_start_entered",
+      "taskId": "task-b",
+      "activeStarts": 2
+    },
+    {
+      "at": "2026-08-12T12:00:02.000Z",
+      "event": "pipelines_active",
+      "taskIds": ["task-a", "task-b"],
+      "maximumObservedParallelStarts": 2
+    },
+    {
+      "at": "2026-08-12T12:00:03.000Z",
+      "event": "restart_reconciliation",
+      "adoptedTaskIds": ["task-a", "task-b"],
+      "duplicateChildRuns": 0
+    }
+  ],
+  "stableDispatchOrder": ["task-a", "task-b"],
+  "pending": {
+    "taskId": "task-c",
+    "requiredPredecessor": "task-a",
+    "integration": "pending",
+    "combinedVerification": "pending"
+  }
+}

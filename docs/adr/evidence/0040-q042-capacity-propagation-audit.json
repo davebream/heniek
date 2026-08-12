@@ -1,0 +1,70 @@
+{
+  "evidenceVersion": "heniek.q042.capacity-propagation.v1",
+  "capacity": {
+    "taskId": "task-a",
+    "acquiredScopes": [
+      ["global", "global"],
+      ["account", "account-1"],
+      ["workspace", "task-workspace:run-1:1:task-a"],
+      ["repository", "repo-a"]
+    ],
+    "retry": {
+      "retryCount": 1,
+      "attemptOrdinal": 2,
+      "activeLeaseCount": 4
+    },
+    "recoveryRequired": {
+      "activeLeaseCount": 4,
+      "classification": "retained_by_design"
+    },
+    "terminalSettlement": {
+      "phase": "failed",
+      "releasedLeaseCount": 4
+    },
+    "repositoryReacquisition": {
+      "earlierFence": 2,
+      "laterFence": 3,
+      "strictlyIncreasing": true
+    }
+  },
+  "propagation": [
+    {
+      "taskId": "task-c",
+      "phase": "blocked",
+      "reason": {
+        "schemaVersion": 1,
+        "code": "predecessor_failed",
+        "immediateTaskId": "task-a",
+        "rootTaskId": "task-a",
+        "path": ["task-a", "task-c"]
+      }
+    },
+    {
+      "taskId": "task-d",
+      "phase": "blocked",
+      "reason": {
+        "schemaVersion": 1,
+        "code": "predecessor_blocked",
+        "immediateTaskId": "task-c",
+        "rootTaskId": "task-a",
+        "path": ["task-a", "task-c", "task-d"]
+      }
+    }
+  ],
+  "unaffectedSibling": {
+    "taskId": "task-b",
+    "phase": "active",
+    "activeLeaseCount": 4
+  },
+  "auditKinds": [
+    "wave_planned",
+    "capacity_acquired",
+    "task_dispatched",
+    "task_retrying",
+    "cancellation_requested",
+    "recovery_required",
+    "task_settled",
+    "capacity_released",
+    "task_blocked"
+  ]
+}
