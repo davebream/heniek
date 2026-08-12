@@ -1,0 +1,67 @@
+{
+  "$id": "heniek://contract/TaskDag/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "graphId",
+    "graphRevision",
+    "nodes",
+    "createdAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "graphId": {
+      "minLength": 1,
+      "description": "Opaque TaskGraphId.",
+      "type": "string"
+    },
+    "graphRevision": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "nodes": {
+      "minItems": 1,
+      "maxItems": 4096,
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "task",
+          "profileId",
+          "accountId"
+        ],
+        "properties": {
+          "task": {
+            "$ref": "heniek://contract/ExecutionTaskRevision/v1"
+          },
+          "profileId": {
+            "minLength": 1,
+            "description": "Opaque ProfileId.",
+            "type": "string"
+          },
+          "accountId": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "description": "Opaque AccountId.",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "createdAt": {
+      "format": "date-time",
+      "type": "string"
+    }
+  }
+}
