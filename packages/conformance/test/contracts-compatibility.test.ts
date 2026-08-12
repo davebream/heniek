@@ -372,6 +372,12 @@ const EXPECTED_SCHEMAS: readonly {
     path: "generated/CodebaseRegisterRequest.v1.schema.json",
   },
   {
+    schemaId: "heniek://contract/CombinedVerificationReport/v1",
+    schemaVersion: 1,
+    sha256: "c37cbc5df1c4397ac2fe623440c6ce65bce00057b7fcd43c065fee8ce7f82354",
+    path: "generated/CombinedVerificationReport.v1.schema.json",
+  },
+  {
     schemaId: "heniek://contract/CompositeWorkspaceProvisioningManifest/v1",
     schemaVersion: 1,
     sha256: "5ffaece2623950e0a315a99533fdff33c260d9fe8f1ceaf02154b86237c54826",
@@ -1392,6 +1398,12 @@ const EXPECTED_SCHEMAS: readonly {
     path: "generated/WholeCodebaseAnalysisPacket.v1.schema.json",
   },
   {
+    schemaId: "heniek://contract/WorkspaceCleanupResult/v1",
+    schemaVersion: 1,
+    sha256: "cf7349ff8e741ca01d529a99f48e25629beae011be7c084259619483cb08fc7f",
+    path: "generated/WorkspaceCleanupResult.v1.schema.json",
+  },
+  {
     schemaId: "heniek://contract/WorkspaceConfiguration/v1",
     schemaVersion: 1,
     sha256: "53f2eef07832e93707729cd0ee79be2a9e9b17ee9fc85a4bf1e95c2da1bf3710",
@@ -1416,6 +1428,12 @@ const EXPECTED_SCHEMAS: readonly {
     path: "generated/WorkspaceProvisioningManifest.v1.schema.json",
   },
   {
+    schemaId: "heniek://contract/WorkspaceRecoveryDecisionTrace/v1",
+    schemaVersion: 1,
+    sha256: "0a2110211922a140ba42c94cc77d68cf3bda3c61a5fc2d29c0808d61b68ae890",
+    path: "generated/WorkspaceRecoveryDecisionTrace.v1.schema.json",
+  },
+  {
     schemaId: "heniek://contract/WorkspaceSynchronizationResult/v1",
     schemaVersion: 1,
     sha256: "2fe27587400747272e5acf288c4ab05d0495bf216c7e3fdf1d97e0ef1278abbf",
@@ -1436,7 +1454,7 @@ const EXPECTED_SCHEMAS: readonly {
 ];
 
 describe("packages/contracts generated manifest is unchanged (AC4)", () => {
-  it("manifest.json lists exactly the 206 known schemas with their recorded sha256", async () => {
+  it("manifest.json lists exactly the 209 known schemas with their recorded sha256", async () => {
     const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
     expect(manifest).toEqual({
       schemaVersion: "heniek.contracts-manifest.v1",

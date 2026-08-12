@@ -1,0 +1,166 @@
+{
+  "$id": "heniek://contract/WorkspaceRecoveryDecisionTrace/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "workspaceId",
+    "variantId",
+    "classification",
+    "decisions",
+    "recordedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "workspaceId": {
+      "minLength": 1,
+      "description": "Opaque WorkspaceId.",
+      "type": "string"
+    },
+    "variantId": {
+      "minLength": 1,
+      "description": "Opaque WorkspaceVariantId.",
+      "type": "string"
+    },
+    "classification": {
+      "anyOf": [
+        {
+          "const": "reconciled",
+          "type": "string"
+        },
+        {
+          "const": "recovery-required",
+          "type": "string"
+        }
+      ]
+    },
+    "decisions": {
+      "minItems": 6,
+      "maxItems": 6,
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "sequence",
+          "phase",
+          "observedState",
+          "ownership",
+          "action",
+          "detail"
+        ],
+        "properties": {
+          "sequence": {
+            "minimum": 1,
+            "maximum": 6,
+            "type": "integer"
+          },
+          "phase": {
+            "anyOf": [
+              {
+                "const": "provisioning",
+                "type": "string"
+              },
+              {
+                "const": "setup",
+                "type": "string"
+              },
+              {
+                "const": "leases",
+                "type": "string"
+              },
+              {
+                "const": "processes",
+                "type": "string"
+              },
+              {
+                "const": "artifacts",
+                "type": "string"
+              },
+              {
+                "const": "integration-refs",
+                "type": "string"
+              }
+            ]
+          },
+          "observedState": {
+            "anyOf": [
+              {
+                "const": "complete",
+                "type": "string"
+              },
+              {
+                "const": "not-started",
+                "type": "string"
+              },
+              {
+                "const": "in-progress",
+                "type": "string"
+              },
+              {
+                "const": "missing",
+                "type": "string"
+              },
+              {
+                "const": "ambiguous",
+                "type": "string"
+              }
+            ]
+          },
+          "ownership": {
+            "anyOf": [
+              {
+                "const": "heniek",
+                "type": "string"
+              },
+              {
+                "const": "external",
+                "type": "string"
+              },
+              {
+                "const": "unknown",
+                "type": "string"
+              }
+            ]
+          },
+          "action": {
+            "anyOf": [
+              {
+                "const": "confirmed",
+                "type": "string"
+              },
+              {
+                "const": "resume",
+                "type": "string"
+              },
+              {
+                "const": "retry",
+                "type": "string"
+              },
+              {
+                "const": "preserve",
+                "type": "string"
+              },
+              {
+                "const": "operator-action",
+                "type": "string"
+              }
+            ]
+          },
+          "detail": {
+            "minLength": 1,
+            "maxLength": 4096,
+            "type": "string"
+          }
+        }
+      }
+    },
+    "recordedAt": {
+      "format": "date-time",
+      "type": "string"
+    }
+  }
+}

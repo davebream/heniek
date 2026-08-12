@@ -1,0 +1,94 @@
+{
+  "$id": "heniek://contract/WorkspaceCleanupResult/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "workspaceId",
+    "variantId",
+    "classification",
+    "checkoutPath",
+    "evidenceArchived",
+    "archivePath",
+    "archiveSha256",
+    "checkoutRemoved",
+    "reasons",
+    "recordedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "workspaceId": {
+      "minLength": 1,
+      "description": "Opaque WorkspaceId.",
+      "type": "string"
+    },
+    "variantId": {
+      "minLength": 1,
+      "description": "Opaque WorkspaceVariantId.",
+      "type": "string"
+    },
+    "classification": {
+      "anyOf": [
+        {
+          "const": "removed",
+          "type": "string"
+        },
+        {
+          "const": "preserved",
+          "type": "string"
+        },
+        {
+          "const": "recovery-required",
+          "type": "string"
+        }
+      ]
+    },
+    "checkoutPath": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "evidenceArchived": {
+      "type": "boolean"
+    },
+    "archivePath": {
+      "anyOf": [
+        {
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "archiveSha256": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "checkoutRemoved": {
+      "type": "boolean"
+    },
+    "reasons": {
+      "type": "array",
+      "items": {
+        "minLength": 1,
+        "maxLength": 4096,
+        "type": "string"
+      }
+    },
+    "recordedAt": {
+      "format": "date-time",
+      "type": "string"
+    }
+  }
+}

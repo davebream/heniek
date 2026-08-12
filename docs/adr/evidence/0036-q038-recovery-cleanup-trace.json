@@ -1,0 +1,41 @@
+{
+  "schemaVersion": "heniek.q038.recovery-cleanup-evidence.v1",
+  "workspaceId": "workspace-q038-evidence",
+  "variantId": "variant-q038-evidence",
+  "killAtEachPhase": [
+    "provisioning",
+    "setup",
+    "leases",
+    "processes",
+    "artifacts",
+    "integration-refs"
+  ],
+  "ambiguousRestart": {
+    "classification": "recovery-required",
+    "decision": "preserve",
+    "evidenceArchived": true,
+    "checkoutRemoved": false,
+    "reason": "Every simulated kill leaves the interrupted phase ambiguous and therefore operator-owned."
+  },
+  "verifiedTerminalCleanup": {
+    "classification": "removed",
+    "operationState": "succeeded",
+    "checkoutOwnership": "heniek-managed",
+    "processes": "terminated",
+    "leases": "released",
+    "artifactOwnershipVerified": true,
+    "integrationOwnershipVerified": true,
+    "reconciliation": "reconciled",
+    "eventOrder": ["archive", "remove"],
+    "evidenceArchived": true,
+    "checkoutRemoved": true
+  },
+  "adoptedAndUserOwnedCleanup": {
+    "classification": "preserved",
+    "checkoutRemoved": false
+  },
+  "archiveFailure": {
+    "classification": "aborted",
+    "checkoutRemoved": false
+  }
+}
