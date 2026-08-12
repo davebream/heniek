@@ -127,6 +127,14 @@ export {
   MAX_CONCURRENT_CONNECTIONS,
   MAX_UNAUTHENTICATED_CONNECTIONS,
 } from "./runtime/socket-server.js";
+export {
+  createTaskGraphRevisionService,
+  type InitializeTaskGraphInput,
+  type SubmitTaskGraphRevisionInput,
+  type TaskGraphRevisionService,
+  type TaskGraphRevisionServiceOptions,
+  taskGraphRevisionValidator,
+} from "./runtime/task-graph-revision-service.js";
 export { createStderrTraceSink } from "./runtime/trace-sink.js";
 export {
   type ExecutionLimitsInput,

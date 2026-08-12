@@ -2,12 +2,13 @@ import { type Static, Type } from "@sinclair/typebox";
 import { AccountId } from "../configuration/index.js";
 import { ExecutionTaskId, ProfileId } from "../execution-backend/index.js";
 import { versioned } from "../kernel/index.js";
+import { PipelineId } from "../pipeline/index.js";
 import { ExecutionTaskRevisionV1, RepositoryId } from "../run/index.js";
 import { TaskGraphId } from "./ids.js";
 
 const IsoDateTime = Type.String({ format: "date-time" });
 
-const TaskDagNode = Type.Object(
+export const TaskDagNodeV1 = Type.Object(
   {
     task: Type.Ref(ExecutionTaskRevisionV1),
     profileId: ProfileId,
@@ -20,7 +21,25 @@ const TaskDagNode = Type.Object(
 export const TaskDagV1 = versioned("TaskDag", 1, {
   graphId: TaskGraphId,
   graphRevision: Type.Integer({ minimum: 1 }),
-  nodes: Type.Array(TaskDagNode, { minItems: 1, maxItems: 4096 }),
+  nodes: Type.Array(TaskDagNodeV1, { minItems: 1, maxItems: 4096 }),
+  createdAt: IsoDateTime,
+});
+
+export const TaskDagNodeV2 = Type.Object(
+  {
+    task: Type.Ref(ExecutionTaskRevisionV1),
+    pipelineId: PipelineId,
+    profileId: ProfileId,
+    accountId: Type.Union([AccountId, Type.Null()]),
+  },
+  { additionalProperties: false },
+);
+
+/** Q041 graph shape: each whole task names the mini-pipeline it will execute. */
+export const TaskDagV2 = versioned("TaskDag", 2, {
+  graphId: TaskGraphId,
+  graphRevision: Type.Integer({ minimum: 1 }),
+  nodes: Type.Array(TaskDagNodeV2, { minItems: 1, maxItems: 4096 }),
   createdAt: IsoDateTime,
 });
 
@@ -44,7 +63,7 @@ const IntegrationGate = Type.Union([
   Type.Literal("reconciliation_required"),
 ]);
 
-const TaskPlanningState = Type.Object(
+export const TaskPlanningState = Type.Object(
   {
     taskId: ExecutionTaskId,
     outcome: TaskPlanningOutcome,
@@ -92,7 +111,7 @@ export const TaskWavePlanningSnapshotV1 = versioned("TaskWavePlanningSnapshot", 
   recordedAt: IsoDateTime,
 });
 
-const TaskDagDiagnostic = Type.Object(
+export const TaskDagDiagnostic = Type.Object(
   {
     code: Type.String({ minLength: 1, maxLength: 128 }),
     message: Type.String({ minLength: 1, maxLength: 8192 }),
@@ -166,9 +185,17 @@ export const TaskWavePlanV1 = versioned("TaskWavePlan", 1, {
   plannedAt: IsoDateTime,
 });
 
-export type TaskDag = Static<typeof TaskDagV1>;
+export type TaskDagV1 = Static<typeof TaskDagV1>;
+export type TaskDagV2 = Static<typeof TaskDagV2>;
+/** Backward-compatible name retained for Q040 consumers. */
+export type TaskDag = TaskDagV1;
+export type TaskDagVersioned = TaskDagV1 | TaskDagV2;
 export type TaskPlanningOutcome = Static<typeof TaskPlanningOutcome>;
-export type TaskWavePlanningSnapshot = Static<typeof TaskWavePlanningSnapshotV1>;
+export type TaskPlanningState = Static<typeof TaskPlanningState>;
+export type TaskWavePlanningSnapshot = Omit<Static<typeof TaskWavePlanningSnapshotV1>, "dag"> & {
+  readonly dag: TaskDagVersioned;
+};
+export type TaskDagDiagnostic = Static<typeof TaskDagDiagnostic>;
 export type TaskDagValidationResult = Static<typeof TaskDagValidationResultV1>;
 export type TaskWaveBlockingCode = Static<typeof TaskWaveBlockingCode>;
 export type TaskWavePlan = Static<typeof TaskWavePlanV1>;
