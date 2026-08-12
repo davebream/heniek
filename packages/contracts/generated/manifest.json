@@ -1160,10 +1160,34 @@
       "path": "generated/TaskDag.v1.schema.json"
     },
     {
+      "schemaId": "heniek://contract/TaskDag/v2",
+      "schemaVersion": 2,
+      "sha256": "9279229657d7c17747101ed066233d353e0e0cee3202d885c5765ab96ce47251",
+      "path": "generated/TaskDag.v2.schema.json"
+    },
+    {
       "schemaId": "heniek://contract/TaskDagValidationResult/v1",
       "schemaVersion": 1,
       "sha256": "af564a85187e07e4d7d21113d31d2f06a44a225e7a3ba8a4bb332fbd3d22462a",
       "path": "generated/TaskDagValidationResult.v1.schema.json"
+    },
+    {
+      "schemaId": "heniek://contract/TaskGraphRevisionDecision/v1",
+      "schemaVersion": 1,
+      "sha256": "aed9fcaf889f302266f69afbaa71e6392e3c66bacf866e91456e22852dfc474c",
+      "path": "generated/TaskGraphRevisionDecision.v1.schema.json"
+    },
+    {
+      "schemaId": "heniek://contract/TaskGraphRevisionProposal/v1",
+      "schemaVersion": 1,
+      "sha256": "3e30f62d684010f8026a53ad63ce474f6b8563ce6f7f111331835fd8d68a10d9",
+      "path": "generated/TaskGraphRevisionProposal.v1.schema.json"
+    },
+    {
+      "schemaId": "heniek://contract/TaskGraphRevisionRecord/v1",
+      "schemaVersion": 1,
+      "sha256": "222d32c1b9f243265eece81a15b5ccccd9a5a23023df2acced5f289410e2c900",
+      "path": "generated/TaskGraphRevisionRecord.v1.schema.json"
     },
     {
       "schemaId": "heniek://contract/TaskHierarchy/v1",

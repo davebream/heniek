@@ -1,4 +1,8 @@
-import type { TaskDag, TaskDagValidationResult, TaskWavePlanningSnapshot } from "@heniek/contracts";
+import type {
+  TaskDagValidationResult,
+  TaskDagVersioned,
+  TaskWavePlanningSnapshot,
+} from "@heniek/contracts";
 
 type Diagnostic = TaskDagValidationResult["diagnostics"][number];
 type TaskState = TaskWavePlanningSnapshot["tasks"][number];
@@ -18,8 +22,8 @@ function insertSorted(values: string[], value: string): void {
 }
 
 function buildTopologicalOrder(
-  dag: TaskDag,
-  nodes: ReadonlyMap<string, TaskDag["nodes"][number]>,
+  dag: TaskDagVersioned,
+  nodes: ReadonlyMap<string, TaskDagVersioned["nodes"][number]>,
 ): { readonly order: readonly string[]; readonly cyclic: readonly string[] } {
   const indegree = new Map<string, number>();
   const successors = new Map<string, string[]>();
@@ -62,7 +66,7 @@ function buildTopologicalOrder(
 
 function computeAncestors(
   order: readonly string[],
-  nodes: ReadonlyMap<string, TaskDag["nodes"][number]>,
+  nodes: ReadonlyMap<string, TaskDagVersioned["nodes"][number]>,
 ): ReadonlyMap<string, ReadonlySet<string>> {
   const ancestors = new Map<string, ReadonlySet<string>>();
   for (const taskId of order) {
@@ -77,8 +81,8 @@ function computeAncestors(
 }
 
 function validateTerminalDependencies(
-  dag: TaskDag,
-  nodes: ReadonlyMap<string, TaskDag["nodes"][number]>,
+  dag: TaskDagVersioned,
+  nodes: ReadonlyMap<string, TaskDagVersioned["nodes"][number]>,
   states: readonly TaskState[],
 ): readonly Diagnostic[] {
   const diagnostics: Diagnostic[] = [];
@@ -111,11 +115,11 @@ function validateTerminalDependencies(
 
 /** Validate a whole-task DAG and, optionally, the state used for a wave decision. */
 export function validateTaskDag(
-  dag: TaskDag,
+  dag: TaskDagVersioned,
   states?: readonly TaskState[],
 ): TaskDagValidationResult {
   const diagnostics: Diagnostic[] = [];
-  const nodes = new Map<string, TaskDag["nodes"][number]>();
+  const nodes = new Map<string, TaskDagVersioned["nodes"][number]>();
   if (dag.nodes.length === 0) {
     diagnostics.push(
       diagnostic("task-dag.empty", "Task graph must contain at least one task.", []),

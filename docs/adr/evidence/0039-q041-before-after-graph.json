@@ -1,0 +1,53 @@
+{
+  "scenario": "accepted add operation changes structural waves",
+  "before": {
+    "graphId": "graph-1",
+    "graphRevision": 1,
+    "nodes": [
+      {
+        "taskId": "task-a",
+        "pipelineId": "careful",
+        "dependencies": []
+      }
+    ],
+    "waves": [
+      {
+        "ordinal": 1,
+        "taskIds": ["task-a"]
+      }
+    ]
+  },
+  "change": {
+    "kind": "add",
+    "beforeTaskIds": [],
+    "afterTaskIds": ["task-b"],
+    "rationale": "Analysis found implementation work not represented by the original graph.",
+    "evidenceArtifactIds": ["artifact-analysis-evidence"]
+  },
+  "after": {
+    "graphId": "graph-1",
+    "graphRevision": 2,
+    "nodes": [
+      {
+        "taskId": "task-a",
+        "pipelineId": "careful",
+        "dependencies": []
+      },
+      {
+        "taskId": "task-b",
+        "pipelineId": "careful",
+        "dependencies": ["task-a"]
+      }
+    ],
+    "waves": [
+      {
+        "ordinal": 1,
+        "taskIds": ["task-a"]
+      },
+      {
+        "ordinal": 2,
+        "taskIds": ["task-b"]
+      }
+    ]
+  }
+}

@@ -1,0 +1,50 @@
+{
+  "artifactVersion": 1,
+  "decisionId": "task-graph-revision-decision-1",
+  "runId": "run-1",
+  "graphId": "graph-1",
+  "expectedGraphRevision": 1,
+  "outcome": "accepted",
+  "diagnostics": [],
+  "beforeWaves": [
+    {
+      "ordinal": 1,
+      "taskIds": ["task-a"]
+    }
+  ],
+  "afterWaves": [
+    {
+      "ordinal": 1,
+      "taskIds": ["task-a"]
+    },
+    {
+      "ordinal": 2,
+      "taskIds": ["task-b"]
+    }
+  ],
+  "affectedTaskIds": ["task-b"],
+  "affectedWaveOrdinals": [2],
+  "taskStates": [
+    {
+      "taskId": "task-a",
+      "outcome": "not_started",
+      "completionContract": "pending",
+      "integration": "pending",
+      "combinedVerification": "pending"
+    }
+  ],
+  "maxGraphRevisions": 5,
+  "provenance": {
+    "rationale": "Analysis found implementation work not represented by the original graph.",
+    "evidenceArtifactIds": ["artifact-analysis-evidence"],
+    "requirementMappings": [
+      {
+        "sourceWorkItemId": "source-1",
+        "requirementId": "R-1",
+        "beforeTaskIds": ["task-a"],
+        "afterTaskIds": ["task-a", "task-b"],
+        "rationale": "Both tasks contribute to the unchanged source commitment."
+      }
+    ]
+  }
+}

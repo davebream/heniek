@@ -82,5 +82,9 @@
   "21": {
     "name": "task-source",
     "statementHash": "76e2585899bfd4aec052974023caa14f4fbf41a5ecb8c536fa9c8a4a19ec72b7"
+  },
+  "22": {
+    "name": "task-graph-revision",
+    "statementHash": "cbe54b2062ab7734da738705b88de1c5ec69d6f91aa33a145e1887bf884ba940"
   }
 }

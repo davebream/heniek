@@ -388,6 +388,14 @@ export {
   type WorkspacePermission,
 } from "./scheduling/store.js";
 export {
+  createTaskGraphRevisionStateStore,
+  type ProposeTaskGraphRevisionInput,
+  type TaskGraphRevisionStateStore,
+  type TaskGraphRevisionValidationInput,
+  type TaskGraphRevisionValidationOutput,
+  type TaskGraphRevisionValidator,
+} from "./task-graph/store.js";
+export {
   createTaskIngestionSource,
   type TaskHierarchyInput,
   TaskSourceConflictError,

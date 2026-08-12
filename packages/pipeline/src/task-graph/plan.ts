@@ -1,5 +1,5 @@
 import type {
-  TaskDag,
+  TaskDagVersioned,
   TaskWaveBlockingCode,
   TaskWavePlan,
   TaskWavePlanningSnapshot,
@@ -44,7 +44,7 @@ function canonicalReasons(values: readonly Reason[]): readonly Reason[] {
 
 function terminalReasons(
   taskId: string,
-  nodes: ReadonlyMap<string, TaskDag["nodes"][number]>,
+  nodes: ReadonlyMap<string, TaskDagVersioned["nodes"][number]>,
   states: ReadonlyMap<string, TaskState>,
   visiting = new Set<string>(),
 ): readonly Reason[] {
@@ -72,8 +72,8 @@ function terminalReasons(
 }
 
 function dependencyReasons(
-  node: TaskDag["nodes"][number],
-  nodes: ReadonlyMap<string, TaskDag["nodes"][number]>,
+  node: TaskDagVersioned["nodes"][number],
+  nodes: ReadonlyMap<string, TaskDagVersioned["nodes"][number]>,
   states: ReadonlyMap<string, TaskState>,
 ): readonly Reason[] {
   const terminal = terminalReasons(node.task.taskId, nodes, states);
