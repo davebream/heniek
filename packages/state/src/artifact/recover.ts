@@ -214,7 +214,18 @@ function listBlobEntries(fs: ArtifactFileSystem, blobsDir: string): readonly str
 
 /** Every `content_hash` any `artifact` row currently references. */
 function listReferencedHashes(db: StateDatabase): ReadonlySet<string> {
-  const rows = internalHandle(db).prepare("SELECT DISTINCT content_hash FROM artifact").all();
+  const handle = internalHandle(db);
+  const taskSourceTable = handle
+    .prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'task_source_artifact'")
+    .get();
+  const rows = handle
+    .prepare(
+      taskSourceTable === undefined
+        ? "SELECT DISTINCT content_hash FROM artifact"
+        : `SELECT content_hash FROM artifact
+           UNION SELECT content_hash FROM task_source_artifact`,
+    )
+    .all();
   return new Set(rows.map((row) => String(row.content_hash)));
 }
 

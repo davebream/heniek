@@ -1,0 +1,113 @@
+{
+  "$id": "heniek://contract/ParentHandoff/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "objective",
+    "constraints",
+    "decisions",
+    "openQuestions",
+    "repositoryReferences",
+    "requirements"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "objective": {
+      "minLength": 1,
+      "maxLength": 65536,
+      "type": "string"
+    },
+    "constraints": {
+      "maxItems": 1024,
+      "type": "array",
+      "items": {
+        "minLength": 1,
+        "maxLength": 65536,
+        "type": "string"
+      }
+    },
+    "decisions": {
+      "maxItems": 1024,
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "statement",
+          "author",
+          "rationale"
+        ],
+        "properties": {
+          "statement": {
+            "minLength": 1,
+            "maxLength": 65536,
+            "type": "string"
+          },
+          "author": {
+            "minLength": 1,
+            "maxLength": 1024,
+            "type": "string"
+          },
+          "rationale": {
+            "minLength": 1,
+            "maxLength": 65536,
+            "type": "string"
+          }
+        }
+      }
+    },
+    "openQuestions": {
+      "maxItems": 1024,
+      "type": "array",
+      "items": {
+        "minLength": 1,
+        "maxLength": 65536,
+        "type": "string"
+      }
+    },
+    "repositoryReferences": {
+      "maxItems": 1024,
+      "type": "array",
+      "items": {
+        "minLength": 1,
+        "maxLength": 4096,
+        "type": "string"
+      }
+    },
+    "requirements": {
+      "minItems": 1,
+      "maxItems": 4096,
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "requirementId",
+          "text",
+          "sourcePointer"
+        ],
+        "properties": {
+          "requirementId": {
+            "minLength": 1,
+            "maxLength": 256,
+            "type": "string"
+          },
+          "text": {
+            "minLength": 1,
+            "maxLength": 65536,
+            "type": "string"
+          },
+          "sourcePointer": {
+            "minLength": 1,
+            "maxLength": 4096,
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

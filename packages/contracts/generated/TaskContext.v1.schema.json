@@ -4,94 +4,23 @@
   "type": "object",
   "required": [
     "schemaVersion",
-    "sourceWorkItemId",
-    "sourceKind",
-    "objective",
-    "constraints",
-    "decisions",
-    "openQuestions",
-    "repositoryReferences",
-    "rawContentRef",
-    "revision"
+    "snapshot",
+    "activeRevision",
+    "hierarchy"
   ],
   "properties": {
     "schemaVersion": {
       "const": 1,
       "type": "number"
     },
-    "sourceWorkItemId": {
-      "minLength": 1,
-      "description": "Opaque SourceWorkItemId.",
-      "type": "string"
+    "snapshot": {
+      "$ref": "heniek://contract/TaskSourceSnapshot/v1"
     },
-    "sourceKind": {
-      "anyOf": [
-        {
-          "const": "parent_conversation",
-          "type": "string"
-        },
-        {
-          "const": "manual_text",
-          "type": "string"
-        },
-        {
-          "const": "github_issue",
-          "type": "string"
-        },
-        {
-          "const": "github_pull_request",
-          "type": "string"
-        },
-        {
-          "const": "local_file",
-          "type": "string"
-        },
-        {
-          "const": "existing_branch_or_pr",
-          "type": "string"
-        }
-      ]
+    "activeRevision": {
+      "$ref": "heniek://contract/TaskRevision/v1"
     },
-    "objective": {
-      "minLength": 1,
-      "type": "string"
-    },
-    "constraints": {
-      "type": "array",
-      "items": {
-        "minLength": 1,
-        "type": "string"
-      }
-    },
-    "decisions": {
-      "type": "array",
-      "items": {
-        "minLength": 1,
-        "type": "string"
-      }
-    },
-    "openQuestions": {
-      "type": "array",
-      "items": {
-        "minLength": 1,
-        "type": "string"
-      }
-    },
-    "repositoryReferences": {
-      "type": "array",
-      "items": {
-        "minLength": 1,
-        "type": "string"
-      }
-    },
-    "rawContentRef": {
-      "minLength": 1,
-      "description": "Opaque ArtifactId.",
-      "type": "string"
-    },
-    "revision": {
-      "minimum": 1,
-      "type": "integer"
+    "hierarchy": {
+      "$ref": "heniek://contract/TaskHierarchy/v1"
     }
   }
 }

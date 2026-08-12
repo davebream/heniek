@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import type { TaskSource } from "@heniek/contracts";
-import { TaskContextV1 } from "@heniek/contracts";
+import {
+  TaskContextV1,
+  TaskHierarchyV1,
+  TaskRevisionDocumentV1,
+  TaskRevisionV1,
+  TaskSourceSnapshotV1,
+} from "@heniek/contracts";
 import type { TaskSourceArrangement } from "../contract/arrangement.js";
 import type { ConformanceCase } from "../contract/case.js";
 import { assertValid } from "../contract/validation.js";
@@ -17,7 +23,12 @@ export const TASK_SOURCE_CASES: readonly TaskSourceCase[] = [
     async run({ subject, arrange }) {
       await arrange({ kind: "resolves" });
       const context = await subject.load(taskSourceInput());
-      assertValid(TaskContextV1, context, "TaskContextV1");
+      assertValid(TaskContextV1, context, "TaskContextV1", [
+        TaskSourceSnapshotV1,
+        TaskRevisionDocumentV1,
+        TaskRevisionV1,
+        TaskHierarchyV1,
+      ]);
     },
   },
   {
@@ -65,7 +76,7 @@ export const TASK_SOURCE_CASES: readonly TaskSourceCase[] = [
       const first = await subject.load(input);
       await arrange({ kind: "revised", times: 1 });
       const second = await subject.load(input);
-      assert.equal(second.revision, first.revision + 1);
+      assert.equal(second.activeRevision.ordinal, first.activeRevision.ordinal + 1);
     },
   },
   {

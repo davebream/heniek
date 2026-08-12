@@ -1,4 +1,11 @@
-import type { ArtifactId, SourceWorkItemId, TaskContextV1, TaskSource } from "@heniek/contracts";
+import type {
+  ArtifactId,
+  SourceWorkItemId,
+  TaskContextV1,
+  TaskRevisionId,
+  TaskSource,
+  TaskSourceSnapshotId,
+} from "@heniek/contracts";
 import type { Static } from "@sinclair/typebox";
 import type { TaskSourceFixtureInput, TaskSourceKindLiteral } from "../cases/fixtures.js";
 import type { TaskSourceArrangement } from "../contract/arrangement.js";
@@ -37,8 +44,14 @@ function parseInput(input: unknown): TaskSourceFixtureInput {
 interface KeyState {
   readonly sourceWorkItemId: SourceWorkItemId;
   readonly rawContentRef: ArtifactId;
+  readonly snapshotId: TaskSourceSnapshotId;
+  revisionId: TaskRevisionId;
   revision: number;
 }
+
+const HASH = "0".repeat(64);
+const REVISED_HASH = "1".repeat(64);
+const NOW = "2026-01-01T00:00:00.000Z";
 
 export interface FakeTaskSource {
   readonly source: TaskSource;
@@ -58,6 +71,8 @@ export function createFakeTaskSource(context: ConformanceContext): FakeTaskSourc
     const created: KeyState = {
       sourceWorkItemId: context.ids.next("conformance-work-item") as SourceWorkItemId,
       rawContentRef: context.ids.next("conformance-artifact") as ArtifactId,
+      snapshotId: context.ids.next("conformance-snapshot") as TaskSourceSnapshotId,
+      revisionId: context.ids.next("conformance-revision") as TaskRevisionId,
       revision: 1,
     };
     keyStates.set(key, created);
@@ -103,28 +118,78 @@ export function createFakeTaskSource(context: ConformanceContext): FakeTaskSourc
       const parsed = parseInput(input);
       const key = JSON.stringify(parsed);
       const state = stateFor(key);
+      let predecessorRevisionId: TaskRevisionId | null = null;
       if (arrangement?.kind === "revised") {
+        predecessorRevisionId = state.revisionId;
         state.revision += arrangement.times;
+        state.revisionId = context.ids.next("conformance-revision") as TaskRevisionId;
       }
 
       const payload: TaskContext = {
         schemaVersion: 1,
-        sourceWorkItemId: state.sourceWorkItemId,
-        sourceKind: parsed.sourceKind,
-        objective: "Conformance harness objective.",
-        constraints: ["Conformance constraint."],
-        decisions: [],
-        openQuestions: [],
-        repositoryReferences: [parsed.ref],
-        rawContentRef: state.rawContentRef,
-        revision: state.revision,
+        snapshot: {
+          schemaVersion: 1,
+          snapshotId: state.snapshotId,
+          sourceWorkItemId: state.sourceWorkItemId,
+          sourceKind: parsed.sourceKind,
+          sourceUri: parsed.ref,
+          observedVersion: String(state.revision),
+          contentSha256: state.revision === 1 ? HASH : REVISED_HASH,
+          rawContentRef: state.rawContentRef,
+          requirements: [
+            { requirementId: "R1", text: "Conformance requirement.", sourcePointer: "/" },
+          ],
+          attachments: [],
+          observedAt: NOW,
+        },
+        activeRevision: {
+          schemaVersion: 1,
+          revisionId: state.revisionId,
+          sourceWorkItemId: state.sourceWorkItemId,
+          ordinal: state.revision,
+          revisionSha256: state.revision === 1 ? HASH : REVISED_HASH,
+          predecessorRevisionId,
+          predecessorRevisionSha256: predecessorRevisionId === null ? null : HASH,
+          sourceSnapshotId: state.snapshotId,
+          author: "conformance-harness",
+          reason: state.revision === 1 ? "Initial ingestion." : "Source revised.",
+          patch:
+            state.revision === 1
+              ? []
+              : [{ op: "replace", path: "/objective", value: "Revised objective." }],
+          document: {
+            schemaVersion: 1,
+            objective:
+              state.revision === 1 ? "Conformance harness objective." : "Revised objective.",
+            constraints: ["Conformance constraint."],
+            decisions: [],
+            openQuestions: [],
+            repositoryReferences: [parsed.ref],
+            requirements: [
+              { requirementId: "R1", text: "Conformance requirement.", sourcePointer: "/" },
+            ],
+          },
+          supersessionState: "active",
+          supersededByRevisionId: null,
+          createdAt: NOW,
+        },
+        hierarchy: {
+          schemaVersion: 1,
+          rootSourceWorkItemId: state.sourceWorkItemId,
+          trackerEdges: [],
+          executionMappings: [],
+          recordedAt: NOW,
+        },
       };
       context.trace.record({
         atMs: context.clock.nowMs(),
         actor: "task-source",
         action: "load",
         outcome: "ok",
-        detail: { sourceWorkItemId: payload.sourceWorkItemId, revision: payload.revision },
+        detail: {
+          sourceWorkItemId: payload.snapshot.sourceWorkItemId,
+          revision: payload.activeRevision.ordinal,
+        },
       });
       return payload;
     },

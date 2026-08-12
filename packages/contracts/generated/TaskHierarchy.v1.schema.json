@@ -1,0 +1,80 @@
+{
+  "$id": "heniek://contract/TaskHierarchy/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "rootSourceWorkItemId",
+    "trackerEdges",
+    "executionMappings",
+    "recordedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "rootSourceWorkItemId": {
+      "minLength": 1,
+      "description": "Opaque SourceWorkItemId.",
+      "type": "string"
+    },
+    "trackerEdges": {
+      "maxItems": 4096,
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "parentSourceWorkItemId",
+          "childSourceWorkItemId"
+        ],
+        "properties": {
+          "parentSourceWorkItemId": {
+            "minLength": 1,
+            "description": "Opaque SourceWorkItemId.",
+            "type": "string"
+          },
+          "childSourceWorkItemId": {
+            "minLength": 1,
+            "description": "Opaque SourceWorkItemId.",
+            "type": "string"
+          }
+        }
+      }
+    },
+    "executionMappings": {
+      "maxItems": 4096,
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "sourceWorkItemId",
+          "executionTaskIds"
+        ],
+        "properties": {
+          "sourceWorkItemId": {
+            "minLength": 1,
+            "description": "Opaque SourceWorkItemId.",
+            "type": "string"
+          },
+          "executionTaskIds": {
+            "uniqueItems": true,
+            "maxItems": 4096,
+            "type": "array",
+            "items": {
+              "minLength": 1,
+              "description": "Opaque ExecutionTaskId.",
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "recordedAt": {
+      "format": "date-time",
+      "type": "string"
+    }
+  }
+}

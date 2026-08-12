@@ -78,5 +78,9 @@
   "20": {
     "name": "workspace-variants",
     "statementHash": "b00f8162e2581e063584e8023b38680766a26ff460ac51742dfe43a80749a605"
+  },
+  "21": {
+    "name": "task-source",
+    "statementHash": "76e2585899bfd4aec052974023caa14f4fbf41a5ecb8c536fa9c8a4a19ec72b7"
   }
 }

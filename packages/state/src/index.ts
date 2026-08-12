@@ -388,6 +388,23 @@ export {
   type WorkspacePermission,
 } from "./scheduling/store.js";
 export {
+  createTaskIngestionSource,
+  type TaskHierarchyInput,
+  TaskSourceConflictError,
+  type TaskSourceIngestionInput,
+  TaskSourceInputError,
+} from "./task-source/ingest.js";
+export {
+  applyTaskRevisionPatch,
+  type JsonPatchOperation,
+  TaskRevisionPatchError,
+} from "./task-source/json-patch.js";
+export {
+  createTaskSourceStateStore,
+  type RecordTaskContextInput,
+  type TaskSourceStateStore,
+} from "./task-source/store.js";
+export {
   createWorkspaceVariantStateStore,
   type WorkspaceVariantStateStore,
 } from "./workspace/variant-store.js";

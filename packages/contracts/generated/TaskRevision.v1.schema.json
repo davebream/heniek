@@ -1,0 +1,255 @@
+{
+  "$id": "heniek://contract/TaskRevision/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "revisionId",
+    "sourceWorkItemId",
+    "ordinal",
+    "revisionSha256",
+    "predecessorRevisionId",
+    "predecessorRevisionSha256",
+    "sourceSnapshotId",
+    "author",
+    "reason",
+    "patch",
+    "document",
+    "supersessionState",
+    "supersededByRevisionId",
+    "createdAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "revisionId": {
+      "minLength": 1,
+      "description": "Opaque TaskRevisionId.",
+      "type": "string"
+    },
+    "sourceWorkItemId": {
+      "minLength": 1,
+      "description": "Opaque SourceWorkItemId.",
+      "type": "string"
+    },
+    "ordinal": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "revisionSha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "predecessorRevisionId": {
+      "anyOf": [
+        {
+          "minLength": 1,
+          "description": "Opaque TaskRevisionId.",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "predecessorRevisionSha256": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "sourceSnapshotId": {
+      "minLength": 1,
+      "description": "Opaque TaskSourceSnapshotId.",
+      "type": "string"
+    },
+    "author": {
+      "minLength": 1,
+      "maxLength": 1024,
+      "type": "string"
+    },
+    "reason": {
+      "minLength": 1,
+      "maxLength": 65536,
+      "type": "string"
+    },
+    "patch": {
+      "maxItems": 256,
+      "type": "array",
+      "items": {
+        "anyOf": [
+          {
+            "additionalProperties": false,
+            "type": "object",
+            "required": [
+              "op",
+              "path",
+              "value"
+            ],
+            "properties": {
+              "op": {
+                "const": "add",
+                "type": "string"
+              },
+              "path": {
+                "pattern": "^(?:/(?:[^~/]|~[01])*)*$",
+                "maxLength": 8192,
+                "type": "string"
+              },
+              "value": {}
+            }
+          },
+          {
+            "additionalProperties": false,
+            "type": "object",
+            "required": [
+              "op",
+              "path"
+            ],
+            "properties": {
+              "op": {
+                "const": "remove",
+                "type": "string"
+              },
+              "path": {
+                "pattern": "^(?:/(?:[^~/]|~[01])*)*$",
+                "maxLength": 8192,
+                "type": "string"
+              }
+            }
+          },
+          {
+            "additionalProperties": false,
+            "type": "object",
+            "required": [
+              "op",
+              "path",
+              "value"
+            ],
+            "properties": {
+              "op": {
+                "const": "replace",
+                "type": "string"
+              },
+              "path": {
+                "pattern": "^(?:/(?:[^~/]|~[01])*)*$",
+                "maxLength": 8192,
+                "type": "string"
+              },
+              "value": {}
+            }
+          },
+          {
+            "additionalProperties": false,
+            "type": "object",
+            "required": [
+              "op",
+              "from",
+              "path"
+            ],
+            "properties": {
+              "op": {
+                "const": "move",
+                "type": "string"
+              },
+              "from": {
+                "pattern": "^(?:/(?:[^~/]|~[01])*)*$",
+                "maxLength": 8192,
+                "type": "string"
+              },
+              "path": {
+                "pattern": "^(?:/(?:[^~/]|~[01])*)*$",
+                "maxLength": 8192,
+                "type": "string"
+              }
+            }
+          },
+          {
+            "additionalProperties": false,
+            "type": "object",
+            "required": [
+              "op",
+              "from",
+              "path"
+            ],
+            "properties": {
+              "op": {
+                "const": "copy",
+                "type": "string"
+              },
+              "from": {
+                "pattern": "^(?:/(?:[^~/]|~[01])*)*$",
+                "maxLength": 8192,
+                "type": "string"
+              },
+              "path": {
+                "pattern": "^(?:/(?:[^~/]|~[01])*)*$",
+                "maxLength": 8192,
+                "type": "string"
+              }
+            }
+          },
+          {
+            "additionalProperties": false,
+            "type": "object",
+            "required": [
+              "op",
+              "path",
+              "value"
+            ],
+            "properties": {
+              "op": {
+                "const": "test",
+                "type": "string"
+              },
+              "path": {
+                "pattern": "^(?:/(?:[^~/]|~[01])*)*$",
+                "maxLength": 8192,
+                "type": "string"
+              },
+              "value": {}
+            }
+          }
+        ]
+      }
+    },
+    "document": {
+      "$ref": "heniek://contract/TaskRevisionDocument/v1"
+    },
+    "supersessionState": {
+      "anyOf": [
+        {
+          "const": "active",
+          "type": "string"
+        },
+        {
+          "const": "superseded",
+          "type": "string"
+        }
+      ]
+    },
+    "supersededByRevisionId": {
+      "anyOf": [
+        {
+          "minLength": 1,
+          "description": "Opaque TaskRevisionId.",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "createdAt": {
+      "format": "date-time",
+      "type": "string"
+    }
+  }
+}
