@@ -1,0 +1,230 @@
+{
+  "$id": "heniek://contract/TaskWavePlanningSnapshot/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "dag",
+    "waveOrdinal",
+    "unresolvedGraphRevision",
+    "tasks",
+    "profiles",
+    "accounts",
+    "writerLeases",
+    "activeWorkers",
+    "maxConcurrentWorkers",
+    "recordedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "dag": {
+      "$ref": "heniek://contract/TaskDag/v1"
+    },
+    "waveOrdinal": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "unresolvedGraphRevision": {
+      "type": "boolean"
+    },
+    "tasks": {
+      "minItems": 1,
+      "maxItems": 4096,
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "taskId",
+          "outcome",
+          "completionContract",
+          "integration",
+          "combinedVerification"
+        ],
+        "properties": {
+          "taskId": {
+            "minLength": 1,
+            "description": "Opaque ExecutionTaskId.",
+            "type": "string"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "const": "not_started",
+                "type": "string"
+              },
+              {
+                "const": "active",
+                "type": "string"
+              },
+              {
+                "const": "succeeded",
+                "type": "string"
+              },
+              {
+                "const": "failed",
+                "type": "string"
+              },
+              {
+                "const": "cancelled",
+                "type": "string"
+              },
+              {
+                "const": "blocked",
+                "type": "string"
+              }
+            ]
+          },
+          "completionContract": {
+            "anyOf": [
+              {
+                "const": "pending",
+                "type": "string"
+              },
+              {
+                "const": "passed",
+                "type": "string"
+              },
+              {
+                "const": "failed",
+                "type": "string"
+              }
+            ]
+          },
+          "integration": {
+            "anyOf": [
+              {
+                "const": "pending",
+                "type": "string"
+              },
+              {
+                "const": "passed",
+                "type": "string"
+              },
+              {
+                "const": "reconciliation_required",
+                "type": "string"
+              }
+            ]
+          },
+          "combinedVerification": {
+            "anyOf": [
+              {
+                "const": "pending",
+                "type": "string"
+              },
+              {
+                "const": "passed",
+                "type": "string"
+              },
+              {
+                "const": "failed",
+                "type": "string"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "profiles": {
+      "maxItems": 4096,
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "profileId",
+          "available"
+        ],
+        "properties": {
+          "profileId": {
+            "minLength": 1,
+            "description": "Opaque ProfileId.",
+            "type": "string"
+          },
+          "available": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "accounts": {
+      "maxItems": 4096,
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "accountId",
+          "activeRuns",
+          "maxConcurrentRuns"
+        ],
+        "properties": {
+          "accountId": {
+            "minLength": 1,
+            "description": "Opaque AccountId.",
+            "type": "string"
+          },
+          "activeRuns": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxConcurrentRuns": {
+            "minimum": 1,
+            "type": "integer"
+          }
+        }
+      }
+    },
+    "writerLeases": {
+      "maxItems": 4096,
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "repositoryId",
+          "available",
+          "holderTaskId"
+        ],
+        "properties": {
+          "repositoryId": {
+            "minLength": 1,
+            "description": "Opaque RepositoryId.",
+            "type": "string"
+          },
+          "available": {
+            "type": "boolean"
+          },
+          "holderTaskId": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "description": "Opaque ExecutionTaskId.",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "activeWorkers": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "maxConcurrentWorkers": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "recordedAt": {
+      "format": "date-time",
+      "type": "string"
+    }
+  }
+}

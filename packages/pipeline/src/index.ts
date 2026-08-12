@@ -17,3 +17,4 @@ export * from "./scheduler/ids.js";
 export * from "./scheduler/tick.js";
 export * from "./scheduler/transitions.js";
 export * from "./suggestions.js";
+export * from "./task-graph/index.js";
