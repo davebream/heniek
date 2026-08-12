@@ -1,0 +1,55 @@
+{
+  "$id": "heniek://contract/TaskPropagationReason/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "code",
+    "immediateTaskId",
+    "rootTaskId",
+    "path"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "code": {
+      "anyOf": [
+        {
+          "const": "predecessor_failed",
+          "type": "string"
+        },
+        {
+          "const": "predecessor_cancelled",
+          "type": "string"
+        },
+        {
+          "const": "predecessor_blocked",
+          "type": "string"
+        }
+      ]
+    },
+    "immediateTaskId": {
+      "minLength": 1,
+      "description": "Opaque ExecutionTaskId.",
+      "type": "string"
+    },
+    "rootTaskId": {
+      "minLength": 1,
+      "description": "Opaque ExecutionTaskId.",
+      "type": "string"
+    },
+    "path": {
+      "minItems": 2,
+      "uniqueItems": true,
+      "maxItems": 4096,
+      "type": "array",
+      "items": {
+        "minLength": 1,
+        "description": "Opaque ExecutionTaskId.",
+        "type": "string"
+      }
+    }
+  }
+}

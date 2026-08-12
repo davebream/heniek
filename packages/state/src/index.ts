@@ -396,6 +396,13 @@ export {
   type TaskGraphRevisionValidator,
 } from "./task-graph/store.js";
 export {
+  createTaskWaveStateStore,
+  TaskCapacityConflictError,
+  type TaskCapacityLimits,
+  type TaskWaveDispatchInput,
+  type TaskWaveStateStore,
+} from "./task-graph/wave-store.js";
+export {
   createTaskIngestionSource,
   type TaskHierarchyInput,
   TaskSourceConflictError,

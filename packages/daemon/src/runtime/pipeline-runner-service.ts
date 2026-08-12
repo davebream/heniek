@@ -68,6 +68,7 @@ import {
   readOpenRunnerAttempts,
   readPendingPipelineSchedulerIntents,
   readPipelineSchedule,
+  readPipelineStageProjections,
   readRetryDirective,
   readRunnerAttempt,
   readRunnerOperationState,
@@ -185,6 +186,8 @@ export interface PipelineRunnerServiceOptions {
 
 export interface PipelineRunnerService {
   tick(runId: string): Promise<void>;
+  status(runId: string): PipelineRunLifecycle;
+  cancel(runId: string): Promise<PipelineRunLifecycle>;
   drainIntents(runId?: string): Promise<void>;
   reconcile(): Promise<void>;
   cleanupHealth(): ReturnType<typeof reportRunnerCleanupHealth>;
@@ -214,6 +217,13 @@ export interface PipelineRunnerService {
   }): ReturnType<typeof recordRecoveryApproval>;
   stop(): void;
 }
+
+export type PipelineRunLifecycle =
+  | { readonly state: "missing" }
+  | { readonly state: "running" }
+  | { readonly state: "retrying"; readonly attemptOrdinal: number }
+  | { readonly state: "recovery_required" }
+  | { readonly state: "succeeded" | "failed" | "cancelled" };
 
 function workspaceConfiguration(remote: string, branch: string) {
   return {
@@ -1693,8 +1703,51 @@ export function createPipelineRunnerService(
     };
   }
 
+  function status(runId: string): PipelineRunLifecycle {
+    const schedule = readPipelineSchedule(options.db, runId);
+    if (schedule === undefined) return { state: "missing" };
+    if (schedule.terminalOutcome !== undefined) {
+      if (schedule.terminalOutcome === "succeeded") return { state: "succeeded" };
+      if (schedule.terminalOutcome === "cancelled") return { state: "cancelled" };
+      return { state: "failed" };
+    }
+    const attempts = readOpenRunnerAttempts(options.db).filter(
+      (attempt) => attempt.runId === runId,
+    );
+    if (attempts.some((attempt) => attempt.phase === "recovery_required")) {
+      return { state: "recovery_required" };
+    }
+    const retrying = readPipelineStageProjections(options.db, runId)
+      .filter(
+        (stage) =>
+          stage.attemptOrdinal > 1 &&
+          !["succeeded", "failed", "cancelled", "blocked"].includes(stage.state),
+      )
+      .sort((left, right) => right.attemptOrdinal - left.attemptOrdinal)[0];
+    return retrying === undefined
+      ? { state: "running" }
+      : { state: "retrying", attemptOrdinal: retrying.attemptOrdinal };
+  }
+
+  async function cancel(runId: string): Promise<PipelineRunLifecycle> {
+    const current = status(runId);
+    if (["missing", "succeeded", "failed", "cancelled"].includes(current.state)) return current;
+    recordPipelineObservation(options.db, {
+      observationId: options.ids.next("obs"),
+      runId,
+      kind: "cancel_requested",
+      payload: {},
+      recordedAt: options.clock.nowIso(),
+    });
+    await tick(runId);
+    await drainIntents(runId);
+    return status(runId);
+  }
+
   return {
     tick,
+    status,
+    cancel,
     drainIntents,
     reconcile,
     cleanupHealth: () => reportRunnerCleanupHealth(options.db),

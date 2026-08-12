@@ -86,5 +86,9 @@
   "22": {
     "name": "task-graph-revision",
     "statementHash": "cbe54b2062ab7734da738705b88de1c5ec69d6f91aa33a145e1887bf884ba940"
+  },
+  "23": {
+    "name": "task-wave-scheduler",
+    "statementHash": "80ef277e126e7a163f3674bf12af039e5800029aec4f410083f33b2af36b9f5e"
   }
 }

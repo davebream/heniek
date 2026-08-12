@@ -3,7 +3,7 @@ import { AccountId } from "../configuration/index.js";
 import { ExecutionTaskId, ProfileId } from "../execution-backend/index.js";
 import { versioned } from "../kernel/index.js";
 import { PipelineId } from "../pipeline/index.js";
-import { ExecutionTaskRevisionV1, RepositoryId } from "../run/index.js";
+import { ExecutionTaskRevisionV1, RepositoryId, RunId } from "../run/index.js";
 import { TaskGraphId } from "./ids.js";
 
 const IsoDateTime = Type.String({ format: "date-time" });
@@ -111,6 +111,113 @@ export const TaskWavePlanningSnapshotV1 = versioned("TaskWavePlanningSnapshot", 
   recordedAt: IsoDateTime,
 });
 
+/** Q042 snapshot shape: the executable V2 DAG carries each task's pipeline binding. */
+export const TaskWavePlanningSnapshotV2 = versioned("TaskWavePlanningSnapshot", 2, {
+  dag: Type.Ref(TaskDagV2),
+  waveOrdinal: Type.Integer({ minimum: 1 }),
+  unresolvedGraphRevision: Type.Boolean(),
+  tasks: Type.Array(TaskPlanningState, { minItems: 1, maxItems: 4096 }),
+  profiles: Type.Array(ProfileCapacitySnapshot, { maxItems: 4096 }),
+  accounts: Type.Array(AccountCapacitySnapshot, { maxItems: 4096 }),
+  writerLeases: Type.Array(WriterLeaseSnapshot, { maxItems: 4096 }),
+  activeWorkers: Type.Integer({ minimum: 0 }),
+  maxConcurrentWorkers: Type.Integer({ minimum: 1 }),
+  recordedAt: IsoDateTime,
+});
+
+export const TaskLifecyclePhase = Type.Union([
+  Type.Literal("not_started"),
+  Type.Literal("dispatching"),
+  Type.Literal("active"),
+  Type.Literal("retrying"),
+  Type.Literal("cancelling"),
+  Type.Literal("recovery_required"),
+  Type.Literal("succeeded"),
+  Type.Literal("failed"),
+  Type.Literal("cancelled"),
+  Type.Literal("blocked"),
+]);
+
+export const TaskPropagationReasonV1 = versioned("TaskPropagationReason", 1, {
+  code: Type.Union([
+    Type.Literal("predecessor_failed"),
+    Type.Literal("predecessor_cancelled"),
+    Type.Literal("predecessor_blocked"),
+  ]),
+  immediateTaskId: ExecutionTaskId,
+  rootTaskId: ExecutionTaskId,
+  path: Type.Array(ExecutionTaskId, { minItems: 2, uniqueItems: true, maxItems: 4096 }),
+});
+
+export const TaskLifecycleProjectionV1 = versioned("TaskLifecycleProjection", 1, {
+  runId: RunId,
+  taskId: ExecutionTaskId,
+  graphRevision: Type.Integer({ minimum: 1 }),
+  phase: TaskLifecyclePhase,
+  childRunId: Type.Union([RunId, Type.Null()]),
+  attemptOrdinal: Type.Integer({ minimum: 0 }),
+  retryCount: Type.Integer({ minimum: 0 }),
+  blockReason: Type.Union([Type.Ref(TaskPropagationReasonV1), Type.Null()]),
+  completionContract: CompletionGate,
+  integration: IntegrationGate,
+  combinedVerification: CompletionGate,
+  revision: Type.Integer({ minimum: 1 }),
+  updatedAt: IsoDateTime,
+});
+
+export const TaskCapacityScope = Type.Union([
+  Type.Literal("global"),
+  Type.Literal("account"),
+  Type.Literal("workspace"),
+  Type.Literal("repository"),
+]);
+
+export const TaskCapacityLeaseV1 = versioned("TaskCapacityLease", 1, {
+  leaseId: Type.String({ minLength: 1, maxLength: 256 }),
+  runId: RunId,
+  taskId: ExecutionTaskId,
+  scope: TaskCapacityScope,
+  resourceId: Type.String({ minLength: 1, maxLength: 1024 }),
+  fencingRevision: Type.Integer({ minimum: 1 }),
+  state: Type.Union([Type.Literal("active"), Type.Literal("released")]),
+  acquiredAt: IsoDateTime,
+  releasedAt: Type.Union([IsoDateTime, Type.Null()]),
+});
+
+export const TaskDispatchRecordV1 = versioned("TaskDispatchRecord", 1, {
+  dispatchId: Type.String({ minLength: 1, maxLength: 256 }),
+  runId: RunId,
+  taskId: ExecutionTaskId,
+  graphRevision: Type.Integer({ minimum: 1 }),
+  waveOrdinal: Type.Integer({ minimum: 1 }),
+  childRunId: RunId,
+  pipelineId: PipelineId,
+  profileId: ProfileId,
+  accountId: Type.Union([AccountId, Type.Null()]),
+  workspaceId: Type.String({ minLength: 1, maxLength: 1024 }),
+  repositoryIds: Type.Array(RepositoryId, { uniqueItems: true, maxItems: 4096 }),
+  recordedAt: IsoDateTime,
+});
+
+export const TaskWaveAuditEventV1 = versioned("TaskWaveAuditEvent", 1, {
+  eventId: Type.String({ minLength: 1, maxLength: 256 }),
+  runId: RunId,
+  taskId: Type.Union([ExecutionTaskId, Type.Null()]),
+  kind: Type.Union([
+    Type.Literal("wave_planned"),
+    Type.Literal("capacity_acquired"),
+    Type.Literal("task_dispatched"),
+    Type.Literal("task_retrying"),
+    Type.Literal("cancellation_requested"),
+    Type.Literal("task_settled"),
+    Type.Literal("task_blocked"),
+    Type.Literal("capacity_released"),
+    Type.Literal("recovery_required"),
+  ]),
+  detail: Type.Record(Type.String(), Type.Unknown()),
+  recordedAt: IsoDateTime,
+});
+
 export const TaskDagDiagnostic = Type.Object(
   {
     code: Type.String({ minLength: 1, maxLength: 128 }),
@@ -199,3 +306,11 @@ export type TaskDagDiagnostic = Static<typeof TaskDagDiagnostic>;
 export type TaskDagValidationResult = Static<typeof TaskDagValidationResultV1>;
 export type TaskWaveBlockingCode = Static<typeof TaskWaveBlockingCode>;
 export type TaskWavePlan = Static<typeof TaskWavePlanV1>;
+export type TaskWavePlanningSnapshotV2 = Static<typeof TaskWavePlanningSnapshotV2>;
+export type TaskLifecyclePhase = Static<typeof TaskLifecyclePhase>;
+export type TaskPropagationReason = Static<typeof TaskPropagationReasonV1>;
+export type TaskLifecycleProjection = Static<typeof TaskLifecycleProjectionV1>;
+export type TaskCapacityScope = Static<typeof TaskCapacityScope>;
+export type TaskCapacityLease = Static<typeof TaskCapacityLeaseV1>;
+export type TaskDispatchRecord = Static<typeof TaskDispatchRecordV1>;
+export type TaskWaveAuditEvent = Static<typeof TaskWaveAuditEventV1>;
