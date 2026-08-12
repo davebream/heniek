@@ -1,0 +1,172 @@
+{
+  "$id": "heniek://contract/TaskIntegrationTrace/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "traceId",
+    "integrationId",
+    "runId",
+    "taskId",
+    "sequence",
+    "repositoryId",
+    "phase",
+    "expectedSha",
+    "observedSha",
+    "candidateSha",
+    "verificationReportId",
+    "classification",
+    "recordedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "traceId": {
+      "minLength": 1,
+      "maxLength": 512,
+      "type": "string"
+    },
+    "integrationId": {
+      "minLength": 1,
+      "maxLength": 512,
+      "type": "string"
+    },
+    "runId": {
+      "minLength": 1,
+      "description": "Opaque RunId.",
+      "type": "string"
+    },
+    "taskId": {
+      "minLength": 1,
+      "description": "Opaque ExecutionTaskId.",
+      "type": "string"
+    },
+    "sequence": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "repositoryId": {
+      "anyOf": [
+        {
+          "minLength": 1,
+          "description": "Opaque RepositoryId.",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "phase": {
+      "anyOf": [
+        {
+          "const": "intent_recorded",
+          "type": "string"
+        },
+        {
+          "const": "source_observed",
+          "type": "string"
+        },
+        {
+          "const": "target_observed",
+          "type": "string"
+        },
+        {
+          "const": "merge_prepared",
+          "type": "string"
+        },
+        {
+          "const": "verification_started",
+          "type": "string"
+        },
+        {
+          "const": "verification_finished",
+          "type": "string"
+        },
+        {
+          "const": "ref_update_attempted",
+          "type": "string"
+        },
+        {
+          "const": "ref_update_observed",
+          "type": "string"
+        },
+        {
+          "const": "adopted",
+          "type": "string"
+        },
+        {
+          "const": "completed",
+          "type": "string"
+        },
+        {
+          "const": "reconciliation_required",
+          "type": "string"
+        }
+      ]
+    },
+    "expectedSha": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{40}(?:[0-9a-f]{24})?$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "observedSha": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{40}(?:[0-9a-f]{24})?$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "candidateSha": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{40}(?:[0-9a-f]{24})?$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "verificationReportId": {
+      "anyOf": [
+        {
+          "minLength": 1,
+          "maxLength": 512,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "classification": {
+      "anyOf": [
+        {
+          "minLength": 1,
+          "maxLength": 128,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "recordedAt": {
+      "format": "date-time",
+      "type": "string"
+    }
+  }
+}
