@@ -4,6 +4,8 @@ import type {
   TaskDagV2,
   TaskDispatchRecord,
   TaskIntegrationLedgerEntry,
+  TaskIntegrationReconciliation,
+  TaskIntegrationReconciliationObservation,
   TaskIntegrationTrace,
   TaskLifecycleProjection,
 } from "@heniek/contracts";
@@ -50,6 +52,13 @@ export interface TaskIntegrationPublishResult {
   readonly repositories: TaskIntegrationLedgerEntry["repositories"];
 }
 
+export interface TaskIntegrationRepositoryObservation {
+  readonly repositoryId: string;
+  readonly observedSha: string | null;
+  readonly classification: "observed" | "missing_ref" | "observation_failed" | "identity_mismatch";
+  readonly detail: string | null;
+}
+
 /** Provider-neutral adapter over Q036/Q037/Q038 workspace operations. */
 export interface TaskIntegrationDriver {
   observeBranches(runId: RunId): Promise<readonly EpicBranchObservation[]>;
@@ -60,7 +69,14 @@ export interface TaskIntegrationDriver {
     work: TaskIntegrationWork,
     repositories: TaskIntegrationLedgerEntry["repositories"],
   ): Promise<TaskIntegrationVerificationResult>;
-  publish(work: TaskIntegrationWork): Promise<TaskIntegrationPublishResult>;
+  observe(
+    work: TaskIntegrationWork,
+    repositories: TaskIntegrationLedgerEntry["repositories"],
+  ): Promise<readonly TaskIntegrationRepositoryObservation[]>;
+  publish(
+    work: TaskIntegrationWork,
+    repositories: TaskIntegrationLedgerEntry["repositories"],
+  ): Promise<TaskIntegrationPublishResult>;
 }
 
 export interface TaskIntegrationTickInput {
@@ -74,6 +90,8 @@ export interface TaskIntegrationStatus {
   readonly branches: readonly EpicRepositoryBranch[];
   readonly entries: readonly TaskIntegrationLedgerEntry[];
   readonly traces: readonly TaskIntegrationTrace[];
+  readonly reconciliations: readonly TaskIntegrationReconciliation[];
+  readonly reconciliationObservations: readonly TaskIntegrationReconciliationObservation[];
 }
 
 export interface TaskIntegrationService {
@@ -104,6 +122,8 @@ export function createTaskIntegrationService(
       branches: store.branches(runId),
       entries,
       traces: entries.flatMap((entry) => store.traces(entry.integrationId)),
+      reconciliations: store.reconciliations(runId),
+      reconciliationObservations: store.reconciliationObservations(runId),
     };
   };
 
@@ -165,6 +185,7 @@ export function createTaskIntegrationService(
     expectedLifecycle: TaskIntegrationLedgerEntry["lifecycle"],
     classification: string,
     repositories = entry.repositories,
+    trigger: TaskIntegrationReconciliation["trigger"] = "recovery_required",
   ): TaskIntegrationLedgerEntry => {
     trace(entry, {
       repositoryId: null,
@@ -175,7 +196,7 @@ export function createTaskIntegrationService(
       verificationReportId: entry.verificationReportId,
       classification,
     });
-    return store.transition({
+    const reconciled = store.transition({
       integrationId: entry.integrationId,
       expectedLifecycle,
       lifecycle: "reconciliation_required",
@@ -186,6 +207,203 @@ export function createTaskIntegrationService(
         combinedVerification: entry.verification,
       },
     });
+    store.startReconciliation({ entry: reconciled, trigger });
+    return reconciled;
+  };
+
+  const reconcileEntry = async (
+    entry: TaskIntegrationLedgerEntry,
+    dispatch: TaskDispatchRecord,
+    allowForward = true,
+  ): Promise<TaskIntegrationLedgerEntry> => {
+    const work = await options.driver.resolve(dispatch);
+    let reconciliation = store.startReconciliation({
+      entry,
+      trigger: entry.repositories.some((repository) => repository.resultSha !== null)
+        ? "partial_publish"
+        : "recovery_required",
+    });
+    const previousActions = reconciliation.repositories.map((repository) => repository.action);
+    if (reconciliation.lifecycle === "integrated" || reconciliation.lifecycle === "blocked")
+      return entry;
+
+    if (work === null || work.variantId !== entry.variantId || entry.repositories.length === 0) {
+      store.advanceReconciliation({
+        reconciliationId: reconciliation.reconciliationId,
+        expectedLifecycle: reconciliation.lifecycle,
+        lifecycle: "blocked",
+        repositories: [],
+        resolution: "blocked",
+        blocker: "missing_evidence",
+      });
+      return entry;
+    }
+
+    const pass = reconciliation.pass + 1;
+    reconciliation = store.advanceReconciliation({
+      reconciliationId: reconciliation.reconciliationId,
+      expectedLifecycle: reconciliation.lifecycle,
+      lifecycle: "observing",
+      pass,
+    });
+    let observed: readonly TaskIntegrationRepositoryObservation[];
+    try {
+      observed = await options.driver.observe(work, entry.repositories);
+    } catch (error) {
+      const detail = (
+        error instanceof Error ? error.message : "repository observation failed"
+      ).slice(0, 1024);
+      observed = entry.repositories.map((repository) => ({
+        repositoryId: repository.repositoryId,
+        observedSha: null,
+        classification: "observation_failed" as const,
+        detail,
+      }));
+    }
+
+    const byRepository = new Map(
+      observed.map((observation) => [observation.repositoryId, observation]),
+    );
+    const existingCount = store
+      .reconciliationObservations(entry.runId)
+      .filter(
+        (observation) => observation.reconciliationId === reconciliation.reconciliationId,
+      ).length;
+    const repositories: TaskIntegrationReconciliation["repositories"] = [];
+    for (const [index, repository] of [...entry.repositories]
+      .sort((left, right) => left.repositoryId.localeCompare(right.repositoryId))
+      .entries()) {
+      const observation = byRepository.get(repository.repositoryId);
+      let classification: TaskIntegrationReconciliation["repositories"][number]["classification"];
+      let action: TaskIntegrationReconciliation["repositories"][number]["action"];
+      let detail = observation?.detail ?? null;
+      if (repository.candidateSha === null) {
+        classification = "missing_candidate";
+        action = "block";
+        detail = detail ?? "prepared candidate SHA is missing";
+      } else if (observation === undefined || observation.classification === "missing_ref") {
+        classification = "missing_ref";
+        action = "block";
+        detail = detail ?? "repository ref observation is missing";
+      } else if (observation.classification === "observation_failed") {
+        classification = "observation_failed";
+        action = "block";
+      } else if (observation.classification === "identity_mismatch") {
+        classification = "identity_mismatch";
+        action = "block";
+      } else if (observation.observedSha === repository.candidateSha) {
+        classification = "applied";
+        action = "adopt";
+      } else if (observation.observedSha === repository.expectedTargetSha) {
+        classification = "pending";
+        action = "publish";
+      } else {
+        classification = "external_mutation";
+        action = "block";
+        detail =
+          detail ?? "observed SHA matches neither the expected target nor prepared candidate";
+      }
+      const projected = {
+        repositoryId: repository.repositoryId,
+        expectedSha: repository.expectedTargetSha,
+        candidateSha: repository.candidateSha,
+        observedSha: observation?.observedSha ?? null,
+        classification,
+        action,
+        detail,
+      };
+      repositories.push(projected);
+      const sequence = existingCount + index + 1;
+      store.appendReconciliationObservation({
+        schemaVersion: 1,
+        observationId: `${reconciliation.reconciliationId}:observation:${sequence}`,
+        reconciliationId: reconciliation.reconciliationId,
+        integrationId: entry.integrationId,
+        runId: entry.runId,
+        taskId: entry.taskId,
+        pass,
+        sequence,
+        repositoryId: repository.repositoryId,
+        expectedSha: repository.expectedTargetSha,
+        candidateSha: repository.candidateSha,
+        observedSha: observation?.observedSha ?? null,
+        classification,
+        detail,
+        observedAt: options.clock.nowIso(),
+      });
+    }
+
+    const blocked = repositories.find((repository) => repository.action === "block");
+    if (blocked !== undefined) {
+      const blocker: Exclude<TaskIntegrationReconciliation["blocker"], null> =
+        blocked.classification === "external_mutation"
+          ? "external_mutation"
+          : blocked.classification === "observation_failed" ||
+              blocked.classification === "missing_ref"
+            ? "observation_failed"
+            : blocked.classification === "identity_mismatch"
+              ? "identity_mismatch"
+              : "missing_evidence";
+      store.advanceReconciliation({
+        reconciliationId: reconciliation.reconciliationId,
+        expectedLifecycle: "observing",
+        lifecycle: "blocked",
+        repositories,
+        resolution: "blocked",
+        blocker,
+      });
+      return entry;
+    }
+
+    const pending = repositories.filter((repository) => repository.action === "publish");
+    if (pending.length > 0) {
+      if (!allowForward) {
+        store.advanceReconciliation({
+          reconciliationId: reconciliation.reconciliationId,
+          expectedLifecycle: "observing",
+          lifecycle: "blocked",
+          repositories,
+          resolution: "blocked",
+          blocker: "ambiguous_state",
+        });
+        return entry;
+      }
+      store.advanceReconciliation({
+        reconciliationId: reconciliation.reconciliationId,
+        expectedLifecycle: "observing",
+        lifecycle: "forwarding",
+        repositories,
+      });
+      const selected = entry.repositories.filter((repository) =>
+        pending.some((candidate) => candidate.repositoryId === repository.repositoryId),
+      );
+      try {
+        await options.driver.publish(work, selected);
+      } catch {
+        return entry;
+      }
+      return reconcileEntry(entry, dispatch, false);
+    }
+
+    const hadForward = previousActions.includes("publish");
+    const hadAdoption = previousActions.includes("adopt");
+    const resolution = hadForward
+      ? hadAdoption
+        ? "mixed_forward_and_adopt"
+        : "forward_published"
+      : "adopted_published";
+    const resolvedRepositories = entry.repositories.map((repository) => ({
+      ...repository,
+      resultSha: repository.candidateSha,
+      classification:
+        repository.resultSha === repository.candidateSha ? "integrated" : "already_applied",
+    }));
+    store.resolveReconciliation(reconciliation.reconciliationId, resolvedRepositories, resolution);
+    return store
+      .entries(entry.runId)
+      .find(
+        (candidate) => candidate.integrationId === entry.integrationId,
+      ) as TaskIntegrationLedgerEntry;
   };
 
   const process = async (
@@ -307,13 +525,32 @@ export function createTaskIntegrationService(
         verificationReportId: entry.verificationReportId,
         classification: "started",
       });
-      const publication = await options.driver.publish(work);
+      let publication: TaskIntegrationPublishResult;
+      try {
+        publication = await options.driver.publish(work, entry.repositories);
+      } catch {
+        return reconcile(
+          entry,
+          "verified",
+          "interrupted_publish",
+          entry.repositories,
+          "interrupted_publish",
+        );
+      }
       recordRepositories(entry, "ref_update_observed", publication.repositories);
       if (
         publication.classification !== "integrated" &&
         publication.classification !== "already_applied"
       )
-        return reconcile(entry, "verified", publication.classification, publication.repositories);
+        return reconcile(
+          entry,
+          "verified",
+          publication.classification,
+          publication.repositories,
+          publication.classification === "partial_progress"
+            ? "partial_publish"
+            : "recovery_required",
+        );
       trace(entry, {
         repositoryId: null,
         phase: publication.classification === "already_applied" ? "adopted" : "completed",
@@ -342,8 +579,6 @@ export function createTaskIntegrationService(
     async tick(input) {
       const branches = await options.driver.observeBranches(input.runId);
       const observed = branches.map((branch) => store.initializeBranch(branch));
-      if (observed.some((branch) => branch.lifecycle === "reconciliation_required"))
-        return status(input.runId);
 
       const order = new Map(
         [...input.dag.nodes]
@@ -369,7 +604,26 @@ export function createTaskIntegrationService(
         });
       }
 
+      if (observed.some((branch) => branch.lifecycle === "reconciliation_required")) {
+        const entries = store.entries(input.runId);
+        const hasActiveReconciliation = entries.some(
+          (entry) => entry.lifecycle === "reconciliation_required",
+        );
+        const first = entries.find(
+          (entry) =>
+            !terminal(entry.lifecycle) &&
+            input.tasks.find((task) => task.taskId === entry.taskId)?.phase === "succeeded",
+        );
+        if (!hasActiveReconciliation && first !== undefined)
+          reconcile(first, first.lifecycle, "branch_drift", first.repositories, "branch_drift");
+      }
+
       for (const entry of store.entries(input.runId)) {
+        if (entry.lifecycle === "reconciliation_required") {
+          const dispatch = dispatches.find((candidate) => candidate.taskId === entry.taskId);
+          if (dispatch !== undefined) await reconcileEntry(entry, dispatch);
+          break;
+        }
         if (terminal(entry.lifecycle)) continue;
         const task = input.tasks.find((candidate) => candidate.taskId === entry.taskId);
         if (
