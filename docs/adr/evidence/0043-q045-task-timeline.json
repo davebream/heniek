@@ -1,0 +1,51 @@
+{
+  "scenario": "Q045 hidden-dependency race",
+  "events": [
+    { "ordinal": 1, "event": "task.integrated", "taskId": "T1", "graphRevision": 1 },
+    {
+      "ordinal": 2,
+      "event": "wave.started",
+      "taskIds": ["T2", "T3", "T4", "T5"],
+      "graphRevision": 1
+    },
+    {
+      "ordinal": 3,
+      "event": "hidden_dependency.recorded",
+      "findingId": "finding-T4-needs-T2",
+      "reporterTaskId": "T4",
+      "affectedTaskIds": ["T4"]
+    },
+    { "ordinal": 4, "event": "replan.quiescing", "replanId": "replan-T4-needs-T2" },
+    {
+      "ordinal": 5,
+      "event": "attempt.cancellation_requested",
+      "taskId": "T4",
+      "leaseRetained": true
+    },
+    { "ordinal": 6, "event": "attempt.cancelled", "taskId": "T4", "historyRetained": true },
+    {
+      "ordinal": 7,
+      "event": "sibling.failed",
+      "taskId": "T3",
+      "effect": "partial-wave failure preserved without cancelling safe siblings"
+    },
+    { "ordinal": 8, "event": "task.integrated", "taskId": "T2", "graphRevision": 1 },
+    { "ordinal": 9, "event": "replan.revising", "replanId": "replan-T4-needs-T2" },
+    {
+      "ordinal": 10,
+      "event": "graph.revised",
+      "fromRevision": 1,
+      "toRevision": 2,
+      "supersededTaskId": "T4",
+      "replacementTaskId": "T4-r"
+    },
+    { "ordinal": 11, "event": "replan.resumed", "replanId": "replan-T4-needs-T2" },
+    {
+      "ordinal": 12,
+      "event": "replacement.started",
+      "taskId": "T4-r",
+      "dependencies": ["T1", "T2"],
+      "graphRevision": 2
+    }
+  ]
+}
