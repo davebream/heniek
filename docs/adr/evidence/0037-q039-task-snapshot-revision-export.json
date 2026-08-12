@@ -1,0 +1,91 @@
+{
+  "schemaVersion": 1,
+  "snapshot": {
+    "schemaVersion": 1,
+    "snapshotId": "snapshot-q039-evidence",
+    "sourceWorkItemId": "source-q039",
+    "sourceKind": "parent_conversation",
+    "sourceUri": "heniek-parent://session/q039",
+    "observedVersion": "turn-2",
+    "contentSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "rawContentRef": "artifact-q039-source",
+    "requirements": [
+      {
+        "requirementId": "Q039-AC1",
+        "text": "Task snapshots retain source URI, content hash, requirements, attachments, and observed version.",
+        "sourcePointer": "/acceptance-criteria/1"
+      }
+    ],
+    "attachments": [
+      {
+        "uri": "heniek-parent://session/q039/attachment/spec.md",
+        "name": "spec.md",
+        "mediaType": "text/markdown",
+        "observedVersion": "1",
+        "contentSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "artifactId": "artifact-q039-spec"
+      }
+    ],
+    "observedAt": "2026-08-12T08:00:00.000Z"
+  },
+  "activeRevision": {
+    "schemaVersion": 1,
+    "revisionId": "revision-q039-2",
+    "sourceWorkItemId": "source-q039",
+    "ordinal": 2,
+    "revisionSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "predecessorRevisionId": "revision-q039-1",
+    "predecessorRevisionSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "sourceSnapshotId": "snapshot-q039-evidence",
+    "author": "maintainer",
+    "reason": "Accepted the durable hierarchy clarification.",
+    "patch": [
+      {
+        "op": "replace",
+        "path": "/objective",
+        "value": "Persist task sources with explicit tracker and execution identities."
+      }
+    ],
+    "document": {
+      "schemaVersion": 1,
+      "objective": "Persist task sources with explicit tracker and execution identities.",
+      "constraints": ["Keep provider payloads outside public contracts."],
+      "decisions": [
+        {
+          "statement": "Use RFC 6902 JSON Patch.",
+          "author": "maintainer",
+          "rationale": "Use a standard replayable diff representation."
+        }
+      ],
+      "openQuestions": [],
+      "repositoryReferences": ["davebream/heniek"],
+      "requirements": [
+        {
+          "requirementId": "Q039-AC1",
+          "text": "Task snapshots retain source URI, content hash, requirements, attachments, and observed version.",
+          "sourcePointer": "/acceptance-criteria/1"
+        }
+      ]
+    },
+    "supersessionState": "active",
+    "supersededByRevisionId": null,
+    "createdAt": "2026-08-12T08:00:00.000Z"
+  },
+  "hierarchy": {
+    "schemaVersion": 1,
+    "rootSourceWorkItemId": "source-q039",
+    "trackerEdges": [
+      {
+        "parentSourceWorkItemId": "source-q039",
+        "childSourceWorkItemId": "source-q039-child"
+      }
+    ],
+    "executionMappings": [
+      {
+        "sourceWorkItemId": "source-q039",
+        "executionTaskIds": ["execution-q039-a", "execution-q039-b"]
+      }
+    ],
+    "recordedAt": "2026-08-12T08:00:00.000Z"
+  }
+}
