@@ -86,5 +86,9 @@
   "21": {
     "structural": "ef38e49bc5f41d1c72aee7edc300d13c414ef6ea618b1c96f022ae6ea323482d",
     "declared": "b9ae9f5157ea1bc6f895c090022c05ea747c52006c6a6db6795c1ba2a989e9dd"
+  },
+  "22": {
+    "structural": "c43f1b150f18378876841171a8c0a46dbc02383db6222bc519908f140837746b",
+    "declared": "cd916ef9cd7da21c462eca5d8c27fd66a9ae257a4ff2710d19724692bc47536b"
   }
 }

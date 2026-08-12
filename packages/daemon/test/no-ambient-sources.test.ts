@@ -135,6 +135,8 @@ const EXPECTED_EXEMPTIONS: readonly string[] = [
    * unauthorised offender for the same blunt `node:crypto` match.
    */
   "runtime/stage-completion.ts",
+  /* Q041 application boundary; deterministic validation plus durable state composition. */
+  "runtime/task-graph-revision-service.ts",
   "runtime/trace-sink.ts",
 ];
 
