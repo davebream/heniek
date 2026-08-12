@@ -84,6 +84,8 @@ export interface ConformanceHarness<TSubject, TArrangement> {
   readonly capabilities: readonly ConformanceCapability[];
   /** Maps an adapter-native error onto the neutral fault vocabulary. */
   classifyFault(error: unknown): FaultKind | "unknown";
+  /** Optionally maps neutral catalogue input into an adapter-native request shape. */
+  mapInput?(input: unknown): unknown;
   createSubject(context: ConformanceContext): Promise<ConformanceSubject<TSubject, TArrangement>>;
 }
 

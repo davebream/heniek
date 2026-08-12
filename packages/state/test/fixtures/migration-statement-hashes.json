@@ -102,5 +102,9 @@
   "26": {
     "name": "hidden-dependency-replanning",
     "statementHash": "70c58376fd9a1f7c13dd5de878e4fc84292026721f39f6e599017dae027bd635"
+  },
+  "27": {
+    "name": "task-source-github",
+    "statementHash": "85b8c92361024cbbe1f7061378747ba09ecc35a6244f7e4d3c744cd892ab62d0"
   }
 }

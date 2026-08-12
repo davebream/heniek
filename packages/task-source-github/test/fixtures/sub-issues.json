@@ -1,0 +1,12 @@
+[
+  {
+    "node_id": "I_kwDOChild1",
+    "url": "https://api.github.com/repos/acme/worker/issues/7",
+    "html_url": "https://github.com/acme/worker/issues/7",
+    "title": "Implement worker projection",
+    "body": "Worker-side change.",
+    "state": "open",
+    "labels": [],
+    "updated_at": "2026-08-12T09:00:00Z"
+  }
+]

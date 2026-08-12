@@ -1,0 +1,10 @@
+[
+  {
+    "node_id": "IC_kwDOComment2",
+    "html_url": "https://github.com/acme/widget/issues/61#issuecomment-2",
+    "body": "Never overwrite the issue body.",
+    "user": { "login": "reviewer" },
+    "created_at": "2026-08-12T10:02:00Z",
+    "updated_at": "2026-08-12T10:02:00Z"
+  }
+]
