@@ -1357,6 +1357,18 @@ const EXPECTED_SCHEMAS: readonly {
     path: "generated/TaskContext.v1.schema.json",
   },
   {
+    schemaId: "heniek://contract/TaskDag/v1",
+    schemaVersion: 1,
+    sha256: "b9f36f7e2d162c3370d0885337242629fbf07df55608ab1596f8968ea50b59a2",
+    path: "generated/TaskDag.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/TaskDagValidationResult/v1",
+    schemaVersion: 1,
+    sha256: "af564a85187e07e4d7d21113d31d2f06a44a225e7a3ba8a4bb332fbd3d22462a",
+    path: "generated/TaskDagValidationResult.v1.schema.json",
+  },
+  {
     schemaId: "heniek://contract/TaskHierarchy/v1",
     schemaVersion: 1,
     sha256: "a5234c9b71d75be9b35214cd2eb7751fb50a2089318fd6b2143d490ae208fb23",
@@ -1379,6 +1391,18 @@ const EXPECTED_SCHEMAS: readonly {
     schemaVersion: 1,
     sha256: "b8e9b720806991b710f8d723428883c6d8d8c142a447588bcd595b3c13f8dfcc",
     path: "generated/TaskSourceSnapshot.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/TaskWavePlan/v1",
+    schemaVersion: 1,
+    sha256: "e10214e01aee693d4561d21f4f2af9e952f7ee695cd6dbbd8682bfbde47a4b31",
+    path: "generated/TaskWavePlan.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/TaskWavePlanningSnapshot/v1",
+    schemaVersion: 1,
+    sha256: "6bb27925984085a0c216b483300b7cdbacd4311be2143939d7d90cdc5f8b3a58",
+    path: "generated/TaskWavePlanningSnapshot.v1.schema.json",
   },
   {
     schemaId: "heniek://contract/TaskWorkspaceBinding/v1",
@@ -1491,7 +1515,7 @@ const EXPECTED_SCHEMAS: readonly {
 ];
 
 describe("packages/contracts generated manifest is unchanged (AC4)", () => {
-  it("manifest.json lists exactly the 209 known schemas with their recorded sha256", async () => {
+  it("manifest.json lists exactly the 218 known schemas with their recorded sha256", async () => {
     const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
     expect(manifest).toEqual({
       schemaVersion: "heniek.contracts-manifest.v1",
