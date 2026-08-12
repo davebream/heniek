@@ -10,9 +10,17 @@ runtime dependency or authoritative architecture.
 | Claudexor | [razzant/claudexor](https://github.com/razzant/claudexor) | `v3.1.2` / `bb5efee24132aa3d65e417040df201e08da44c8c` | Provider processes, accounts, sessions, interactions, and execution through `/v2` |
 | Heniek | this repository | this repository | Codebases, multi-root workspaces, task waves, integration, and delivery |
 
-The reference pins are evidence baselines. Product contracts remain
-provider-neutral, and only a versioned ADR with compatibility tests can change an
-accepted implementation default.
+The reference pins are evidence baselines: each records the upstream commit the
+borrowed mechanics were actually read at, not the current state of that project.
+Do not read a pin as a survey of what the upstream tool can do today. As of
+2026-08-12, TAKT `main` (`f074b24`) is 161 commits ahead of the pin above and has
+grown team-leader decomposition, callable subworkflows, dynamic parallel
+reviewers, command quality gates, a findings contract, and resume/restart
+positions; re-pinning requires re-reading the borrowed mechanics at the new
+commit, so the baseline stays where the evidence was taken.
+
+Product contracts remain provider-neutral, and only a versioned ADR with
+compatibility tests can change an accepted implementation default.
 
 ## Glossary
 

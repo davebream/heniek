@@ -28,9 +28,13 @@ at runtime.
 
 [TAKT](https://github.com/nrslib/takt) coordinates agent work inside a single
 repository. It keeps a first-in-first-out task queue in `.takt/tasks.yaml`,
-drains it with a worker pool, runs each task through a declarative YAML state
-machine in its own worktree, and can open a draft pull request when a task
-finishes.
+drains it with a worker pool, runs each task through a declarative YAML workflow
+in an optional isolated clone, then commits, pushes, and can open a pull request.
+Its workflow layer is deep: seven step types, including parallel and dynamically
+selected reviewers, team-leader decomposition, and callable subworkflows;
+machine-executed command quality gates; a findings contract with a completion
+gate and conflict adjudication; loop monitors and rate-limit provider fallback;
+and resume or restart from a chosen step after a failure.
 
 [Claudexor](https://github.com/razzant/claudexor) executes agent turns against a
 single project. It owns the vendor CLI adapters, credential profiles spanning
@@ -65,11 +69,13 @@ repositories and the order in which its parts land matters.
 
 ## Current status
 
-Milestones M0 through M3, covering queue items Q001–Q032, are complete, and M4
-is in progress through Q034. The bundled `fast` and `careful` pipelines run end
-to end from a source checkout, which is the first repeatable multi-stage
-workflow. This is an engineering checkpoint, not the point at which Heniek is
-generally usable.
+Milestones M0 through M5, covering queue items Q001–Q045, are complete. M6,
+GitHub delivery, is next and not yet started. An epic now runs from
+whole-Codebase analysis through a revisable task DAG, parallel waves, repository
+integration branches, and combined verification — the machinery Heniek exists
+for. This is an engineering checkpoint, not the point at which Heniek is
+generally usable: nothing yet publishes the resulting work as linked pull
+requests.
 
 What works today:
 
@@ -88,14 +94,19 @@ What works today:
   fixed stage state machine, bounded repair, segment fusion, and smart
   continuation capsules;
 - single-repository Codebase detection, workspace provisioning, base sync, and
-  writer leases, plus multi-root Codebase configuration and immutable base pins.
+  writer leases, plus multi-root Codebase configuration and immutable base pins;
+- composite workspace provisioning with repository setup and instruction merge,
+  isolated variants, one-writer leases, expected-SHA integration, whole-Codebase
+  analysis, multi-repository tasks, and combined verification with restart
+  reconciliation;
+- TaskSource handoffs, snapshots, revisions and hierarchy, task DAG validation,
+  wave eligibility and capacity gates, autonomous graph revision with
+  provenance, whole-task parallel scheduling, repository epic branches with
+  serialized integration, partial multi-repository reconciliation, and
+  hidden-dependency replanning.
 
 What is still missing:
 
-- composite workspace provisioning, isolated variants, whole-Codebase analysis,
-  and combined multi-repository verification;
-- epic task hierarchies, DAG validation, parallel task waves, autonomous graph
-  revision, integration branches, and reconciliation;
 - GitHub task synchronization and linked single- and multi-repository draft-PR
   delivery;
 - the Claude MCP/plugin surface, the complete CLI, the TUI, the local dashboard,
