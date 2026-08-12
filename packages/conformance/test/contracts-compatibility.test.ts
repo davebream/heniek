@@ -1423,6 +1423,18 @@ const EXPECTED_SCHEMAS: readonly {
     path: "generated/TaskIntegrationLedgerEntry.v1.schema.json",
   },
   {
+    schemaId: "heniek://contract/TaskIntegrationReconciliation/v1",
+    schemaVersion: 1,
+    sha256: "77e34051462b4b41d4f406e7740c8d61dfc7b7ed974051b4225946a1be11cd64",
+    path: "generated/TaskIntegrationReconciliation.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/TaskIntegrationReconciliationObservation/v1",
+    schemaVersion: 1,
+    sha256: "c22edcd95a0a00d730bc426eec58fe3799d9f99ca26820990eda725a8694c0f5",
+    path: "generated/TaskIntegrationReconciliationObservation.v1.schema.json",
+  },
+  {
     schemaId: "heniek://contract/TaskIntegrationTrace/v1",
     schemaVersion: 1,
     sha256: "e62e0881ac7a0ab06fd3192cffa029e338ddcce9bbcc6a9a49264ad469a389e7",
@@ -1593,7 +1605,7 @@ const EXPECTED_SCHEMAS: readonly {
 ];
 
 describe("packages/contracts generated manifest is unchanged (AC4)", () => {
-  it("manifest.json lists exactly the 231 known schemas with their recorded sha256", async () => {
+  it("manifest.json lists exactly the 233 known schemas with their recorded sha256", async () => {
     const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
     expect(manifest).toEqual({
       schemaVersion: "heniek.contracts-manifest.v1",

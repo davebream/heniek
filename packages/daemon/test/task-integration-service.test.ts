@@ -115,6 +115,10 @@ class FakeIntegrationDriver implements TaskIntegrationDriver {
   publicationFailure: "partial_progress" | null = null;
   throwOnVerifyOnce = false;
   throwOnPublishOnce = false;
+  throwAfterPrepareRepository: string | null = null;
+  throwAfterRepository: string | null = null;
+  publishFailuresRemaining = 0;
+  observationFailure: "observation_failed" | "identity_mismatch" | null = null;
 
   async observeBranches() {
     return ["repo-a", "repo-b"].map((repositoryId) => ({
@@ -151,12 +155,15 @@ class FakeIntegrationDriver implements TaskIntegrationDriver {
         ),
       };
     }
-    return {
-      classification: "prepared" as const,
-      repositories: repositoryIds.map((repositoryId) =>
-        this.repository(repositoryId, null, "prepared"),
-      ),
-    };
+    const repositories = [] as TaskIntegrationLedgerEntry["repositories"][number][];
+    for (const repositoryId of repositoryIds) {
+      repositories.push(this.repository(repositoryId, null, "prepared"));
+      if (this.throwAfterPrepareRepository === repositoryId) {
+        this.throwAfterPrepareRepository = null;
+        throw new Error(`preparation interrupted after ${repositoryId}`);
+      }
+    }
+    return { classification: "prepared" as const, repositories };
   }
 
   async verify(work: TaskIntegrationWork) {
@@ -173,19 +180,48 @@ class FakeIntegrationDriver implements TaskIntegrationDriver {
     };
   }
 
-  async publish(work: TaskIntegrationWork) {
+  async observe(
+    _work: TaskIntegrationWork,
+    repositories: TaskIntegrationLedgerEntry["repositories"],
+  ) {
+    this.calls.push(
+      `observe:${repositories.map((repository) => repository.repositoryId).join(",")}`,
+    );
+    return repositories.map((repository) => ({
+      repositoryId: repository.repositoryId,
+      observedSha:
+        this.observationFailure === null ? (this.heads.get(repository.repositoryId) ?? null) : null,
+      classification:
+        this.observationFailure ??
+        (this.heads.has(repository.repositoryId)
+          ? ("observed" as const)
+          : ("missing_ref" as const)),
+      detail: this.observationFailure === null ? null : "injected observation failure",
+    }));
+  }
+
+  async publish(work: TaskIntegrationWork, selected?: TaskIntegrationLedgerEntry["repositories"]) {
     const taskId = work.variantId.at(-1) as string;
     const repositoryIds =
-      this.multiRepositoryFor === taskId ? ["repo-a", "repo-b"] : [`repo-${taskId}`];
+      selected === undefined
+        ? this.multiRepositoryFor === taskId
+          ? ["repo-a", "repo-b"]
+          : [`repo-${taskId}`]
+        : selected.map((repository) => repository.repositoryId);
     this.calls.push(`publish:${taskId}`);
-    if (this.throwOnPublishOnce) {
+    if (this.throwOnPublishOnce || this.publishFailuresRemaining > 0) {
       this.throwOnPublishOnce = false;
+      this.publishFailuresRemaining = Math.max(0, this.publishFailuresRemaining - 1);
       throw new Error("publication process interrupted");
     }
     if (this.publicationFailure === "partial_progress") {
       const first = repositoryIds[0] as string;
-      const result = "d".repeat(40);
-      const installed = this.repository(first, result, "integrated");
+      const selectedRepository = selected?.find((repository) => repository.repositoryId === first);
+      const result = selectedRepository?.candidateSha ?? "d".repeat(40);
+      const installed =
+        selectedRepository === undefined
+          ? this.repository(first, result, "integrated")
+          : { ...selectedRepository, resultSha: result, classification: "integrated" };
       this.heads.set(first, result);
       return {
         classification: "partial_progress" as const,
@@ -197,12 +233,24 @@ class FakeIntegrationDriver implements TaskIntegrationDriver {
         ],
       };
     }
-    const repositories = repositoryIds.map((repositoryId, index) => {
-      const result = String(index + (taskId === "a" ? 4 : 6)).repeat(40);
-      const repository = this.repository(repositoryId, result, "integrated");
+    const repositories = [] as TaskIntegrationLedgerEntry["repositories"][number][];
+    for (const [index, repositoryId] of repositoryIds.entries()) {
+      const selectedRepository = selected?.find(
+        (repository) => repository.repositoryId === repositoryId,
+      );
+      const result =
+        selectedRepository?.candidateSha ?? String(index + (taskId === "a" ? 4 : 6)).repeat(40);
+      const repository =
+        selectedRepository === undefined
+          ? this.repository(repositoryId, result, "integrated")
+          : { ...selectedRepository, resultSha: result, classification: "integrated" };
       this.heads.set(repositoryId, result);
-      return repository;
-    });
+      repositories.push(repository);
+      if (this.throwAfterRepository === repositoryId) {
+        this.throwAfterRepository = null;
+        throw new Error(`publication interrupted after ${repositoryId}`);
+      }
+    }
     return {
       classification: "integrated" as const,
       repositories,
@@ -366,15 +414,13 @@ describe("Q043 serialized task integration", () => {
     expect(create().status(RUN_ID).entries[0]?.lifecycle).toBe("prepared");
 
     driver.throwOnPublishOnce = true;
-    await expect(
-      create().tick({
-        runId: RUN_ID,
-        dag: DAG,
-        tasks: waves.projections(RUN_ID),
-        dispatches: waves.dispatches(RUN_ID),
-      }),
-    ).rejects.toThrow("publication process interrupted");
-    expect(create().status(RUN_ID).entries[0]?.lifecycle).toBe("verified");
+    await create().tick({
+      runId: RUN_ID,
+      dag: DAG,
+      tasks: waves.projections(RUN_ID),
+      dispatches: waves.dispatches(RUN_ID),
+    });
+    expect(create().status(RUN_ID).entries[0]?.lifecycle).toBe("reconciliation_required");
 
     await create().tick({
       runId: RUN_ID,
@@ -388,10 +434,39 @@ describe("Q043 serialized task integration", () => {
       "verify:a",
       "verify:a",
       "publish:a",
+      "observe:repo-a",
       "publish:a",
+      "observe:repo-a",
     ]);
     expect(create().status(RUN_ID).entries[0]?.lifecycle).toBe("integrated");
   });
+
+  it.each(["repo-a", "repo-b"])(
+    "restarts preparation safely after interruption immediately after %s",
+    async (repositoryId) => {
+      const { waves, driver, create } = await fixture();
+      waves.settle(RUN_ID, "a", "succeeded");
+      driver.multiRepositoryFor = "a";
+      driver.throwAfterPrepareRepository = repositoryId;
+      await expect(
+        create().tick({
+          runId: RUN_ID,
+          dag: DAG,
+          tasks: waves.projections(RUN_ID),
+          dispatches: waves.dispatches(RUN_ID),
+        }),
+      ).rejects.toThrow(`preparation interrupted after ${repositoryId}`);
+      expect(create().status(RUN_ID).entries[0]?.lifecycle).toBe("queued");
+      const recovered = await create().tick({
+        runId: RUN_ID,
+        dag: DAG,
+        tasks: waves.projections(RUN_ID),
+        dispatches: waves.dispatches(RUN_ID),
+      });
+      expect(recovered.entries[0]?.lifecycle).toBe("integrated");
+      expect(driver.calls.filter((call) => call === "prepare:a")).toHaveLength(2);
+    },
+  );
 
   it("stops before integration when a remote branch or prepared target is unexpected", async () => {
     const remote = await fixture();
@@ -476,8 +551,8 @@ describe("Q043 serialized task integration", () => {
       "repo-b",
     ]);
     expect(result.branches.map((branch) => branch.expectedLocalSha)).toEqual([
-      "4".repeat(40),
-      "5".repeat(40),
+      "1".repeat(40),
+      "2".repeat(40),
     ]);
   });
 
@@ -498,14 +573,130 @@ describe("Q043 serialized task integration", () => {
       "queued",
     ]);
     expect(result.entries[0]?.repositories).toMatchObject([
-      { repositoryId: "repo-a", classification: "integrated", resultSha: "d".repeat(40) },
+      { repositoryId: "repo-a", classification: "integrated", resultSha: "1".repeat(40) },
       { repositoryId: "repo-b", classification: "stale_target", resultSha: null },
     ]);
     expect(result.branches.map((branch) => branch.expectedLocalSha)).toEqual([
-      "d".repeat(40),
+      "1".repeat(40),
       BASE,
     ]);
     expect(driver.calls).toEqual(["inventory:a", "prepare:a", "verify:a", "publish:a"]);
+
+    const recovered = await create().tick({
+      runId: RUN_ID,
+      dag: DAG,
+      tasks: waves.projections(RUN_ID),
+      dispatches: waves.dispatches(RUN_ID),
+    });
+    expect(recovered.entries.map((entry) => entry.lifecycle)).toEqual(["integrated", "queued"]);
+    expect(recovered.reconciliations).toMatchObject([
+      { lifecycle: "integrated", resolution: "mixed_forward_and_adopt", blocker: null, pass: 2 },
+    ]);
+    expect(recovered.reconciliationObservations).toHaveLength(4);
+    expect(
+      recovered.reconciliationObservations.map((observation) => observation.classification),
+    ).toEqual(["applied", "pending", "applied", "applied"]);
+    expect(driver.calls.slice(-3)).toEqual([
+      "observe:repo-a,repo-b",
+      "publish:a",
+      "observe:repo-a,repo-b",
+    ]);
+  });
+
+  it.each(["repo-a", "repo-b"])(
+    "recovers after interruption immediately after publishing %s",
+    async (repositoryId) => {
+      const { waves, driver, create } = await fixture();
+      waves.settle(RUN_ID, "a", "succeeded");
+      driver.multiRepositoryFor = "a";
+      driver.throwAfterRepository = repositoryId;
+      const interrupted = await create().tick({
+        runId: RUN_ID,
+        dag: DAG,
+        tasks: waves.projections(RUN_ID),
+        dispatches: waves.dispatches(RUN_ID),
+      });
+      expect(interrupted.entries[0]?.lifecycle).toBe("reconciliation_required");
+
+      const recovered = await create().tick({
+        runId: RUN_ID,
+        dag: DAG,
+        tasks: waves.projections(RUN_ID),
+        dispatches: waves.dispatches(RUN_ID),
+      });
+      expect(recovered.entries[0]?.lifecycle).toBe("integrated");
+      expect(recovered.branches.map((branch) => branch.expectedLocalSha)).toEqual([
+        "1".repeat(40),
+        "2".repeat(40),
+      ]);
+      expect(recovered.reconciliations[0]).toMatchObject({
+        lifecycle: "integrated",
+        blocker: null,
+      });
+    },
+  );
+
+  it("records identical observations on repeated passes while state mutations remain idempotent", async () => {
+    const { waves, driver, create } = await fixture();
+    waves.settle(RUN_ID, "a", "succeeded");
+    driver.publishFailuresRemaining = 2;
+    await create().tick({
+      runId: RUN_ID,
+      dag: DAG,
+      tasks: waves.projections(RUN_ID),
+      dispatches: waves.dispatches(RUN_ID),
+    });
+    await create().tick({
+      runId: RUN_ID,
+      dag: DAG,
+      tasks: waves.projections(RUN_ID),
+      dispatches: waves.dispatches(RUN_ID),
+    });
+    const recovered = await create().tick({
+      runId: RUN_ID,
+      dag: DAG,
+      tasks: waves.projections(RUN_ID),
+      dispatches: waves.dispatches(RUN_ID),
+    });
+    expect(recovered.entries[0]?.lifecycle).toBe("integrated");
+    expect(
+      recovered.reconciliationObservations.map((observation) => observation.observedSha),
+    ).toEqual([BASE, BASE, "1".repeat(40)]);
+    expect(recovered.reconciliationObservations.map((observation) => observation.pass)).toEqual([
+      1, 2, 3,
+    ]);
+  });
+
+  it.each([
+    ["external mutation", "external_mutation"],
+    ["missing ref", "observation_failed"],
+    ["identity mismatch", "identity_mismatch"],
+  ] as const)("blocks without further publication on %s", async (scenario, blocker) => {
+    const { waves, driver, create } = await fixture();
+    waves.settle(RUN_ID, "a", "succeeded");
+    driver.throwOnPublishOnce = true;
+    await create().tick({
+      runId: RUN_ID,
+      dag: DAG,
+      tasks: waves.projections(RUN_ID),
+      dispatches: waves.dispatches(RUN_ID),
+    });
+    if (scenario === "external mutation") driver.heads.set("repo-a", "f".repeat(40));
+    if (scenario === "missing ref") driver.heads.delete("repo-a");
+    if (scenario === "identity mismatch") driver.observationFailure = "identity_mismatch";
+    const publishCalls = driver.calls.filter((call) => call.startsWith("publish:")).length;
+    const blocked = await create().tick({
+      runId: RUN_ID,
+      dag: DAG,
+      tasks: waves.projections(RUN_ID),
+      dispatches: waves.dispatches(RUN_ID),
+    });
+    expect(blocked.reconciliations[0]).toMatchObject({
+      lifecycle: "blocked",
+      resolution: "blocked",
+      blocker,
+    });
+    expect(driver.calls.filter((call) => call.startsWith("publish:")).length).toBe(publishCalls);
   });
 
   it("detects local epic-ref movement on replay before invoking integration work", async () => {
@@ -528,6 +719,11 @@ describe("Q043 serialized task integration", () => {
     expect(result.branches.find((branch) => branch.repositoryId === "repo-a")).toMatchObject({
       lifecycle: "reconciliation_required",
       expectedLocalSha: BASE,
+    });
+    expect(result.reconciliations[0]).toMatchObject({
+      lifecycle: "blocked",
+      blocker: "missing_evidence",
+      trigger: "branch_drift",
     });
     expect(driver.calls).toEqual([]);
   });
