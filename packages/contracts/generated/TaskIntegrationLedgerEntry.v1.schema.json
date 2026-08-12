@@ -1,0 +1,194 @@
+{
+  "$id": "heniek://contract/TaskIntegrationLedgerEntry/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "integrationId",
+    "runId",
+    "taskId",
+    "graphRevision",
+    "waveOrdinal",
+    "integrationOrdinal",
+    "variantId",
+    "lifecycle",
+    "repositories",
+    "verificationReportId",
+    "verification",
+    "revision",
+    "createdAt",
+    "updatedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "integrationId": {
+      "minLength": 1,
+      "maxLength": 512,
+      "type": "string"
+    },
+    "runId": {
+      "minLength": 1,
+      "description": "Opaque RunId.",
+      "type": "string"
+    },
+    "taskId": {
+      "minLength": 1,
+      "description": "Opaque ExecutionTaskId.",
+      "type": "string"
+    },
+    "graphRevision": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "waveOrdinal": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "integrationOrdinal": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "variantId": {
+      "minLength": 1,
+      "description": "Opaque WorkspaceVariantId.",
+      "type": "string"
+    },
+    "lifecycle": {
+      "anyOf": [
+        {
+          "const": "queued",
+          "type": "string"
+        },
+        {
+          "const": "prepared",
+          "type": "string"
+        },
+        {
+          "const": "verified",
+          "type": "string"
+        },
+        {
+          "const": "integrated",
+          "type": "string"
+        },
+        {
+          "const": "failed",
+          "type": "string"
+        },
+        {
+          "const": "reconciliation_required",
+          "type": "string"
+        }
+      ]
+    },
+    "repositories": {
+      "uniqueItems": true,
+      "maxItems": 4096,
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "repositoryId",
+          "sourceSha",
+          "expectedTargetSha",
+          "candidateSha",
+          "resultSha",
+          "classification"
+        ],
+        "properties": {
+          "repositoryId": {
+            "minLength": 1,
+            "description": "Opaque RepositoryId.",
+            "type": "string"
+          },
+          "sourceSha": {
+            "pattern": "^[0-9a-f]{40}(?:[0-9a-f]{24})?$",
+            "type": "string"
+          },
+          "expectedTargetSha": {
+            "pattern": "^[0-9a-f]{40}(?:[0-9a-f]{24})?$",
+            "type": "string"
+          },
+          "candidateSha": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{40}(?:[0-9a-f]{24})?$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "resultSha": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{40}(?:[0-9a-f]{24})?$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "classification": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "verificationReportId": {
+      "anyOf": [
+        {
+          "minLength": 1,
+          "maxLength": 512,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "verification": {
+      "anyOf": [
+        {
+          "const": "pending",
+          "type": "string"
+        },
+        {
+          "const": "passed",
+          "type": "string"
+        },
+        {
+          "const": "failed",
+          "type": "string"
+        }
+      ]
+    },
+    "revision": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "createdAt": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "updatedAt": {
+      "format": "date-time",
+      "type": "string"
+    }
+  }
+}

@@ -90,5 +90,9 @@
   "23": {
     "name": "task-wave-scheduler",
     "statementHash": "80ef277e126e7a163f3674bf12af039e5800029aec4f410083f33b2af36b9f5e"
+  },
+  "24": {
+    "name": "task-integration",
+    "statementHash": "36234d40b105f692d048965fbfc76084e55ea8a020c999c244b0de4257d7148e"
   }
 }

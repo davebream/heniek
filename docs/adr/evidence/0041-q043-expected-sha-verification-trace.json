@@ -1,0 +1,49 @@
+{
+  "schemaVersion": "heniek.q043.expected-sha-verification-trace.v1",
+  "integrationId": "task-integration:run-1:1:b",
+  "events": [
+    {
+      "sequence": 1,
+      "phase": "source_observed",
+      "classification": "inventory_started"
+    },
+    {
+      "sequence": 2,
+      "phase": "merge_prepared",
+      "repositoryId": "repo-b",
+      "expectedSha": "0000000000000000000000000000000000000000",
+      "candidateSha": "2222222222222222222222222222222222222222"
+    },
+    {
+      "sequence": 3,
+      "phase": "verification_started",
+      "classification": "started"
+    },
+    {
+      "sequence": 4,
+      "phase": "verification_finished",
+      "verificationReportId": "report-b",
+      "classification": "passed"
+    },
+    {
+      "sequence": 5,
+      "phase": "ref_update_attempted",
+      "classification": "started"
+    },
+    {
+      "sequence": 6,
+      "phase": "ref_update_observed",
+      "repositoryId": "repo-b",
+      "expectedSha": "0000000000000000000000000000000000000000",
+      "observedSha": "6666666666666666666666666666666666666666",
+      "candidateSha": "2222222222222222222222222222222222222222",
+      "classification": "integrated"
+    },
+    {
+      "sequence": 7,
+      "phase": "completed",
+      "verificationReportId": "report-b",
+      "classification": "integrated"
+    }
+  ]
+}

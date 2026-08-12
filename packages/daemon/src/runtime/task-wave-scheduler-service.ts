@@ -13,6 +13,7 @@ import {
   type TaskWaveStateStore,
 } from "@heniek/state";
 import type { PipelineRunnerService } from "./pipeline-runner-service.js";
+import type { TaskIntegrationService } from "./task-integration-service.js";
 
 export type TaskPipelineStatus =
   | { readonly state: "missing" }
@@ -84,6 +85,7 @@ export interface TaskWaveSchedulerServiceOptions {
   readonly driver: TaskPipelineDriver;
   readonly clock: { nowIso(): string };
   readonly ids: { next(prefix: string): string };
+  readonly integration?: Pick<TaskIntegrationService, "tick">;
 }
 
 function canonical(values: readonly string[]): readonly string[] {
@@ -167,6 +169,16 @@ export function createTaskWaveSchedulerService(
         applyDriverStatus(runId, task, observation);
       }),
     );
+  };
+
+  const integrateTasks = async (runId: RunId, dag: TaskDagV2): Promise<void> => {
+    if (options.integration === undefined) return;
+    await options.integration.tick({
+      runId,
+      dag,
+      tasks: store.projections(runId),
+      dispatches: store.dispatches(runId),
+    });
   };
 
   const propagationReason = (
@@ -267,6 +279,7 @@ export function createTaskWaveSchedulerService(
     async tick(input) {
       this.initialize(input.runId, input.dag);
       await reconcileTasks(input.runId);
+      await integrateTasks(input.runId, input.dag);
       propagate(input.runId, input.dag);
 
       const leases = store.leases(input.runId).filter((lease) => lease.state === "active");
@@ -349,6 +362,7 @@ export function createTaskWaveSchedulerService(
           applyDriverStatus(input.runId, task, await options.driver.tick(task.childRunId));
         }),
       );
+      await integrateTasks(input.runId, input.dag);
       propagate(input.runId, input.dag);
       return status(input.runId);
     },
@@ -356,6 +370,7 @@ export function createTaskWaveSchedulerService(
     async reconcile(runId, dag) {
       this.initialize(runId, dag);
       await reconcileTasks(runId);
+      await integrateTasks(runId, dag);
       propagate(runId, dag);
       return status(runId);
     },

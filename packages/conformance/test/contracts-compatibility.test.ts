@@ -451,6 +451,12 @@ const EXPECTED_SCHEMAS: readonly {
     path: "generated/EffectiveInstructionReport.v1.schema.json",
   },
   {
+    schemaId: "heniek://contract/EpicRepositoryBranch/v1",
+    schemaVersion: 1,
+    sha256: "d029db045c767de7a30ac779e2a834badef534dcf4611d9328d296ab9488289d",
+    path: "generated/EpicRepositoryBranch.v1.schema.json",
+  },
+  {
     schemaId: "heniek://contract/ExecutionAttempt/v1",
     schemaVersion: 1,
     sha256: "cbe5804f47363fa784c1a2ff20433a6dfc530c18dc12b4342712af789a227326",
@@ -1411,6 +1417,18 @@ const EXPECTED_SCHEMAS: readonly {
     path: "generated/TaskHierarchy.v1.schema.json",
   },
   {
+    schemaId: "heniek://contract/TaskIntegrationLedgerEntry/v1",
+    schemaVersion: 1,
+    sha256: "8a9f2a1cb1525ec90a1c816f88174efa749313ebdf42249579c0aa3793aa3a15",
+    path: "generated/TaskIntegrationLedgerEntry.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/TaskIntegrationTrace/v1",
+    schemaVersion: 1,
+    sha256: "e62e0881ac7a0ab06fd3192cffa029e338ddcce9bbcc6a9a49264ad469a389e7",
+    path: "generated/TaskIntegrationTrace.v1.schema.json",
+  },
+  {
     schemaId: "heniek://contract/TaskLifecycleProjection/v1",
     schemaVersion: 1,
     sha256: "c42d486035c4aab0c1d5f166757abc92272fcac6edf2683e7cfe5c2ebdc67a8b",
@@ -1575,7 +1593,7 @@ const EXPECTED_SCHEMAS: readonly {
 ];
 
 describe("packages/contracts generated manifest is unchanged (AC4)", () => {
-  it("manifest.json lists exactly the 228 known schemas with their recorded sha256", async () => {
+  it("manifest.json lists exactly the 231 known schemas with their recorded sha256", async () => {
     const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
     expect(manifest).toEqual({
       schemaVersion: "heniek.contracts-manifest.v1",

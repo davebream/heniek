@@ -137,6 +137,20 @@ export {
   taskGraphRevisionValidator,
 } from "./runtime/task-graph-revision-service.js";
 export {
+  createTaskIntegrationService,
+  type EpicBranchObservation,
+  type TaskIntegrationDriver,
+  type TaskIntegrationInventoryResult,
+  type TaskIntegrationPrepareResult,
+  type TaskIntegrationPublishResult,
+  type TaskIntegrationService,
+  type TaskIntegrationServiceOptions,
+  type TaskIntegrationStatus,
+  type TaskIntegrationTickInput,
+  type TaskIntegrationVerificationResult,
+  type TaskIntegrationWork,
+} from "./runtime/task-integration-service.js";
+export {
   createPipelineRunnerTaskDriver,
   createTaskWaveSchedulerService,
   type TaskPipelineDriver,

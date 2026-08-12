@@ -1,0 +1,94 @@
+{
+  "$id": "heniek://contract/EpicRepositoryBranch/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "runId",
+    "repositoryId",
+    "branchRef",
+    "remote",
+    "remoteBaseRef",
+    "remoteBaseSha",
+    "expectedLocalSha",
+    "observedRemoteSha",
+    "lifecycle",
+    "revision",
+    "createdAt",
+    "updatedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "runId": {
+      "minLength": 1,
+      "description": "Opaque RunId.",
+      "type": "string"
+    },
+    "repositoryId": {
+      "minLength": 1,
+      "description": "Opaque RepositoryId.",
+      "type": "string"
+    },
+    "branchRef": {
+      "minLength": 1,
+      "maxLength": 256,
+      "type": "string"
+    },
+    "remote": {
+      "minLength": 1,
+      "maxLength": 256,
+      "type": "string"
+    },
+    "remoteBaseRef": {
+      "minLength": 1,
+      "maxLength": 256,
+      "type": "string"
+    },
+    "remoteBaseSha": {
+      "pattern": "^[0-9a-f]{40}(?:[0-9a-f]{24})?$",
+      "type": "string"
+    },
+    "expectedLocalSha": {
+      "pattern": "^[0-9a-f]{40}(?:[0-9a-f]{24})?$",
+      "type": "string"
+    },
+    "observedRemoteSha": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{40}(?:[0-9a-f]{24})?$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "lifecycle": {
+      "anyOf": [
+        {
+          "const": "ready",
+          "type": "string"
+        },
+        {
+          "const": "reconciliation_required",
+          "type": "string"
+        }
+      ]
+    },
+    "revision": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "createdAt": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "updatedAt": {
+      "format": "date-time",
+      "type": "string"
+    }
+  }
+}
