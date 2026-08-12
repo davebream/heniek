@@ -1148,6 +1148,12 @@
       "path": "generated/StageStartResult.v3.schema.json"
     },
     {
+      "schemaId": "heniek://contract/TaskCapacityLease/v1",
+      "schemaVersion": 1,
+      "sha256": "4742e85d862dba743325f22dd4bffa9338aebd12a6bce9ea6e470cef8ba5c19d",
+      "path": "generated/TaskCapacityLease.v1.schema.json"
+    },
+    {
       "schemaId": "heniek://contract/TaskContext/v1",
       "schemaVersion": 1,
       "sha256": "d183f2b0159e2b92fa36737ecaa320995a14cf012ee3fc7af3bf9e529f24586b",
@@ -1170,6 +1176,12 @@
       "schemaVersion": 1,
       "sha256": "af564a85187e07e4d7d21113d31d2f06a44a225e7a3ba8a4bb332fbd3d22462a",
       "path": "generated/TaskDagValidationResult.v1.schema.json"
+    },
+    {
+      "schemaId": "heniek://contract/TaskDispatchRecord/v1",
+      "schemaVersion": 1,
+      "sha256": "da35396b6668426dbd5df6ef2be95d7ea516629404145c62ebde1bdad33877c1",
+      "path": "generated/TaskDispatchRecord.v1.schema.json"
     },
     {
       "schemaId": "heniek://contract/TaskGraphRevisionDecision/v1",
@@ -1196,6 +1208,18 @@
       "path": "generated/TaskHierarchy.v1.schema.json"
     },
     {
+      "schemaId": "heniek://contract/TaskLifecycleProjection/v1",
+      "schemaVersion": 1,
+      "sha256": "c42d486035c4aab0c1d5f166757abc92272fcac6edf2683e7cfe5c2ebdc67a8b",
+      "path": "generated/TaskLifecycleProjection.v1.schema.json"
+    },
+    {
+      "schemaId": "heniek://contract/TaskPropagationReason/v1",
+      "schemaVersion": 1,
+      "sha256": "3742cb0e0279c74fd957967c2bb27bd6ad96731d0b638345526dcef709edd5a5",
+      "path": "generated/TaskPropagationReason.v1.schema.json"
+    },
+    {
       "schemaId": "heniek://contract/TaskRevision/v1",
       "schemaVersion": 1,
       "sha256": "d01c27bf2740b13fe9f345740ab717e121abe8550df124a0e66215d1ff8f50a7",
@@ -1214,6 +1238,12 @@
       "path": "generated/TaskSourceSnapshot.v1.schema.json"
     },
     {
+      "schemaId": "heniek://contract/TaskWaveAuditEvent/v1",
+      "schemaVersion": 1,
+      "sha256": "900f0e82c1004c903e0bcee44301ac189035f97dd4be5af092bfa20610dce707",
+      "path": "generated/TaskWaveAuditEvent.v1.schema.json"
+    },
+    {
       "schemaId": "heniek://contract/TaskWavePlan/v1",
       "schemaVersion": 1,
       "sha256": "e10214e01aee693d4561d21f4f2af9e952f7ee695cd6dbbd8682bfbde47a4b31",
@@ -1224,6 +1254,12 @@
       "schemaVersion": 1,
       "sha256": "6bb27925984085a0c216b483300b7cdbacd4311be2143939d7d90cdc5f8b3a58",
       "path": "generated/TaskWavePlanningSnapshot.v1.schema.json"
+    },
+    {
+      "schemaId": "heniek://contract/TaskWavePlanningSnapshot/v2",
+      "schemaVersion": 2,
+      "sha256": "562f68e8d8b76d02c7c5cf1f2964079b7ff616e9e4885c7863270815d850fe9a",
+      "path": "generated/TaskWavePlanningSnapshot.v2.schema.json"
     },
     {
       "schemaId": "heniek://contract/TaskWorkspaceBinding/v1",

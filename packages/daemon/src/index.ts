@@ -106,6 +106,7 @@ export { createHmacSha256MacProvider } from "./runtime/mac.js";
 export {
   createPipelineRunnerService,
   type PipelineCodebaseContext,
+  type PipelineRunLifecycle,
   type PipelineRunnerService,
   type PipelineRunnerServiceOptions,
   resolvePipelineCodebaseContextFromRepository,
@@ -135,6 +136,16 @@ export {
   type TaskGraphRevisionServiceOptions,
   taskGraphRevisionValidator,
 } from "./runtime/task-graph-revision-service.js";
+export {
+  createPipelineRunnerTaskDriver,
+  createTaskWaveSchedulerService,
+  type TaskPipelineDriver,
+  type TaskPipelineStatus,
+  type TaskWaveSchedulerService,
+  type TaskWaveSchedulerServiceOptions,
+  type TaskWaveSchedulerStatus,
+  type TaskWaveSchedulerTickInput,
+} from "./runtime/task-wave-scheduler-service.js";
 export { createStderrTraceSink } from "./runtime/trace-sink.js";
 export {
   type ExecutionLimitsInput,

@@ -1,0 +1,94 @@
+{
+  "$id": "heniek://contract/TaskCapacityLease/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "leaseId",
+    "runId",
+    "taskId",
+    "scope",
+    "resourceId",
+    "fencingRevision",
+    "state",
+    "acquiredAt",
+    "releasedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "leaseId": {
+      "minLength": 1,
+      "maxLength": 256,
+      "type": "string"
+    },
+    "runId": {
+      "minLength": 1,
+      "description": "Opaque RunId.",
+      "type": "string"
+    },
+    "taskId": {
+      "minLength": 1,
+      "description": "Opaque ExecutionTaskId.",
+      "type": "string"
+    },
+    "scope": {
+      "anyOf": [
+        {
+          "const": "global",
+          "type": "string"
+        },
+        {
+          "const": "account",
+          "type": "string"
+        },
+        {
+          "const": "workspace",
+          "type": "string"
+        },
+        {
+          "const": "repository",
+          "type": "string"
+        }
+      ]
+    },
+    "resourceId": {
+      "minLength": 1,
+      "maxLength": 1024,
+      "type": "string"
+    },
+    "fencingRevision": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "state": {
+      "anyOf": [
+        {
+          "const": "active",
+          "type": "string"
+        },
+        {
+          "const": "released",
+          "type": "string"
+        }
+      ]
+    },
+    "acquiredAt": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "releasedAt": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  }
+}
