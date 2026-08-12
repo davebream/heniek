@@ -27,6 +27,7 @@ import { MIGRATION_0022_TASK_GRAPH_REVISION } from "./task-graph-revision.js";
 import { MIGRATION_0024_TASK_INTEGRATION } from "./task-integration.js";
 import { MIGRATION_0025_TASK_INTEGRATION_RECONCILIATION } from "./task-integration-reconciliation.js";
 import { MIGRATION_0021_TASK_SOURCE } from "./task-source.js";
+import { MIGRATION_0027_TASK_SOURCE_GITHUB } from "./task-source-github.js";
 import { MIGRATION_0023_TASK_WAVE_SCHEDULER } from "./task-wave-scheduler.js";
 import { MIGRATION_0020_WORKSPACE_VARIANTS } from "./workspace-variants.js";
 
@@ -44,6 +45,7 @@ export { MIGRATION_0022_TASK_GRAPH_REVISION } from "./task-graph-revision.js";
 export { MIGRATION_0024_TASK_INTEGRATION } from "./task-integration.js";
 export { MIGRATION_0025_TASK_INTEGRATION_RECONCILIATION } from "./task-integration-reconciliation.js";
 export { MIGRATION_0021_TASK_SOURCE } from "./task-source.js";
+export { MIGRATION_0027_TASK_SOURCE_GITHUB } from "./task-source-github.js";
 export { MIGRATION_0023_TASK_WAVE_SCHEDULER } from "./task-wave-scheduler.js";
 export { MIGRATION_0020_WORKSPACE_VARIANTS } from "./workspace-variants.js";
 
@@ -1157,5 +1159,6 @@ export const MIGRATIONS: readonly Migration[] = Object.freeze([
   MIGRATION_0024_TASK_INTEGRATION,
   MIGRATION_0025_TASK_INTEGRATION_RECONCILIATION,
   MIGRATION_0026_HIDDEN_DEPENDENCY_REPLANNING,
+  MIGRATION_0027_TASK_SOURCE_GITHUB,
 ]);
 assertAppendOnly(MIGRATIONS);

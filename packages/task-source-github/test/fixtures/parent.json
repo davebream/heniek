@@ -1,0 +1,10 @@
+{
+  "node_id": "I_kwDOParent1",
+  "url": "https://api.github.com/repos/acme/roadmap/issues/3",
+  "html_url": "https://github.com/acme/roadmap/issues/3",
+  "title": "M6 delivery",
+  "body": "Parent epic.",
+  "state": "open",
+  "labels": [{ "name": "epic" }],
+  "updated_at": "2026-08-12T08:00:00Z"
+}

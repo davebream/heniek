@@ -1,0 +1,122 @@
+{
+  "$id": "heniek://contract/TaskSourceUpdateProposal/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "proposalId",
+    "sourceWorkItemId",
+    "baseSnapshotId",
+    "observedSnapshotId",
+    "baseObservedVersion",
+    "observedVersion",
+    "changedFields",
+    "status",
+    "createdAt",
+    "decidedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "proposalId": {
+      "minLength": 1,
+      "description": "Opaque TaskSourceUpdateProposalId.",
+      "type": "string"
+    },
+    "sourceWorkItemId": {
+      "minLength": 1,
+      "description": "Opaque SourceWorkItemId.",
+      "type": "string"
+    },
+    "baseSnapshotId": {
+      "minLength": 1,
+      "description": "Opaque TaskSourceSnapshotId.",
+      "type": "string"
+    },
+    "observedSnapshotId": {
+      "minLength": 1,
+      "description": "Opaque TaskSourceSnapshotId.",
+      "type": "string"
+    },
+    "baseObservedVersion": {
+      "minLength": 1,
+      "maxLength": 4096,
+      "type": "string"
+    },
+    "observedVersion": {
+      "minLength": 1,
+      "maxLength": 4096,
+      "type": "string"
+    },
+    "changedFields": {
+      "minItems": 1,
+      "uniqueItems": true,
+      "type": "array",
+      "items": {
+        "anyOf": [
+          {
+            "const": "title",
+            "type": "string"
+          },
+          {
+            "const": "body",
+            "type": "string"
+          },
+          {
+            "const": "state",
+            "type": "string"
+          },
+          {
+            "const": "labels",
+            "type": "string"
+          },
+          {
+            "const": "comments",
+            "type": "string"
+          },
+          {
+            "const": "hierarchy",
+            "type": "string"
+          },
+          {
+            "const": "attachments",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    "status": {
+      "anyOf": [
+        {
+          "const": "pending",
+          "type": "string"
+        },
+        {
+          "const": "accepted",
+          "type": "string"
+        },
+        {
+          "const": "rejected",
+          "type": "string"
+        }
+      ]
+    },
+    "createdAt": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "decidedAt": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  }
+}

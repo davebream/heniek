@@ -65,6 +65,13 @@ export interface TaskSourceIngestionInput {
   readonly hierarchy?: TaskHierarchyInput;
   readonly author: string;
   readonly reason: string;
+  readonly externalMetadata?: {
+    readonly title: string;
+    readonly state: "open" | "closed";
+    readonly labels: readonly string[];
+    readonly comments: Extract<TaskSourceSnapshot, { schemaVersion: 2 }>["comments"];
+    readonly components: Extract<TaskSourceSnapshot, { schemaVersion: 2 }>["components"];
+  };
 }
 
 export class TaskSourceInputError extends Error {
@@ -107,6 +114,21 @@ function parseInput(input: unknown): TaskSourceIngestionInput {
     throw new TaskSourceInputError(
       "input does not satisfy the provider-neutral task-source contract",
     );
+  }
+  if (value.externalMetadata !== undefined) {
+    const metadata = value.externalMetadata;
+    if (
+      typeof metadata.title !== "string" ||
+      metadata.title.length === 0 ||
+      (metadata.state !== "open" && metadata.state !== "closed") ||
+      !Array.isArray(metadata.labels) ||
+      metadata.labels.some((label) => typeof label !== "string" || label.length === 0) ||
+      !Array.isArray(metadata.comments) ||
+      !Array.isArray(metadata.components) ||
+      metadata.components.length === 0
+    ) {
+      throw new TaskSourceInputError("external metadata does not satisfy the task-source contract");
+    }
   }
   for (const attachment of value.attachments ?? []) {
     if (
@@ -285,7 +307,7 @@ export function createTaskIngestionSource(deps: {
 
       const now = deps.clock.nowIso();
       const snapshot: TaskSourceSnapshot = {
-        schemaVersion: 1,
+        schemaVersion: input.externalMetadata === undefined ? 1 : 2,
         snapshotId: deps.ids.next("source-snapshot") as TaskSourceSnapshotId,
         sourceWorkItemId: input.sourceWorkItemId,
         sourceKind: input.sourceKind,
@@ -296,7 +318,16 @@ export function createTaskIngestionSource(deps: {
         requirements: [...input.handoff.requirements],
         attachments,
         observedAt: now,
-      };
+        ...(input.externalMetadata === undefined
+          ? {}
+          : {
+              title: input.externalMetadata.title,
+              state: input.externalMetadata.state,
+              labels: [...input.externalMetadata.labels],
+              comments: [...input.externalMetadata.comments],
+              components: [...input.externalMetadata.components],
+            }),
+      } as TaskSourceSnapshot;
       const document = documentFrom(input.handoff);
       const patch = previous === undefined ? [] : diff(previous.activeRevision.document, document);
       if (previous !== undefined) {

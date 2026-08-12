@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "fixture": "recorded-synthetic-github",
+  "before": {
+    "sourceUri": "https://github.com/acme/widget/issues/61",
+    "acceptedRevisionOrdinal": 1,
+    "sourceVersion": "github-composite-v1:<sha256>",
+    "humanFields": {
+      "title": "preserved",
+      "body": "preserved",
+      "labels": "preserved",
+      "state": "preserved"
+    }
+  },
+  "trace": [
+    {
+      "method": "GET",
+      "path": "/repos/acme/widget/issues/61",
+      "status": 200,
+      "responseHeaders": ["etag", "x-github-request-id"]
+    },
+    {
+      "method": "GET",
+      "path": "/repos/acme/widget/issues/61/comments?per_page=100",
+      "status": 200,
+      "pages": 2
+    },
+    {
+      "method": "GET",
+      "path": "/repos/acme/widget/issues/61/sub_issues?per_page=100",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/repos/acme/widget/issues/61/parent",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/repos/acme/widget/issues/61/comments",
+      "status": 201,
+      "body": "<heniek-marker-and-proposal-redacted>",
+      "requestId": "<redacted>"
+    }
+  ],
+  "after": {
+    "outcome": "posted",
+    "mutation": "append-only-comment",
+    "duplicateDelivery": "same-audit-no-second-post",
+    "uncertainPostRecovery": "marker-adopted",
+    "humanFieldsChanged": false,
+    "credentialMaterialRetained": false
+  }
+}

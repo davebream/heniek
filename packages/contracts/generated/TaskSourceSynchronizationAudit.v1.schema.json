@@ -1,0 +1,169 @@
+{
+  "$id": "heniek://contract/TaskSourceSynchronizationAudit/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "synchronizationId",
+    "sourceWorkItemId",
+    "sourceUri",
+    "idempotencyKey",
+    "proposalSha256",
+    "expectedObservedVersion",
+    "currentObservedVersion",
+    "actor",
+    "outcome",
+    "commentUri",
+    "requestId",
+    "conflict",
+    "createdAt",
+    "completedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "synchronizationId": {
+      "minLength": 1,
+      "description": "Opaque TaskSourceSynchronizationId.",
+      "type": "string"
+    },
+    "sourceWorkItemId": {
+      "minLength": 1,
+      "description": "Opaque SourceWorkItemId.",
+      "type": "string"
+    },
+    "sourceUri": {
+      "minLength": 1,
+      "maxLength": 8192,
+      "type": "string"
+    },
+    "idempotencyKey": {
+      "minLength": 1,
+      "maxLength": 1024,
+      "type": "string"
+    },
+    "proposalSha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "expectedObservedVersion": {
+      "minLength": 1,
+      "maxLength": 4096,
+      "type": "string"
+    },
+    "currentObservedVersion": {
+      "minLength": 1,
+      "maxLength": 4096,
+      "type": "string"
+    },
+    "actor": {
+      "minLength": 1,
+      "maxLength": 1024,
+      "type": "string"
+    },
+    "outcome": {
+      "anyOf": [
+        {
+          "const": "posted",
+          "type": "string"
+        },
+        {
+          "const": "adopted",
+          "type": "string"
+        },
+        {
+          "const": "conflict",
+          "type": "string"
+        }
+      ]
+    },
+    "commentUri": {
+      "anyOf": [
+        {
+          "minLength": 1,
+          "maxLength": 8192,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "requestId": {
+      "anyOf": [
+        {
+          "minLength": 1,
+          "maxLength": 1024,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "conflict": {
+      "anyOf": [
+        {
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "kind",
+            "message",
+            "baseObservedVersion",
+            "currentObservedVersion",
+            "mergeable"
+          ],
+          "properties": {
+            "kind": {
+              "anyOf": [
+                {
+                  "const": "stale_source",
+                  "type": "string"
+                },
+                {
+                  "const": "ambiguous_mapping",
+                  "type": "string"
+                },
+                {
+                  "const": "incompatible_source",
+                  "type": "string"
+                }
+              ]
+            },
+            "message": {
+              "minLength": 1,
+              "maxLength": 65536,
+              "type": "string"
+            },
+            "baseObservedVersion": {
+              "minLength": 1,
+              "maxLength": 4096,
+              "type": "string"
+            },
+            "currentObservedVersion": {
+              "minLength": 1,
+              "maxLength": 4096,
+              "type": "string"
+            },
+            "mergeable": {
+              "type": "boolean"
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "createdAt": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "completedAt": {
+      "format": "date-time",
+      "type": "string"
+    }
+  }
+}

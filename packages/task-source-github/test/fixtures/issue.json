@@ -1,0 +1,10 @@
+{
+  "node_id": "I_kwDOExample1",
+  "url": "https://api.github.com/repos/acme/widget/issues/61",
+  "html_url": "https://github.com/acme/widget/issues/61",
+  "title": "Synchronize the delivery graph",
+  "body": "Preserve human-authored scope while publishing approved graph changes.",
+  "state": "open",
+  "labels": [{ "name": "enhancement" }, { "name": "m6" }],
+  "updated_at": "2026-08-12T10:00:00Z"
+}

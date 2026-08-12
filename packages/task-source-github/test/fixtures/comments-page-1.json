@@ -1,0 +1,10 @@
+[
+  {
+    "node_id": "IC_kwDOComment1",
+    "html_url": "https://github.com/acme/widget/issues/61#issuecomment-1",
+    "body": "The synchronization must be idempotent.",
+    "user": { "login": "maintainer" },
+    "created_at": "2026-08-12T10:01:00Z",
+    "updated_at": "2026-08-12T10:01:00Z"
+  }
+]
