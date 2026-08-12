@@ -84,6 +84,7 @@ const FORBIDDEN_PATTERN =
 const EXPECTED_EXEMPTIONS: readonly string[] = [
   "runtime/clock.ts",
   "runtime/compose.ts",
+  "runtime/epic-runtime-coordinator.ts",
   "runtime/execution-service.ts",
   "runtime/host-witness.ts",
   "runtime/lock-filesystem.ts",

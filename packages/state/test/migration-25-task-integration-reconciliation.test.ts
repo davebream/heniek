@@ -69,7 +69,10 @@ describe("migration 25 — task integration reconciliation", () => {
   it("upgrades a Q043 blocked integration without losing it and permits explicit resolution", () => {
     runMigrationList(db, MIGRATIONS, 24);
     seedReconciliationRequiredIntegration();
-    expect(runMigrationList(db, MIGRATIONS)).toMatchObject({ fromVersion: 24, toVersion: 25 });
+    expect(runMigrationList(db, MIGRATIONS.slice(0, 25))).toMatchObject({
+      fromVersion: 24,
+      toVersion: 25,
+    });
     expect(readUserVersion(internalHandle(db))).toBe(25);
     expect(
       internalHandle(db)
