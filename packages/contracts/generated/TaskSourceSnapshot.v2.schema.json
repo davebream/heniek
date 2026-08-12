@@ -1,0 +1,289 @@
+{
+  "$id": "heniek://contract/TaskSourceSnapshot/v2",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "snapshotId",
+    "sourceWorkItemId",
+    "sourceKind",
+    "sourceUri",
+    "observedVersion",
+    "contentSha256",
+    "rawContentRef",
+    "requirements",
+    "attachments",
+    "observedAt",
+    "title",
+    "state",
+    "labels",
+    "comments",
+    "components"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 2,
+      "type": "number"
+    },
+    "snapshotId": {
+      "minLength": 1,
+      "description": "Opaque TaskSourceSnapshotId.",
+      "type": "string"
+    },
+    "sourceWorkItemId": {
+      "minLength": 1,
+      "description": "Opaque SourceWorkItemId.",
+      "type": "string"
+    },
+    "sourceKind": {
+      "anyOf": [
+        {
+          "const": "parent_conversation",
+          "type": "string"
+        },
+        {
+          "const": "manual_text",
+          "type": "string"
+        },
+        {
+          "const": "github_issue",
+          "type": "string"
+        },
+        {
+          "const": "github_pull_request",
+          "type": "string"
+        },
+        {
+          "const": "local_file",
+          "type": "string"
+        },
+        {
+          "const": "existing_branch_or_pr",
+          "type": "string"
+        }
+      ]
+    },
+    "sourceUri": {
+      "minLength": 1,
+      "maxLength": 8192,
+      "type": "string"
+    },
+    "observedVersion": {
+      "minLength": 1,
+      "maxLength": 4096,
+      "type": "string"
+    },
+    "contentSha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "rawContentRef": {
+      "minLength": 1,
+      "description": "Opaque ArtifactId.",
+      "type": "string"
+    },
+    "requirements": {
+      "minItems": 1,
+      "maxItems": 4096,
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "requirementId",
+          "text",
+          "sourcePointer"
+        ],
+        "properties": {
+          "requirementId": {
+            "minLength": 1,
+            "maxLength": 256,
+            "type": "string"
+          },
+          "text": {
+            "minLength": 1,
+            "maxLength": 65536,
+            "type": "string"
+          },
+          "sourcePointer": {
+            "minLength": 1,
+            "maxLength": 4096,
+            "type": "string"
+          }
+        }
+      }
+    },
+    "attachments": {
+      "maxItems": 1024,
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "uri",
+          "name",
+          "mediaType",
+          "observedVersion",
+          "contentSha256",
+          "artifactId"
+        ],
+        "properties": {
+          "uri": {
+            "minLength": 1,
+            "maxLength": 8192,
+            "type": "string"
+          },
+          "name": {
+            "minLength": 1,
+            "maxLength": 1024,
+            "type": "string"
+          },
+          "mediaType": {
+            "minLength": 1,
+            "maxLength": 256,
+            "type": "string"
+          },
+          "observedVersion": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "maxLength": 4096,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "contentSha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "artifactId": {
+            "minLength": 1,
+            "description": "Opaque ArtifactId.",
+            "type": "string"
+          }
+        }
+      }
+    },
+    "observedAt": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "title": {
+      "minLength": 1,
+      "maxLength": 65536,
+      "type": "string"
+    },
+    "state": {
+      "anyOf": [
+        {
+          "const": "open",
+          "type": "string"
+        },
+        {
+          "const": "closed",
+          "type": "string"
+        }
+      ]
+    },
+    "labels": {
+      "uniqueItems": true,
+      "maxItems": 1024,
+      "type": "array",
+      "items": {
+        "minLength": 1,
+        "maxLength": 1024,
+        "type": "string"
+      }
+    },
+    "comments": {
+      "maxItems": 4096,
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "sourceCommentId",
+          "uri",
+          "author",
+          "bodySha256",
+          "observedVersion",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "sourceCommentId": {
+            "minLength": 1,
+            "maxLength": 1024,
+            "type": "string"
+          },
+          "uri": {
+            "minLength": 1,
+            "maxLength": 8192,
+            "type": "string"
+          },
+          "author": {
+            "minLength": 1,
+            "maxLength": 1024,
+            "type": "string"
+          },
+          "bodySha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "observedVersion": {
+            "minLength": 1,
+            "maxLength": 4096,
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        }
+      }
+    },
+    "components": {
+      "minItems": 1,
+      "maxItems": 8192,
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "componentId",
+          "uri",
+          "observedVersion",
+          "contentSha256"
+        ],
+        "properties": {
+          "componentId": {
+            "minLength": 1,
+            "maxLength": 1024,
+            "type": "string"
+          },
+          "uri": {
+            "minLength": 1,
+            "maxLength": 8192,
+            "type": "string"
+          },
+          "observedVersion": {
+            "minLength": 1,
+            "maxLength": 4096,
+            "type": "string"
+          },
+          "contentSha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

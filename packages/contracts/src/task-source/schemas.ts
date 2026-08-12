@@ -2,7 +2,13 @@ import { Type } from "@sinclair/typebox";
 import { ArtifactId } from "../artifact/index.js";
 import { ExecutionTaskId } from "../execution-backend/index.js";
 import { versioned } from "../kernel/index.js";
-import { SourceWorkItemId, TaskRevisionId, TaskSourceSnapshotId } from "./ids.js";
+import {
+  SourceWorkItemId,
+  TaskRevisionId,
+  TaskSourceSnapshotId,
+  TaskSourceSynchronizationId,
+  TaskSourceUpdateProposalId,
+} from "./ids.js";
 
 const Sha256 = Type.String({ pattern: "^[0-9a-f]{64}$" });
 const IsoDateTime = Type.String({ format: "date-time" });
@@ -72,6 +78,108 @@ export const TaskSourceSnapshotV1 = versioned("TaskSourceSnapshot", 1, {
   requirements: Type.Array(TaskRequirement, { minItems: 1, maxItems: 4096 }),
   attachments: Type.Array(TaskSourceAttachment, { maxItems: 1024 }),
   observedAt: IsoDateTime,
+});
+
+export const TaskSourceState = Type.Union([Type.Literal("open"), Type.Literal("closed")]);
+
+export const TaskSourceComment = Type.Object(
+  {
+    sourceCommentId: Type.String({ minLength: 1, maxLength: 1024 }),
+    uri: Type.String({ minLength: 1, maxLength: 8192 }),
+    author: Type.String({ minLength: 1, maxLength: 1024 }),
+    bodySha256: Sha256,
+    observedVersion: Type.String({ minLength: 1, maxLength: 4096 }),
+    createdAt: IsoDateTime,
+    updatedAt: IsoDateTime,
+  },
+  { additionalProperties: false },
+);
+
+export const TaskSourceComponentObservation = Type.Object(
+  {
+    componentId: Type.String({ minLength: 1, maxLength: 1024 }),
+    uri: Type.String({ minLength: 1, maxLength: 8192 }),
+    observedVersion: Type.String({ minLength: 1, maxLength: 4096 }),
+    contentSha256: Sha256,
+  },
+  { additionalProperties: false },
+);
+
+/** Q046: normalized external issue observation without provider DTO leakage. */
+export const TaskSourceSnapshotV2 = versioned("TaskSourceSnapshot", 2, {
+  snapshotId: TaskSourceSnapshotId,
+  sourceWorkItemId: SourceWorkItemId,
+  sourceKind: TaskSourceKind,
+  sourceUri: Type.String({ minLength: 1, maxLength: 8192 }),
+  observedVersion: Type.String({ minLength: 1, maxLength: 4096 }),
+  contentSha256: Sha256,
+  rawContentRef: ArtifactId,
+  requirements: Type.Array(TaskRequirement, { minItems: 1, maxItems: 4096 }),
+  attachments: Type.Array(TaskSourceAttachment, { maxItems: 1024 }),
+  observedAt: IsoDateTime,
+  title: NonEmpty,
+  state: TaskSourceState,
+  labels: Type.Array(Type.String({ minLength: 1, maxLength: 1024 }), {
+    uniqueItems: true,
+    maxItems: 1024,
+  }),
+  comments: Type.Array(TaskSourceComment, { maxItems: 4096 }),
+  components: Type.Array(TaskSourceComponentObservation, { minItems: 1, maxItems: 8192 }),
+});
+
+export const TaskSourceChangedField = Type.Union([
+  Type.Literal("title"),
+  Type.Literal("body"),
+  Type.Literal("state"),
+  Type.Literal("labels"),
+  Type.Literal("comments"),
+  Type.Literal("hierarchy"),
+  Type.Literal("attachments"),
+]);
+
+export const TaskSourceUpdateProposalV1 = versioned("TaskSourceUpdateProposal", 1, {
+  proposalId: TaskSourceUpdateProposalId,
+  sourceWorkItemId: SourceWorkItemId,
+  baseSnapshotId: TaskSourceSnapshotId,
+  observedSnapshotId: TaskSourceSnapshotId,
+  baseObservedVersion: Type.String({ minLength: 1, maxLength: 4096 }),
+  observedVersion: Type.String({ minLength: 1, maxLength: 4096 }),
+  changedFields: Type.Array(TaskSourceChangedField, { minItems: 1, uniqueItems: true }),
+  status: Type.Union([Type.Literal("pending"), Type.Literal("accepted"), Type.Literal("rejected")]),
+  createdAt: IsoDateTime,
+  decidedAt: Type.Union([IsoDateTime, Type.Null()]),
+});
+
+export const TaskSourceSynchronizationConflict = Type.Object(
+  {
+    kind: Type.Union([
+      Type.Literal("stale_source"),
+      Type.Literal("ambiguous_mapping"),
+      Type.Literal("incompatible_source"),
+    ]),
+    message: NonEmpty,
+    baseObservedVersion: Type.String({ minLength: 1, maxLength: 4096 }),
+    currentObservedVersion: Type.String({ minLength: 1, maxLength: 4096 }),
+    mergeable: Type.Boolean(),
+  },
+  { additionalProperties: false },
+);
+
+export const TaskSourceSynchronizationAuditV1 = versioned("TaskSourceSynchronizationAudit", 1, {
+  synchronizationId: TaskSourceSynchronizationId,
+  sourceWorkItemId: SourceWorkItemId,
+  sourceUri: Type.String({ minLength: 1, maxLength: 8192 }),
+  idempotencyKey: Type.String({ minLength: 1, maxLength: 1024 }),
+  proposalSha256: Sha256,
+  expectedObservedVersion: Type.String({ minLength: 1, maxLength: 4096 }),
+  currentObservedVersion: Type.String({ minLength: 1, maxLength: 4096 }),
+  actor: Type.String({ minLength: 1, maxLength: 1024 }),
+  outcome: Type.Union([Type.Literal("posted"), Type.Literal("adopted"), Type.Literal("conflict")]),
+  commentUri: Type.Union([Type.String({ minLength: 1, maxLength: 8192 }), Type.Null()]),
+  requestId: Type.Union([Type.String({ minLength: 1, maxLength: 1024 }), Type.Null()]),
+  conflict: Type.Union([TaskSourceSynchronizationConflict, Type.Null()]),
+  createdAt: IsoDateTime,
+  completedAt: IsoDateTime,
 });
 
 export const TaskRevisionDocumentV1 = versioned("TaskRevisionDocument", 1, {
@@ -160,4 +268,11 @@ export const TaskContextV1 = versioned("TaskContext", 1, {
   snapshot: Type.Ref(TaskSourceSnapshotV1),
   activeRevision: Type.Ref(TaskRevisionV1),
   hierarchy: Type.Ref(TaskHierarchyV1),
+});
+
+export const TaskContextV2 = versioned("TaskContext", 2, {
+  snapshot: Type.Ref(TaskSourceSnapshotV2),
+  activeRevision: Type.Ref(TaskRevisionV1),
+  hierarchy: Type.Ref(TaskHierarchyV1),
+  pendingUpdates: Type.Array(Type.Ref(TaskSourceUpdateProposalV1), { maxItems: 4096 }),
 });

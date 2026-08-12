@@ -420,6 +420,7 @@ export {
 export {
   createTaskIngestionSource,
   type TaskHierarchyInput,
+  type TaskSourceAttachmentInput,
   TaskSourceConflictError,
   type TaskSourceIngestionInput,
   TaskSourceInputError,
