@@ -13,6 +13,7 @@ import {
   PendingInteractionV1,
   PullRequestV1,
   RunV1,
+  SCHEMA_REGISTRY,
   TaskContextV1,
 } from "../src/index.js";
 
@@ -23,6 +24,7 @@ const require = createRequire(import.meta.url);
 const addFormats: typeof import("ajv-formats").default = require("ajv-formats");
 const ajv = new Ajv({ strict: true, allErrors: true });
 addFormats(ajv);
+for (const [schemaId, schema] of SCHEMA_REGISTRY) ajv.addSchema(schema, schemaId);
 
 const NOW = "2026-07-31T12:00:00.000Z";
 
@@ -70,15 +72,53 @@ const cases: { name: string; schema: object; valid: Record<string, unknown> }[] 
     schema: TaskContextV1,
     valid: {
       schemaVersion: 1,
-      sourceWorkItemId: "issue-2",
-      sourceKind: "github_issue",
-      objective: "Establish domain contracts.",
-      constraints: ["Use TypeBox and Ajv."],
-      decisions: ["One package, six families."],
-      openQuestions: [],
-      repositoryReferences: ["davebream/heniek"],
-      rawContentRef: "artifact-1",
-      revision: 1,
+      snapshot: {
+        schemaVersion: 1,
+        snapshotId: "snapshot-1",
+        sourceWorkItemId: "issue-2",
+        sourceKind: "github_issue",
+        sourceUri: "https://example.test/issues/2",
+        observedVersion: "etag-1",
+        contentSha256: "a".repeat(64),
+        rawContentRef: "artifact-1",
+        requirements: [{ requirementId: "R1", text: "Keep it.", sourcePointer: "/body" }],
+        attachments: [],
+        observedAt: NOW,
+      },
+      activeRevision: {
+        schemaVersion: 1,
+        revisionId: "revision-1",
+        sourceWorkItemId: "issue-2",
+        ordinal: 1,
+        revisionSha256: "b".repeat(64),
+        predecessorRevisionId: null,
+        predecessorRevisionSha256: null,
+        sourceSnapshotId: "snapshot-1",
+        author: "maintainer",
+        reason: "Initial ingestion.",
+        patch: [],
+        document: {
+          schemaVersion: 1,
+          objective: "Establish domain contracts.",
+          constraints: ["Use TypeBox and Ajv."],
+          decisions: [
+            { statement: "Use one package.", author: "maintainer", rationale: "Cohesion." },
+          ],
+          openQuestions: [],
+          repositoryReferences: ["davebream/heniek"],
+          requirements: [{ requirementId: "R1", text: "Keep it.", sourcePointer: "/body" }],
+        },
+        supersessionState: "active",
+        supersededByRevisionId: null,
+        createdAt: NOW,
+      },
+      hierarchy: {
+        schemaVersion: 1,
+        rootSourceWorkItemId: "issue-2",
+        trackerEdges: [],
+        executionMappings: [],
+        recordedAt: NOW,
+      },
     },
   },
   {

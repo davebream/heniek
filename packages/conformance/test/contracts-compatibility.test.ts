@@ -49,6 +49,13 @@ const manifestPath = resolve(packageRoot, "../contracts/generated/manifest.json"
  * unpublished, unconsumed schema, not a "versioning act" in the semver
  * sense.
  *
+ * Q039 deliberately resets the unpublished bootstrap `TaskContext/v1`
+ * contract from a flat summary to the complete snapshot/revision/hierarchy
+ * context and adds five supporting schemas. The issue and implementation plan
+ * explicitly authorize this alpha break. `@heniek/contracts` remains private,
+ * and the only pre-Q039 consumer was the bundled conformance fake updated in
+ * the same change; there are no persisted TaskContext payloads to migrate.
+ *
  * Q008 raised the count 14 → 18 by **pure addition**: four new schemas —
  * `DaemonHelloResult/v1`, `DaemonRequestAuth/v1`, `DaemonStatus/v1`, and
  * `RunRecoveryClassification/v1` (the daemon's local-control surface and its
@@ -714,6 +721,12 @@ const EXPECTED_SCHEMAS: readonly {
     path: "generated/NativeStageSubmitResult.v1.schema.json",
   },
   {
+    schemaId: "heniek://contract/ParentHandoff/v1",
+    schemaVersion: 1,
+    sha256: "3f737e89d8f16f80d3726b49593f53ef2ca96914cdff6dcb6571f75f6419bf3d",
+    path: "generated/ParentHandoff.v1.schema.json",
+  },
+  {
     schemaId: "heniek://contract/ParentSessionAttachment/v1",
     schemaVersion: 1,
     sha256: "bdfc12500ea76159d46d9da097dc41569cbc0004df2dc55daa58088bcb2fc555",
@@ -1340,8 +1353,32 @@ const EXPECTED_SCHEMAS: readonly {
   {
     schemaId: "heniek://contract/TaskContext/v1",
     schemaVersion: 1,
-    sha256: "bba19a9bb7a0647c6e80babe821b020650f4fb702fcffb629a1ac57ff56eaa6a",
+    sha256: "d183f2b0159e2b92fa36737ecaa320995a14cf012ee3fc7af3bf9e529f24586b",
     path: "generated/TaskContext.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/TaskHierarchy/v1",
+    schemaVersion: 1,
+    sha256: "a5234c9b71d75be9b35214cd2eb7751fb50a2089318fd6b2143d490ae208fb23",
+    path: "generated/TaskHierarchy.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/TaskRevision/v1",
+    schemaVersion: 1,
+    sha256: "d01c27bf2740b13fe9f345740ab717e121abe8550df124a0e66215d1ff8f50a7",
+    path: "generated/TaskRevision.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/TaskRevisionDocument/v1",
+    schemaVersion: 1,
+    sha256: "8c837d159b1a3d42b54a9855247b9009cd18d0b9f458e2419ef7e4c6a92c54bb",
+    path: "generated/TaskRevisionDocument.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/TaskSourceSnapshot/v1",
+    schemaVersion: 1,
+    sha256: "b8e9b720806991b710f8d723428883c6d8d8c142a447588bcd595b3c13f8dfcc",
+    path: "generated/TaskSourceSnapshot.v1.schema.json",
   },
   {
     schemaId: "heniek://contract/TaskWorkspaceBinding/v1",
