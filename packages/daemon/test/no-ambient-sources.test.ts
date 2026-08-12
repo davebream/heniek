@@ -137,6 +137,8 @@ const EXPECTED_EXEMPTIONS: readonly string[] = [
   "runtime/stage-completion.ts",
   /* Q041 application boundary; deterministic validation plus durable state composition. */
   "runtime/task-graph-revision-service.ts",
+  /* Q043 application boundary; durable serialized repository integration orchestration. */
+  "runtime/task-integration-service.ts",
   /* Q042 application boundary; whole-task dispatch and injected child-pipeline driver. */
   "runtime/task-wave-scheduler-service.ts",
   "runtime/trace-sink.ts",
