@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "issue": "Q044",
+  "protocol": "observe-all -> classify-all -> publish-selected -> observe-all -> resolve-or-block",
+  "scenarios": [
+    {
+      "failurePoint": "after-repository-a-ref-update",
+      "firstPass": [
+        { "repositoryId": "repo-a", "classification": "applied", "action": "adopt" },
+        { "repositoryId": "repo-b", "classification": "pending", "action": "publish" }
+      ],
+      "secondPass": [
+        { "repositoryId": "repo-a", "classification": "applied", "action": "adopt" },
+        { "repositoryId": "repo-b", "classification": "applied", "action": "adopt" }
+      ],
+      "terminal": "integrated",
+      "resolution": "mixed_forward_and_adopt"
+    },
+    {
+      "failurePoint": "after-all-ref-updates-before-ledger-commit",
+      "firstPass": [
+        { "repositoryId": "repo-a", "classification": "applied", "action": "adopt" },
+        { "repositoryId": "repo-b", "classification": "applied", "action": "adopt" }
+      ],
+      "terminal": "integrated",
+      "resolution": "adopted_published"
+    },
+    {
+      "failurePoint": "before-any-ref-update-with-repeated-restart",
+      "passes": [
+        { "pass": 1, "observed": "expected", "classification": "pending" },
+        { "pass": 2, "observed": "expected", "classification": "pending" },
+        { "pass": 3, "observed": "candidate", "classification": "applied" }
+      ],
+      "terminal": "integrated",
+      "identicalObservationsRetained": true
+    },
+    {
+      "failurePoint": "external-mutation-before-reconciliation",
+      "firstPass": [
+        { "repositoryId": "repo-a", "classification": "external_mutation", "action": "block" }
+      ],
+      "terminal": "blocked",
+      "blocker": "external_mutation",
+      "refMutationsAfterObservation": 0
+    },
+    {
+      "failurePoint": "missing-or-unreadable-ref",
+      "firstPass": [
+        { "repositoryId": "repo-a", "classification": "missing_ref", "action": "block" }
+      ],
+      "terminal": "blocked",
+      "blocker": "observation_failed",
+      "refMutationsAfterObservation": 0
+    },
+    {
+      "failurePoint": "repository-identity-mismatch",
+      "firstPass": [
+        { "repositoryId": "repo-a", "classification": "identity_mismatch", "action": "block" }
+      ],
+      "terminal": "blocked",
+      "blocker": "identity_mismatch",
+      "refMutationsAfterObservation": 0
+    }
+  ]
+}
