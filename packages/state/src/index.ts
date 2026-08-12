@@ -388,9 +388,11 @@ export {
   type WorkspacePermission,
 } from "./scheduling/store.js";
 export {
+  type AdvanceTaskIntegrationReconciliationInput,
   createTaskIntegrationStateStore,
   type InitializeEpicBranchInput,
   type QueueTaskIntegrationInput,
+  type StartTaskIntegrationReconciliationInput,
   type TaskIntegrationStateStore,
   type TaskIntegrationTransitionInput,
 } from "./task-graph/integration-store.js";

@@ -24,6 +24,7 @@ import { MIGRATION_0014_PIPELINE_RUNNER_OPERATIONS } from "./pipeline-runner-ope
 import { MIGRATION_0012_PIPELINE_SCHEDULER } from "./pipeline-scheduler.js";
 import { MIGRATION_0022_TASK_GRAPH_REVISION } from "./task-graph-revision.js";
 import { MIGRATION_0024_TASK_INTEGRATION } from "./task-integration.js";
+import { MIGRATION_0025_TASK_INTEGRATION_RECONCILIATION } from "./task-integration-reconciliation.js";
 import { MIGRATION_0021_TASK_SOURCE } from "./task-source.js";
 import { MIGRATION_0023_TASK_WAVE_SCHEDULER } from "./task-wave-scheduler.js";
 import { MIGRATION_0020_WORKSPACE_VARIANTS } from "./workspace-variants.js";
@@ -39,6 +40,7 @@ export { MIGRATION_0014_PIPELINE_RUNNER_OPERATIONS } from "./pipeline-runner-ope
 export { MIGRATION_0012_PIPELINE_SCHEDULER } from "./pipeline-scheduler.js";
 export { MIGRATION_0022_TASK_GRAPH_REVISION } from "./task-graph-revision.js";
 export { MIGRATION_0024_TASK_INTEGRATION } from "./task-integration.js";
+export { MIGRATION_0025_TASK_INTEGRATION_RECONCILIATION } from "./task-integration-reconciliation.js";
 export { MIGRATION_0021_TASK_SOURCE } from "./task-source.js";
 export { MIGRATION_0023_TASK_WAVE_SCHEDULER } from "./task-wave-scheduler.js";
 export { MIGRATION_0020_WORKSPACE_VARIANTS } from "./workspace-variants.js";
@@ -1151,5 +1153,6 @@ export const MIGRATIONS: readonly Migration[] = Object.freeze([
   MIGRATION_0022_TASK_GRAPH_REVISION,
   MIGRATION_0023_TASK_WAVE_SCHEDULER,
   MIGRATION_0024_TASK_INTEGRATION,
+  MIGRATION_0025_TASK_INTEGRATION_RECONCILIATION,
 ]);
 assertAppendOnly(MIGRATIONS);

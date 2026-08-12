@@ -89,6 +89,99 @@ export const TaskIntegrationTraceV1 = versioned("TaskIntegrationTrace", 1, {
   recordedAt: IsoDateTime,
 });
 
+const ReconciliationRepository = Type.Object(
+  {
+    repositoryId: RepositoryId,
+    expectedSha: GitObjectId,
+    candidateSha: Type.Union([GitObjectId, Type.Null()]),
+    observedSha: Type.Union([GitObjectId, Type.Null()]),
+    classification: Type.Union([
+      Type.Literal("pending"),
+      Type.Literal("applied"),
+      Type.Literal("missing_candidate"),
+      Type.Literal("missing_ref"),
+      Type.Literal("observation_failed"),
+      Type.Literal("external_mutation"),
+      Type.Literal("identity_mismatch"),
+    ]),
+    action: Type.Union([
+      Type.Literal("publish"),
+      Type.Literal("adopt"),
+      Type.Literal("none"),
+      Type.Literal("block"),
+    ]),
+    detail: Type.Union([Type.String({ minLength: 1, maxLength: 1024 }), Type.Null()]),
+  },
+  { additionalProperties: false },
+);
+
+export const TaskIntegrationReconciliationV1 = versioned("TaskIntegrationReconciliation", 1, {
+  reconciliationId: Type.String({ minLength: 1, maxLength: 512 }),
+  integrationId: Type.String({ minLength: 1, maxLength: 512 }),
+  runId: RunId,
+  taskId: ExecutionTaskId,
+  trigger: Type.Union([
+    Type.Literal("interrupted_prepare"),
+    Type.Literal("interrupted_verify"),
+    Type.Literal("interrupted_publish"),
+    Type.Literal("partial_publish"),
+    Type.Literal("branch_drift"),
+    Type.Literal("recovery_required"),
+  ]),
+  lifecycle: Type.Union([
+    Type.Literal("observing"),
+    Type.Literal("forwarding"),
+    Type.Literal("integrated"),
+    Type.Literal("blocked"),
+  ]),
+  resolution: Type.Union([
+    Type.Literal("forward_published"),
+    Type.Literal("adopted_published"),
+    Type.Literal("mixed_forward_and_adopt"),
+    Type.Literal("blocked"),
+    Type.Null(),
+  ]),
+  blocker: Type.Union([
+    Type.Literal("external_mutation"),
+    Type.Literal("missing_evidence"),
+    Type.Literal("observation_failed"),
+    Type.Literal("identity_mismatch"),
+    Type.Literal("ambiguous_state"),
+    Type.Null(),
+  ]),
+  pass: Type.Integer({ minimum: 0 }),
+  repositories: Type.Array(ReconciliationRepository, { uniqueItems: true, maxItems: 4096 }),
+  verificationReportId: Type.Union([Type.String({ minLength: 1, maxLength: 512 }), Type.Null()]),
+  revision: Type.Integer({ minimum: 1 }),
+  createdAt: IsoDateTime,
+  updatedAt: IsoDateTime,
+});
+
+export const TaskIntegrationReconciliationObservationV1 = versioned(
+  "TaskIntegrationReconciliationObservation",
+  1,
+  {
+    observationId: Type.String({ minLength: 1, maxLength: 512 }),
+    reconciliationId: Type.String({ minLength: 1, maxLength: 512 }),
+    integrationId: Type.String({ minLength: 1, maxLength: 512 }),
+    runId: RunId,
+    taskId: ExecutionTaskId,
+    pass: Type.Integer({ minimum: 1 }),
+    sequence: Type.Integer({ minimum: 1 }),
+    repositoryId: RepositoryId,
+    expectedSha: GitObjectId,
+    candidateSha: Type.Union([GitObjectId, Type.Null()]),
+    observedSha: Type.Union([GitObjectId, Type.Null()]),
+    classification: ReconciliationRepository.properties.classification,
+    detail: Type.Union([Type.String({ minLength: 1, maxLength: 1024 }), Type.Null()]),
+    observedAt: IsoDateTime,
+  },
+);
+
 export type EpicRepositoryBranch = Static<typeof EpicRepositoryBranchV1>;
 export type TaskIntegrationLedgerEntry = Static<typeof TaskIntegrationLedgerEntryV1>;
+export type TaskIntegrationReconciliation = Static<typeof TaskIntegrationReconciliationV1>;
+export type TaskIntegrationReconciliationObservation = Static<
+  typeof TaskIntegrationReconciliationObservationV1
+>;
 export type TaskIntegrationTrace = Static<typeof TaskIntegrationTraceV1>;

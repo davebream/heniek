@@ -2,6 +2,8 @@ import type {
   EpicRepositoryBranch,
   RunId,
   TaskIntegrationLedgerEntry,
+  TaskIntegrationReconciliation,
+  TaskIntegrationReconciliationObservation,
   TaskIntegrationTrace,
   TaskPlanningState,
 } from "@heniek/contracts";
@@ -44,12 +46,43 @@ export interface TaskIntegrationTransitionInput {
   };
 }
 
+export interface StartTaskIntegrationReconciliationInput {
+  readonly entry: TaskIntegrationLedgerEntry;
+  readonly trigger: TaskIntegrationReconciliation["trigger"];
+}
+
+export interface AdvanceTaskIntegrationReconciliationInput {
+  readonly reconciliationId: string;
+  readonly expectedLifecycle: TaskIntegrationReconciliation["lifecycle"];
+  readonly lifecycle: TaskIntegrationReconciliation["lifecycle"];
+  readonly pass?: number;
+  readonly repositories?: TaskIntegrationReconciliation["repositories"];
+  readonly resolution?: TaskIntegrationReconciliation["resolution"];
+  readonly blocker?: TaskIntegrationReconciliation["blocker"];
+}
+
 export interface TaskIntegrationStateStore {
   initializeBranch(input: InitializeEpicBranchInput): EpicRepositoryBranch;
   branches(runId: RunId): readonly EpicRepositoryBranch[];
   enqueue(input: QueueTaskIntegrationInput): TaskIntegrationLedgerEntry;
   entries(runId: RunId): readonly TaskIntegrationLedgerEntry[];
   transition(input: TaskIntegrationTransitionInput): TaskIntegrationLedgerEntry;
+  startReconciliation(
+    input: StartTaskIntegrationReconciliationInput,
+  ): TaskIntegrationReconciliation;
+  advanceReconciliation(
+    input: AdvanceTaskIntegrationReconciliationInput,
+  ): TaskIntegrationReconciliation;
+  resolveReconciliation(
+    reconciliationId: string,
+    repositories: TaskIntegrationLedgerEntry["repositories"],
+    resolution: Exclude<TaskIntegrationReconciliation["resolution"], "blocked" | null>,
+  ): TaskIntegrationReconciliation;
+  reconciliations(runId: RunId): readonly TaskIntegrationReconciliation[];
+  appendReconciliationObservation(
+    observation: TaskIntegrationReconciliationObservation,
+  ): TaskIntegrationReconciliationObservation;
+  reconciliationObservations(runId: RunId): readonly TaskIntegrationReconciliationObservation[];
   appendTrace(trace: TaskIntegrationTrace): TaskIntegrationTrace;
   traces(integrationId: string): readonly TaskIntegrationTrace[];
 }
@@ -91,6 +124,14 @@ function parseEntry(value: unknown): TaskIntegrationLedgerEntry {
   return JSON.parse(String(value)) as TaskIntegrationLedgerEntry;
 }
 
+function parseReconciliation(value: unknown): TaskIntegrationReconciliation {
+  return JSON.parse(String(value)) as TaskIntegrationReconciliation;
+}
+
+function parseReconciliationObservation(value: unknown): TaskIntegrationReconciliationObservation {
+  return JSON.parse(String(value)) as TaskIntegrationReconciliationObservation;
+}
+
 export function createTaskIntegrationStateStore(db: StateDatabase): TaskIntegrationStateStore {
   const handle = internalHandle(db);
   const clock = internalClock(db);
@@ -107,6 +148,17 @@ export function createTaskIntegrationStateStore(db: StateDatabase): TaskIntegrat
       .prepare("SELECT entry_json FROM task_integration_ledger WHERE integration_id = ?")
       .get(integrationId) as { entry_json: string } | undefined;
     return row === undefined ? undefined : parseEntry(row.entry_json);
+  };
+
+  const readReconciliation = (
+    reconciliationId: string,
+  ): TaskIntegrationReconciliation | undefined => {
+    const row = handle
+      .prepare(
+        "SELECT reconciliation_json FROM task_integration_reconciliation WHERE reconciliation_id = ?",
+      )
+      .get(reconciliationId) as { reconciliation_json: string } | undefined;
+    return row === undefined ? undefined : parseReconciliation(row.reconciliation_json);
   };
 
   return {
@@ -294,6 +346,7 @@ export function createTaskIntegrationStateStore(db: StateDatabase): TaskIntegrat
           for (const repository of next.repositories) {
             if (
               repository.resultSha === null ||
+              repository.resultSha !== repository.candidateSha ||
               (repository.classification !== "integrated" &&
                 repository.classification !== "already-applied" &&
                 repository.classification !== "already_applied")
@@ -342,6 +395,236 @@ export function createTaskIntegrationStateStore(db: StateDatabase): TaskIntegrat
         }
         return next;
       });
+    },
+
+    startReconciliation(input) {
+      return transaction(db, () => {
+        const reconciliationId = `${input.entry.integrationId}:reconciliation`;
+        const existing = readReconciliation(reconciliationId);
+        if (existing !== undefined) return existing;
+        const now = clock.nowIso();
+        const reconciliation: TaskIntegrationReconciliation = {
+          schemaVersion: 1,
+          reconciliationId,
+          integrationId: input.entry.integrationId,
+          runId: input.entry.runId,
+          taskId: input.entry.taskId,
+          trigger: input.trigger,
+          lifecycle: "observing",
+          resolution: null,
+          blocker: null,
+          pass: 0,
+          repositories: [],
+          verificationReportId: input.entry.verificationReportId,
+          revision: 1,
+          createdAt: now,
+          updatedAt: now,
+        };
+        handle
+          .prepare(
+            `INSERT INTO task_integration_reconciliation
+              (reconciliation_id, integration_id, run_id, task_id, lifecycle,
+               reconciliation_json, revision, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+          )
+          .run(
+            reconciliation.reconciliationId,
+            reconciliation.integrationId,
+            reconciliation.runId,
+            reconciliation.taskId,
+            reconciliation.lifecycle,
+            stringifyCanonical(reconciliation),
+            now,
+            now,
+          );
+        return reconciliation;
+      });
+    },
+
+    advanceReconciliation(input) {
+      return transaction(db, () => {
+        const existing = readReconciliation(input.reconciliationId);
+        if (existing === undefined)
+          throw new StateStoreError(
+            `unknown task integration reconciliation: ${input.reconciliationId}`,
+          );
+        if (existing.lifecycle !== input.expectedLifecycle) {
+          if (existing.lifecycle === input.lifecycle) return existing;
+          throw new StateStoreError(
+            `task integration reconciliation ${input.reconciliationId} expected ${input.expectedLifecycle}, observed ${existing.lifecycle}`,
+          );
+        }
+        const now = clock.nowIso();
+        const next: TaskIntegrationReconciliation = {
+          ...existing,
+          lifecycle: input.lifecycle,
+          pass: input.pass ?? existing.pass,
+          repositories: input.repositories ?? existing.repositories,
+          resolution: input.resolution === undefined ? existing.resolution : input.resolution,
+          blocker: input.blocker === undefined ? existing.blocker : input.blocker,
+          revision: existing.revision + 1,
+          updatedAt: now,
+        };
+        handle
+          .prepare(
+            `UPDATE task_integration_reconciliation
+             SET lifecycle = ?, reconciliation_json = ?, revision = ?, updated_at = ?
+             WHERE reconciliation_id = ? AND revision = ?`,
+          )
+          .run(
+            next.lifecycle,
+            stringifyCanonical(next),
+            next.revision,
+            now,
+            next.reconciliationId,
+            existing.revision,
+          );
+        return next;
+      });
+    },
+
+    resolveReconciliation(reconciliationId, repositories, resolution) {
+      return transaction(db, () => {
+        const existing = readReconciliation(reconciliationId);
+        if (existing === undefined)
+          throw new StateStoreError(`unknown task integration reconciliation: ${reconciliationId}`);
+        if (existing.lifecycle === "integrated") return existing;
+        if (existing.lifecycle === "blocked")
+          throw new StateStoreError(
+            `blocked task integration reconciliation cannot resolve: ${reconciliationId}`,
+          );
+        const entry = readEntry(existing.integrationId);
+        if (entry === undefined)
+          throw new StateStoreError(`unknown task integration: ${existing.integrationId}`);
+        const now = clock.nowIso();
+        for (const repository of repositories) {
+          if (repository.candidateSha === null || repository.resultSha !== repository.candidateSha)
+            throw new StateStoreError(
+              `reconciliation result does not prove candidate for ${repository.repositoryId}`,
+            );
+          const changed = handle
+            .prepare(
+              `UPDATE epic_repository_branch
+               SET expected_local_sha = ?, lifecycle = 'ready', revision = revision + 1, updated_at = ?
+               WHERE run_id = ? AND repository_id = ?
+                 AND expected_local_sha IN (?, ?)`,
+            )
+            .run(
+              repository.candidateSha,
+              now,
+              entry.runId,
+              repository.repositoryId,
+              repository.expectedTargetSha,
+              repository.candidateSha,
+            );
+          if (changed.changes !== 1)
+            throw new StateStoreError(
+              `epic branch reconciliation evidence changed for ${repository.repositoryId}`,
+            );
+        }
+        const nextEntry: TaskIntegrationLedgerEntry = {
+          ...entry,
+          lifecycle: "integrated",
+          repositories,
+          revision: entry.revision + 1,
+          updatedAt: now,
+        };
+        handle
+          .prepare(
+            `UPDATE task_integration_ledger
+             SET lifecycle = 'integrated', entry_json = ?, revision = ?, updated_at = ?
+             WHERE integration_id = ? AND revision = ?`,
+          )
+          .run(
+            stringifyCanonical(nextEntry),
+            nextEntry.revision,
+            now,
+            nextEntry.integrationId,
+            entry.revision,
+          );
+        const gates = handle
+          .prepare(
+            `UPDATE task_lifecycle_projection
+             SET completion_contract = 'passed', integration = 'passed', combined_verification = 'passed',
+                 revision = revision + 1, updated_at = ?
+             WHERE run_id = ? AND task_id = ? AND phase = 'succeeded'`,
+          )
+          .run(now, entry.runId, entry.taskId);
+        if (gates.changes !== 1)
+          throw new StateStoreError(
+            `task integration gates require succeeded task ${entry.taskId}`,
+          );
+        const next: TaskIntegrationReconciliation = {
+          ...existing,
+          lifecycle: "integrated",
+          repositories: existing.repositories,
+          resolution,
+          blocker: null,
+          revision: existing.revision + 1,
+          updatedAt: now,
+        };
+        handle
+          .prepare(
+            `UPDATE task_integration_reconciliation
+             SET lifecycle = 'integrated', reconciliation_json = ?, revision = ?, updated_at = ?
+             WHERE reconciliation_id = ? AND revision = ?`,
+          )
+          .run(
+            stringifyCanonical(next),
+            next.revision,
+            now,
+            next.reconciliationId,
+            existing.revision,
+          );
+        return next;
+      });
+    },
+
+    reconciliations(runId) {
+      return (
+        handle
+          .prepare(
+            `SELECT reconciliation_json FROM task_integration_reconciliation
+             WHERE run_id = ? ORDER BY created_at, reconciliation_id`,
+          )
+          .all(runId) as { reconciliation_json: string }[]
+      ).map((row) => parseReconciliation(row.reconciliation_json));
+    },
+
+    appendReconciliationObservation(observation) {
+      return transaction(db, () => {
+        handle
+          .prepare(
+            `INSERT INTO task_integration_reconciliation_observation
+              (observation_id, reconciliation_id, integration_id, run_id, task_id,
+               pass, sequence, repository_id, observation_json, observed_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          )
+          .run(
+            observation.observationId,
+            observation.reconciliationId,
+            observation.integrationId,
+            observation.runId,
+            observation.taskId,
+            observation.pass,
+            observation.sequence,
+            observation.repositoryId,
+            stringifyCanonical(observation),
+            observation.observedAt,
+          );
+        return observation;
+      });
+    },
+
+    reconciliationObservations(runId) {
+      return (
+        handle
+          .prepare(
+            `SELECT observation_json FROM task_integration_reconciliation_observation
+             WHERE run_id = ? ORDER BY observed_at, observation_id`,
+          )
+          .all(runId) as { observation_json: string }[]
+      ).map((row) => parseReconciliationObservation(row.observation_json));
     },
 
     appendTrace(trace) {

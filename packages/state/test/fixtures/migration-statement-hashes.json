@@ -94,5 +94,9 @@
   "24": {
     "name": "task-integration",
     "statementHash": "36234d40b105f692d048965fbfc76084e55ea8a020c999c244b0de4257d7148e"
+  },
+  "25": {
+    "name": "task-integration-reconciliation",
+    "statementHash": "6076c9d62e19aeb119b8d4144fe4fcf71670378e18b19a5cd2616e466fc99b85"
   }
 }
