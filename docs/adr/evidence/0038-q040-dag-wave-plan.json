@@ -1,0 +1,133 @@
+{
+  "evidenceVersion": "heniek.q040.v1",
+  "snapshot": {
+    "schemaVersion": 1,
+    "dag": {
+      "schemaVersion": 1,
+      "graphId": "evidence-graph",
+      "graphRevision": 1,
+      "nodes": [
+        {
+          "profileId": "builder",
+          "accountId": "account-main",
+          "task": {
+            "schemaVersion": 1,
+            "taskId": "task-a",
+            "revision": 1,
+            "revisionSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "predecessorRevisionSha256": null,
+            "analysisPacketId": "analysis-1",
+            "analysisPacketSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "objective": "Introduce the shared contract.",
+            "rationale": "The consumer depends on this contract.",
+            "primaryRepositoryId": "repo-api",
+            "readSet": ["repo-api"],
+            "writeSet": ["repo-api"],
+            "excludedRepositories": [],
+            "dependencies": [],
+            "artifacts": [],
+            "verification": [],
+            "createdAt": "2026-08-12T12:00:00.000Z"
+          }
+        },
+        {
+          "profileId": "builder",
+          "accountId": "account-main",
+          "task": {
+            "schemaVersion": 1,
+            "taskId": "task-b",
+            "revision": 1,
+            "revisionSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "predecessorRevisionSha256": null,
+            "analysisPacketId": "analysis-1",
+            "analysisPacketSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "objective": "Adopt the shared contract.",
+            "rationale": "Adoption follows contract integration.",
+            "primaryRepositoryId": "repo-web",
+            "readSet": ["repo-api", "repo-web"],
+            "writeSet": ["repo-web"],
+            "excludedRepositories": [],
+            "dependencies": ["task-a"],
+            "artifacts": [],
+            "verification": [],
+            "createdAt": "2026-08-12T12:00:00.000Z"
+          }
+        }
+      ],
+      "createdAt": "2026-08-12T12:00:00.000Z"
+    },
+    "waveOrdinal": 1,
+    "unresolvedGraphRevision": false,
+    "tasks": [
+      {
+        "taskId": "task-a",
+        "outcome": "not_started",
+        "completionContract": "pending",
+        "integration": "pending",
+        "combinedVerification": "pending"
+      },
+      {
+        "taskId": "task-b",
+        "outcome": "not_started",
+        "completionContract": "pending",
+        "integration": "pending",
+        "combinedVerification": "pending"
+      }
+    ],
+    "profiles": [{ "profileId": "builder", "available": true }],
+    "accounts": [{ "accountId": "account-main", "activeRuns": 0, "maxConcurrentRuns": 1 }],
+    "writerLeases": [
+      { "repositoryId": "repo-api", "available": true, "holderTaskId": null },
+      { "repositoryId": "repo-web", "available": true, "holderTaskId": null }
+    ],
+    "activeWorkers": 0,
+    "maxConcurrentWorkers": 1,
+    "recordedAt": "2026-08-12T12:00:00.000Z"
+  },
+  "wavePlan": {
+    "schemaVersion": 1,
+    "graphId": "evidence-graph",
+    "graphRevision": 1,
+    "waveOrdinal": 1,
+    "validation": {
+      "schemaVersion": 1,
+      "graphId": "evidence-graph",
+      "graphRevision": 1,
+      "valid": true,
+      "topologicalOrder": ["task-a", "task-b"],
+      "diagnostics": []
+    },
+    "selectedTaskIds": ["task-a"],
+    "decisions": [
+      { "taskId": "task-a", "classification": "selected", "blockingReasons": [] },
+      {
+        "taskId": "task-b",
+        "classification": "deferred",
+        "blockingReasons": [
+          {
+            "code": "account_capacity_exhausted",
+            "sourceTaskId": null,
+            "repositoryId": null,
+            "profileId": null,
+            "accountId": "account-main"
+          },
+          {
+            "code": "predecessor_pending",
+            "sourceTaskId": "task-a",
+            "repositoryId": null,
+            "profileId": null,
+            "accountId": null
+          },
+          {
+            "code": "run_concurrency_exhausted",
+            "sourceTaskId": null,
+            "repositoryId": null,
+            "profileId": null,
+            "accountId": null
+          }
+        ]
+      }
+    ],
+    "plannedAt": "2026-08-12T12:00:00.000Z"
+  }
+}
