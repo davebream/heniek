@@ -14,6 +14,7 @@
  */
 
 import { MIGRATION_0019_CAPABILITY_LANDING } from "./capability-landing.js";
+import { MIGRATION_0026_HIDDEN_DEPENDENCY_REPLANNING } from "./hidden-dependency-replanning.js";
 import { assertAppendOnly, type Migration } from "./migration.js";
 import { MIGRATION_0018_PIPELINE_ADMISSION } from "./pipeline-admission.js";
 import { MIGRATION_0017_PIPELINE_FINDINGS } from "./pipeline-findings.js";
@@ -30,6 +31,7 @@ import { MIGRATION_0023_TASK_WAVE_SCHEDULER } from "./task-wave-scheduler.js";
 import { MIGRATION_0020_WORKSPACE_VARIANTS } from "./workspace-variants.js";
 
 export { MIGRATION_0019_CAPABILITY_LANDING } from "./capability-landing.js";
+export { MIGRATION_0026_HIDDEN_DEPENDENCY_REPLANNING } from "./hidden-dependency-replanning.js";
 export type { Migration } from "./migration.js";
 export { MIGRATION_0018_PIPELINE_ADMISSION } from "./pipeline-admission.js";
 export { MIGRATION_0017_PIPELINE_FINDINGS } from "./pipeline-findings.js";
@@ -1154,5 +1156,6 @@ export const MIGRATIONS: readonly Migration[] = Object.freeze([
   MIGRATION_0023_TASK_WAVE_SCHEDULER,
   MIGRATION_0024_TASK_INTEGRATION,
   MIGRATION_0025_TASK_INTEGRATION_RECONCILIATION,
+  MIGRATION_0026_HIDDEN_DEPENDENCY_REPLANNING,
 ]);
 assertAppendOnly(MIGRATIONS);

@@ -100,6 +100,14 @@ export {
 export { createSystemClock } from "./runtime/clock.js";
 export type { ConnectionHandlerDeps } from "./runtime/compose.js";
 export { attachDaemonRpcServer, createConnectionHandler } from "./runtime/compose.js";
+export {
+  createEpicRuntimeCoordinator,
+  type EpicRuntimeCoordinator,
+  type EpicRuntimeCoordinatorOptions,
+  type EpicRuntimeStatus,
+  type EpicRuntimeTickInput,
+  type ReportHiddenDependencyInput,
+} from "./runtime/epic-runtime-coordinator.js";
 export { createSystemHostWitness } from "./runtime/host-witness.js";
 export { createNodeLockFileSystem } from "./runtime/lock-filesystem.js";
 export { createHmacSha256MacProvider } from "./runtime/mac.js";

@@ -1,0 +1,50 @@
+{
+  "scenario": "hidden dependency T4 requires integrated T2 evidence",
+  "finding": {
+    "findingId": "finding-T4-needs-T2",
+    "reporterTaskId": "T4",
+    "affectedTaskIds": ["T4"],
+    "evidenceArtifactIds": ["artifact-T4-analysis"]
+  },
+  "before": {
+    "graphId": "graph-q045",
+    "graphRevision": 1,
+    "nodes": [
+      { "taskId": "T1", "dependencies": [] },
+      { "taskId": "T2", "dependencies": ["T1"] },
+      { "taskId": "T3", "dependencies": ["T1"] },
+      { "taskId": "T4", "dependencies": ["T1"] },
+      { "taskId": "T5", "dependencies": ["T1"] }
+    ],
+    "waves": [
+      { "ordinal": 1, "taskIds": ["T1"] },
+      { "ordinal": 2, "taskIds": ["T2", "T3", "T4", "T5"] }
+    ]
+  },
+  "operation": {
+    "kind": "supersede",
+    "beforeTaskIds": ["T4"],
+    "afterTaskIds": ["T4-r"],
+    "evidenceArtifactIds": ["artifact-T4-analysis"]
+  },
+  "after": {
+    "graphId": "graph-q045",
+    "graphRevision": 2,
+    "nodes": [
+      { "taskId": "T1", "dependencies": [] },
+      { "taskId": "T2", "dependencies": ["T1"] },
+      { "taskId": "T3", "dependencies": ["T1"] },
+      { "taskId": "T4-r", "dependencies": ["T1", "T2"] },
+      { "taskId": "T5", "dependencies": ["T1"] }
+    ],
+    "waves": [
+      { "ordinal": 1, "taskIds": ["T1"] },
+      { "ordinal": 2, "taskIds": ["T2", "T3", "T5"] },
+      { "ordinal": 3, "taskIds": ["T4-r"] }
+    ]
+  },
+  "retainedHistory": {
+    "taskIds": ["T4"],
+    "records": ["lifecycle", "attempt", "dispatch", "artifact", "audit-event"]
+  }
+}

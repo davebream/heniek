@@ -1,0 +1,53 @@
+{
+  "scenario": "Q045 canonical five-task epic",
+  "repositories": ["repo-a", "repo-b", "repo-c"],
+  "graph": {
+    "graphId": "graph-q045",
+    "graphRevision": 1,
+    "waves": [
+      { "ordinal": 1, "taskIds": ["T1"] },
+      { "ordinal": 2, "taskIds": ["T2", "T3", "T4", "T5"] }
+    ]
+  },
+  "tasks": [
+    {
+      "taskId": "T1",
+      "dependencies": [],
+      "repositories": ["repo-a", "repo-b", "repo-c"],
+      "outcome": "integrated"
+    },
+    {
+      "taskId": "T2",
+      "dependencies": ["T1"],
+      "repositories": ["repo-a"],
+      "outcome": "integrated",
+      "execution": "retry",
+      "childSessionReused": true
+    },
+    {
+      "taskId": "T3",
+      "dependencies": ["T1"],
+      "repositories": ["repo-b"],
+      "outcome": "integrated",
+      "execution": "question-resume",
+      "childSessionReused": true
+    },
+    {
+      "taskId": "T4",
+      "dependencies": ["T1"],
+      "repositories": ["repo-c"],
+      "outcome": "integrated"
+    },
+    {
+      "taskId": "T5",
+      "dependencies": ["T1"],
+      "repositories": [],
+      "outcome": "verified"
+    }
+  ],
+  "integration": {
+    "ordering": ["T1", "T2", "T3", "T4", "T5"],
+    "serialized": true,
+    "combinedVerification": "passed"
+  }
+}

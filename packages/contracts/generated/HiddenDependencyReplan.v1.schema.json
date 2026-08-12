@@ -1,0 +1,144 @@
+{
+  "$id": "heniek://contract/HiddenDependencyReplan/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "replanId",
+    "finding",
+    "proposal",
+    "lifecycle",
+    "interruptedTaskIds",
+    "replacementTaskIds",
+    "decisionId",
+    "resultingGraphRevision",
+    "blocker",
+    "revision",
+    "createdAt",
+    "updatedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "replanId": {
+      "minLength": 1,
+      "maxLength": 256,
+      "type": "string"
+    },
+    "finding": {
+      "$ref": "heniek://contract/HiddenDependencyFinding/v1"
+    },
+    "proposal": {
+      "$ref": "heniek://contract/TaskGraphRevisionProposal/v2"
+    },
+    "lifecycle": {
+      "anyOf": [
+        {
+          "const": "quiescing",
+          "type": "string"
+        },
+        {
+          "const": "revising",
+          "type": "string"
+        },
+        {
+          "const": "resumed",
+          "type": "string"
+        },
+        {
+          "const": "blocked",
+          "type": "string"
+        }
+      ]
+    },
+    "interruptedTaskIds": {
+      "minItems": 1,
+      "uniqueItems": true,
+      "maxItems": 4096,
+      "type": "array",
+      "items": {
+        "minLength": 1,
+        "description": "Opaque ExecutionTaskId.",
+        "type": "string"
+      }
+    },
+    "replacementTaskIds": {
+      "uniqueItems": true,
+      "maxItems": 4096,
+      "type": "array",
+      "items": {
+        "minLength": 1,
+        "description": "Opaque ExecutionTaskId.",
+        "type": "string"
+      }
+    },
+    "decisionId": {
+      "anyOf": [
+        {
+          "minLength": 1,
+          "description": "Opaque TaskGraphRevisionDecisionId.",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "resultingGraphRevision": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "blocker": {
+      "anyOf": [
+        {
+          "anyOf": [
+            {
+              "const": "cancellation_unconfirmed",
+              "type": "string"
+            },
+            {
+              "const": "prerequisite_unsatisfied",
+              "type": "string"
+            },
+            {
+              "const": "integration_reconciliation_required",
+              "type": "string"
+            },
+            {
+              "const": "revision_rejected",
+              "type": "string"
+            },
+            {
+              "const": "missing_evidence",
+              "type": "string"
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "revision": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "createdAt": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "updatedAt": {
+      "format": "date-time",
+      "type": "string"
+    }
+  }
+}

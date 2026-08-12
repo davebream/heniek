@@ -1,4 +1,5 @@
 import type {
+  HiddenDependencyFinding,
   RunId,
   TaskGraphRevisionDecision,
   TaskGraphRevisionProposal,
@@ -24,6 +25,7 @@ export interface TaskGraphRevisionValidationInput {
   readonly maxGraphRevisions: number;
   readonly decisionId: string;
   readonly decidedAt: string;
+  readonly hiddenDependencyFinding?: HiddenDependencyFinding;
 }
 
 export interface TaskGraphRevisionValidationOutput {
@@ -42,6 +44,7 @@ export interface ProposeTaskGraphRevisionInput {
   readonly maxGraphRevisions: number;
   readonly decisionId: string;
   readonly decidedAt: string;
+  readonly hiddenDependencyFinding?: HiddenDependencyFinding;
 }
 
 export interface TaskGraphRevisionStateStore {
@@ -138,6 +141,9 @@ export function createTaskGraphRevisionStateStore(
             maxGraphRevisions: input.maxGraphRevisions,
             decisionId: input.decisionId,
             decidedAt: input.decidedAt,
+            ...(input.hiddenDependencyFinding === undefined
+              ? {}
+              : { hiddenDependencyFinding: input.hiddenDependencyFinding }),
           },
           input.proposal,
         );

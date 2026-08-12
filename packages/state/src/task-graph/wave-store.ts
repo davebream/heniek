@@ -48,7 +48,7 @@ export class TaskCapacityConflictError extends StateStoreError {
 export interface TaskWaveStateStore {
   initialize(runId: RunId, graphRevision: number, taskIds: readonly string[]): void;
   projections(runId: RunId): readonly TaskLifecycleProjection[];
-  planningStates(runId: RunId): readonly TaskPlanningState[];
+  planningStates(runId: RunId, taskIds?: readonly string[]): readonly TaskPlanningState[];
   dispatchWave(input: TaskWaveDispatchInput): readonly TaskDispatchRecord[];
   markActive(runId: RunId, taskId: string): TaskLifecycleProjection;
   markRetrying(runId: RunId, taskId: string): TaskLifecycleProjection;
@@ -228,14 +228,17 @@ export function createTaskWaveStateStore(db: StateDatabase): TaskWaveStateStore 
       ).map(lifecycleFrom);
     },
 
-    planningStates(runId) {
-      return this.projections(runId).map((task) => ({
-        taskId: task.taskId,
-        outcome: planningOutcome(task.phase),
-        completionContract: task.completionContract,
-        integration: task.integration,
-        combinedVerification: task.combinedVerification,
-      })) as readonly TaskPlanningState[];
+    planningStates(runId, taskIds) {
+      const selected = taskIds === undefined ? undefined : new Set(taskIds);
+      return this.projections(runId)
+        .filter((task) => selected === undefined || selected.has(task.taskId))
+        .map((task) => ({
+          taskId: task.taskId,
+          outcome: planningOutcome(task.phase),
+          completionContract: task.completionContract,
+          integration: task.integration,
+          combinedVerification: task.combinedVerification,
+        })) as readonly TaskPlanningState[];
     },
 
     dispatchWave(input) {
