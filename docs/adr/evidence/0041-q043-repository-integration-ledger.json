@@ -1,0 +1,37 @@
+{
+  "schemaVersion": "heniek.q043.repository-integration-ledger.v1",
+  "runId": "run-1",
+  "branches": [
+    {
+      "repositoryId": "repo-a",
+      "branchRef": "refs/heads/epic/repo-a",
+      "remoteBaseSha": "0000000000000000000000000000000000000000",
+      "expectedLocalSha": "4444444444444444444444444444444444444444",
+      "lifecycle": "ready"
+    },
+    {
+      "repositoryId": "repo-b",
+      "branchRef": "refs/heads/epic/repo-b",
+      "remoteBaseSha": "0000000000000000000000000000000000000000",
+      "expectedLocalSha": "6666666666666666666666666666666666666666",
+      "lifecycle": "ready"
+    }
+  ],
+  "entries": [
+    {
+      "taskId": "a",
+      "waveOrdinal": 1,
+      "integrationOrdinal": 1,
+      "lifecycle": "integrated",
+      "verification": "passed"
+    },
+    {
+      "taskId": "b",
+      "waveOrdinal": 1,
+      "integrationOrdinal": 2,
+      "lifecycle": "integrated",
+      "verification": "passed"
+    }
+  ],
+  "invariant": "completion order does not change integration order"
+}
