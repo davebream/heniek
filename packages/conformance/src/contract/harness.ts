@@ -1,4 +1,4 @@
-import type { ExecutionBackend, ForgeBackend, TaskSource } from "@heniek/contracts";
+import type { ExecutionBackend, ForgeBackendV3, TaskSource } from "@heniek/contracts";
 import type { ConformanceContext } from "../kernel/context.js";
 import type {
   ExecutionArrangement,
@@ -126,4 +126,4 @@ export const EXECUTION_BACKEND_TRACE_ACTIONS = {
 
 export type ExecutionBackendHarness = ConformanceHarness<ExecutionBackend, ExecutionArrangement>;
 export type TaskSourceHarness = ConformanceHarness<TaskSource, TaskSourceArrangement>;
-export type ForgeBackendHarness = ConformanceHarness<ForgeBackend, ForgeArrangement>;
+export type ForgeBackendHarness = ConformanceHarness<ForgeBackendV3, ForgeArrangement>;

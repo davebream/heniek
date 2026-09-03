@@ -57,6 +57,21 @@
       ]
     },
     {
+      "id": "recorded-github-forge-backend",
+      "label": "Recorded GitHub ForgeBackend",
+      "family": "ForgeBackend",
+      "availability": "always",
+      "capabilities": [
+        "lifecycle",
+        "fault-conflict",
+        "fault-stale-ref",
+        "fault-disconnect",
+        "fault-rate-limit"
+      ],
+      "authRoute": "none",
+      "note": "Credential-free recorded REST and GraphQL responses exercise the real GitHub adapter."
+    },
+    {
       "id": "fake-pipeline-runtime",
       "label": "Fake PipelineRuntime",
       "family": "PipelineRuntime",
@@ -335,6 +350,29 @@
       ]
     },
     {
+      "caseId": "forge/branch-create-adopt-and-exact-update",
+      "family": "ForgeBackend",
+      "requires": [
+        "lifecycle"
+      ],
+      "covers": [
+        "AC1:lifecycle",
+        "Q047:branch-cas"
+      ]
+    },
+    {
+      "caseId": "forge/branch-update-rejects-unexpected-ref",
+      "family": "ForgeBackend",
+      "requires": [
+        "lifecycle",
+        "fault-stale-ref"
+      ],
+      "covers": [
+        "AC2:stale-ref",
+        "Q047:no-force"
+      ]
+    },
+    {
       "caseId": "forge/create-pull-request-honours-draft-true",
       "family": "ForgeBackend",
       "requires": [
@@ -412,6 +450,30 @@
       ]
     },
     {
+      "caseId": "forge/issue-create-adopt-and-versioned-update",
+      "family": "ForgeBackend",
+      "requires": [
+        "lifecycle"
+      ],
+      "covers": [
+        "AC1:lifecycle",
+        "Q047:issue-idempotency",
+        "Q047:observed-version"
+      ]
+    },
+    {
+      "caseId": "forge/issue-update-rejects-stale-version",
+      "family": "ForgeBackend",
+      "requires": [
+        "lifecycle",
+        "fault-conflict"
+      ],
+      "covers": [
+        "AC2:conflict",
+        "Q047:observed-version"
+      ]
+    },
+    {
       "caseId": "forge/mark-ready-clears-draft",
       "family": "ForgeBackend",
       "requires": [
@@ -446,6 +508,31 @@
       ]
     },
     {
+      "caseId": "forge/pull-request-defaults-to-draft-and-adopts",
+      "family": "ForgeBackend",
+      "requires": [
+        "lifecycle"
+      ],
+      "covers": [
+        "AC1:lifecycle",
+        "§21.5",
+        "Q047:pull-request-idempotency"
+      ]
+    },
+    {
+      "caseId": "forge/pull-request-update-fences-head-and-version",
+      "family": "ForgeBackend",
+      "requires": [
+        "lifecycle",
+        "fault-stale-ref"
+      ],
+      "covers": [
+        "AC2:stale-ref",
+        "Q047:observed-version",
+        "Q047:expected-head"
+      ]
+    },
+    {
       "caseId": "forge/rate-limit-is-classified",
       "family": "ForgeBackend",
       "requires": [
@@ -454,6 +541,18 @@
       "covers": [
         "AC2:rate-limit",
         "rate limits"
+      ]
+    },
+    {
+      "caseId": "forge/status-observation-summarizes-required-checks",
+      "family": "ForgeBackend",
+      "requires": [
+        "lifecycle"
+      ],
+      "covers": [
+        "AC1:lifecycle",
+        "Q047:checks-summary",
+        "Q047:mergeability"
       ]
     },
     {
@@ -562,24 +661,12 @@
       "unsupported",
       "unsupported",
       "unsupported",
-      "opt-in"
-    ],
-    [
-      "covered",
-      "unsupported",
-      "unsupported",
       "unsupported",
       "opt-in"
     ],
     [
       "covered",
       "unsupported",
-      "unsupported",
-      "unsupported",
-      "opt-in"
-    ],
-    [
-      "covered",
       "unsupported",
       "unsupported",
       "unsupported",
@@ -590,24 +677,12 @@
       "unsupported",
       "unsupported",
       "unsupported",
+      "unsupported",
       "opt-in"
     ],
     [
       "covered",
       "unsupported",
-      "unsupported",
-      "unsupported",
-      "unsupported"
-    ],
-    [
-      "covered",
-      "unsupported",
-      "unsupported",
-      "unsupported",
-      "unsupported"
-    ],
-    [
-      "covered",
       "unsupported",
       "unsupported",
       "unsupported",
@@ -618,24 +693,12 @@
       "unsupported",
       "unsupported",
       "unsupported",
-      "opt-in"
-    ],
-    [
-      "covered",
-      "unsupported",
-      "unsupported",
       "unsupported",
       "opt-in"
     ],
     [
       "covered",
       "unsupported",
-      "unsupported",
-      "unsupported",
-      "opt-in"
-    ],
-    [
-      "covered",
       "unsupported",
       "unsupported",
       "unsupported",
@@ -646,10 +709,12 @@
       "unsupported",
       "unsupported",
       "unsupported",
-      "opt-in"
+      "unsupported",
+      "unsupported"
     ],
     [
       "covered",
+      "unsupported",
       "unsupported",
       "unsupported",
       "unsupported",
@@ -660,17 +725,12 @@
       "unsupported",
       "unsupported",
       "unsupported",
-      "unsupported"
+      "unsupported",
+      "opt-in"
     ],
     [
       "covered",
       "unsupported",
-      "unsupported",
-      "unsupported",
-      "unsupported"
-    ],
-    [
-      "covered",
       "unsupported",
       "unsupported",
       "unsupported",
@@ -681,12 +741,6 @@
       "unsupported",
       "unsupported",
       "unsupported",
-      "opt-in"
-    ],
-    [
-      "covered",
-      "unsupported",
-      "unsupported",
       "unsupported",
       "opt-in"
     ],
@@ -695,17 +749,12 @@
       "unsupported",
       "unsupported",
       "unsupported",
-      "opt-in"
+      "unsupported",
+      "unsupported"
     ],
     [
       "covered",
       "unsupported",
-      "unsupported",
-      "unsupported",
-      "opt-in"
-    ],
-    [
-      "covered",
       "unsupported",
       "unsupported",
       "unsupported",
@@ -716,18 +765,85 @@
       "unsupported",
       "unsupported",
       "unsupported",
+      "unsupported",
+      "opt-in"
+    ],
+    [
+      "covered",
+      "unsupported",
+      "unsupported",
+      "unsupported",
+      "unsupported",
+      "unsupported"
+    ],
+    [
+      "covered",
+      "unsupported",
+      "unsupported",
+      "unsupported",
+      "unsupported",
+      "unsupported"
+    ],
+    [
+      "covered",
+      "unsupported",
+      "unsupported",
+      "unsupported",
+      "unsupported",
+      "opt-in"
+    ],
+    [
+      "covered",
+      "unsupported",
+      "unsupported",
+      "unsupported",
+      "unsupported",
+      "opt-in"
+    ],
+    [
+      "covered",
+      "unsupported",
+      "unsupported",
+      "unsupported",
+      "unsupported",
+      "opt-in"
+    ],
+    [
+      "covered",
+      "unsupported",
+      "unsupported",
+      "unsupported",
+      "unsupported",
+      "opt-in"
+    ],
+    [
+      "covered",
+      "unsupported",
+      "unsupported",
+      "unsupported",
+      "unsupported",
+      "opt-in"
+    ],
+    [
+      "covered",
+      "unsupported",
+      "unsupported",
+      "unsupported",
+      "unsupported",
+      "opt-in"
+    ],
+    [
+      "covered",
+      "unsupported",
+      "unsupported",
+      "unsupported",
+      "unsupported",
       "opt-in"
     ],
     [
       "unsupported",
       "unsupported",
       "covered",
-      "unsupported",
-      "unsupported"
-    ],
-    [
-      "unsupported",
-      "unsupported",
       "covered",
       "unsupported",
       "unsupported"
@@ -736,12 +852,6 @@
       "unsupported",
       "unsupported",
       "covered",
-      "unsupported",
-      "unsupported"
-    ],
-    [
-      "unsupported",
-      "unsupported",
       "covered",
       "unsupported",
       "unsupported"
@@ -750,12 +860,6 @@
       "unsupported",
       "unsupported",
       "covered",
-      "unsupported",
-      "unsupported"
-    ],
-    [
-      "unsupported",
-      "unsupported",
       "covered",
       "unsupported",
       "unsupported"
@@ -764,12 +868,6 @@
       "unsupported",
       "unsupported",
       "covered",
-      "unsupported",
-      "unsupported"
-    ],
-    [
-      "unsupported",
-      "unsupported",
       "covered",
       "unsupported",
       "unsupported"
@@ -778,12 +876,6 @@
       "unsupported",
       "unsupported",
       "covered",
-      "unsupported",
-      "unsupported"
-    ],
-    [
-      "unsupported",
-      "unsupported",
       "covered",
       "unsupported",
       "unsupported"
@@ -792,10 +884,108 @@
       "unsupported",
       "unsupported",
       "covered",
+      "covered",
       "unsupported",
       "unsupported"
     ],
     [
+      "unsupported",
+      "unsupported",
+      "covered",
+      "covered",
+      "unsupported",
+      "unsupported"
+    ],
+    [
+      "unsupported",
+      "unsupported",
+      "covered",
+      "covered",
+      "unsupported",
+      "unsupported"
+    ],
+    [
+      "unsupported",
+      "unsupported",
+      "covered",
+      "covered",
+      "unsupported",
+      "unsupported"
+    ],
+    [
+      "unsupported",
+      "unsupported",
+      "covered",
+      "covered",
+      "unsupported",
+      "unsupported"
+    ],
+    [
+      "unsupported",
+      "unsupported",
+      "covered",
+      "covered",
+      "unsupported",
+      "unsupported"
+    ],
+    [
+      "unsupported",
+      "unsupported",
+      "covered",
+      "covered",
+      "unsupported",
+      "unsupported"
+    ],
+    [
+      "unsupported",
+      "unsupported",
+      "covered",
+      "covered",
+      "unsupported",
+      "unsupported"
+    ],
+    [
+      "unsupported",
+      "unsupported",
+      "covered",
+      "covered",
+      "unsupported",
+      "unsupported"
+    ],
+    [
+      "unsupported",
+      "unsupported",
+      "covered",
+      "covered",
+      "unsupported",
+      "unsupported"
+    ],
+    [
+      "unsupported",
+      "unsupported",
+      "covered",
+      "covered",
+      "unsupported",
+      "unsupported"
+    ],
+    [
+      "unsupported",
+      "unsupported",
+      "covered",
+      "covered",
+      "unsupported",
+      "unsupported"
+    ],
+    [
+      "unsupported",
+      "unsupported",
+      "covered",
+      "covered",
+      "unsupported",
+      "unsupported"
+    ],
+    [
+      "unsupported",
       "unsupported",
       "unsupported",
       "unsupported",
@@ -806,6 +996,7 @@
       "unsupported",
       "unsupported",
       "unsupported",
+      "unsupported",
       "covered",
       "unsupported"
     ],
@@ -813,19 +1004,6 @@
       "unsupported",
       "covered",
       "unsupported",
-      "unsupported",
-      "unsupported"
-    ],
-    [
-      "unsupported",
-      "covered",
-      "unsupported",
-      "unsupported",
-      "unsupported"
-    ],
-    [
-      "unsupported",
-      "covered",
       "unsupported",
       "unsupported",
       "unsupported"
@@ -835,12 +1013,6 @@
       "covered",
       "unsupported",
       "unsupported",
-      "unsupported"
-    ],
-    [
-      "unsupported",
-      "covered",
-      "unsupported",
       "unsupported",
       "unsupported"
     ],
@@ -849,11 +1021,37 @@
       "covered",
       "unsupported",
       "unsupported",
+      "unsupported",
       "unsupported"
     ],
     [
       "unsupported",
       "covered",
+      "unsupported",
+      "unsupported",
+      "unsupported",
+      "unsupported"
+    ],
+    [
+      "unsupported",
+      "covered",
+      "unsupported",
+      "unsupported",
+      "unsupported",
+      "unsupported"
+    ],
+    [
+      "unsupported",
+      "covered",
+      "unsupported",
+      "unsupported",
+      "unsupported",
+      "unsupported"
+    ],
+    [
+      "unsupported",
+      "covered",
+      "unsupported",
       "unsupported",
       "unsupported",
       "unsupported"

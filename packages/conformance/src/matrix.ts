@@ -56,6 +56,15 @@ export const SUBJECT_DECLARATIONS: readonly SubjectDeclaration[] = [
     capabilities: FAKE_FORGE_BACKEND_CAPABILITIES,
   },
   {
+    id: "recorded-github-forge-backend",
+    label: "Recorded GitHub ForgeBackend",
+    family: "ForgeBackend",
+    availability: "always",
+    capabilities: FAKE_FORGE_BACKEND_CAPABILITIES,
+    authRoute: "none",
+    note: "Credential-free recorded REST and GraphQL responses exercise the real GitHub adapter.",
+  },
+  {
     id: "fake-pipeline-runtime",
     label: "Fake PipelineRuntime",
     family: "PipelineRuntime",

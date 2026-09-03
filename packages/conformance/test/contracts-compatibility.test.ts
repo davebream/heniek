@@ -391,10 +391,28 @@ const EXPECTED_SCHEMAS: readonly {
     path: "generated/CompositeWorkspaceProvisioningManifest.v1.schema.json",
   },
   {
+    schemaId: "heniek://contract/CreateOrAdoptBranchInput/v1",
+    schemaVersion: 1,
+    sha256: "1f74a1730a6d4319a79e0dc988bfaf6ef970b2f053797d05a3f00b8ae523875b",
+    path: "generated/CreateOrAdoptBranchInput.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/CreateOrAdoptIssueInput/v1",
+    schemaVersion: 1,
+    sha256: "1cb81c32ce2d7dec4a6f42fe2139c79282f1de4433613fcb7cb89028e4d55f16",
+    path: "generated/CreateOrAdoptIssueInput.v1.schema.json",
+  },
+  {
     schemaId: "heniek://contract/CreatePullRequestInput/v1",
     schemaVersion: 1,
     sha256: "55873424bc47a8bd87d409ef294271c8fd81d1b7a6111b92bb8501f782dba79c",
     path: "generated/CreatePullRequestInput.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/CreatePullRequestInput/v2",
+    schemaVersion: 2,
+    sha256: "0080b0647f17522cd995c72892e2824ff73210693586f5c32cc52415b976a987",
+    path: "generated/CreatePullRequestInput.v2.schema.json",
   },
   {
     schemaId: "heniek://contract/DaemonHelloResult/v1",
@@ -593,6 +611,42 @@ const EXPECTED_SCHEMAS: readonly {
     schemaVersion: 1,
     sha256: "dbaa851a4e27eb4b34e65e015bee7bdd12d2a51a8a34cdcbca13b0e551fccaa1",
     path: "generated/FindingSnapshot.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/ForgeIssue/v1",
+    schemaVersion: 1,
+    sha256: "a7393789ae312ce199f02a65c6c551527064a01d7578df185511bff7f63dce64",
+    path: "generated/ForgeIssue.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/ForgeIssueMutation/v1",
+    schemaVersion: 1,
+    sha256: "7ef5c6b7eb9b7266cead5225f89944b21d8aca4a1ac3f1ffd93f0c815cc120c3",
+    path: "generated/ForgeIssueMutation.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/ForgeRef/v1",
+    schemaVersion: 1,
+    sha256: "3c1c11c797e5611fc3804966d069f1239341ab0ad2897798935de7c120571169",
+    path: "generated/ForgeRef.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/ForgeRefMutation/v1",
+    schemaVersion: 1,
+    sha256: "11f945e4a0b303cf61d6a820aeb640cfbf1991067aeadcf652a34abec0b34793",
+    path: "generated/ForgeRefMutation.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/GetIssueInput/v1",
+    schemaVersion: 1,
+    sha256: "9a0c919a1833915dfaadb4005fd1c9deb3b3aaedeb99558bcf01002ec5bba9e7",
+    path: "generated/GetIssueInput.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/GetRefInput/v1",
+    schemaVersion: 1,
+    sha256: "fe353bb68913bd4d87d9e75e41f128583b06d2f2f4e326ef1b1a235fb9ca7ed0",
+    path: "generated/GetRefInput.v1.schema.json",
   },
   {
     schemaId: "heniek://contract/HiddenDependencyFinding/v1",
@@ -1043,6 +1097,24 @@ const EXPECTED_SCHEMAS: readonly {
     schemaVersion: 1,
     sha256: "07c6c0fead0ade0271932b7f60262d84644c3097fed4462ca374f9a22496c0ef",
     path: "generated/PullRequest.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/PullRequest/v2",
+    schemaVersion: 2,
+    sha256: "44687cfd78e47adfec4a79ed5f5ab657ed984232de66432de475f4c1afd20268",
+    path: "generated/PullRequest.v2.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/PullRequestMutation/v1",
+    schemaVersion: 1,
+    sha256: "1fc8dce58d5c39b166add6936018ca5338dc2101772d5032df966a4bb37f88eb",
+    path: "generated/PullRequestMutation.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/PullRequestStatus/v1",
+    schemaVersion: 1,
+    sha256: "fce6f6babff277d5d1bb554b31cb198b9cedc0339efc5bb5b7c3c62df9913b9e",
+    path: "generated/PullRequestStatus.v1.schema.json",
   },
   {
     schemaId: "heniek://contract/RegisteredCodebase/v1",
@@ -1553,6 +1625,24 @@ const EXPECTED_SCHEMAS: readonly {
     schemaVersion: 1,
     sha256: "fcb85bddd5fd0060468f23ba4ac6f90246bb085818241a04de66f1331ea73106",
     path: "generated/TaskWorkspaceBinding.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/UpdateBranchInput/v1",
+    schemaVersion: 1,
+    sha256: "de5d2573d62bcc92a8b2bbd661b240a21d60bda7104cf06ef71101df18775379",
+    path: "generated/UpdateBranchInput.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/UpdateIssueInput/v1",
+    schemaVersion: 1,
+    sha256: "58ce61f1c45a0f3f6cfffba891ae36b4c3e1ff400bd1a078a619d83fa99b228a",
+    path: "generated/UpdateIssueInput.v1.schema.json",
+  },
+  {
+    schemaId: "heniek://contract/UpdatePullRequestInput/v1",
+    schemaVersion: 1,
+    sha256: "50bf52b8dfc149c5cb117412dce2dc4f2a2875022ef66a453f6ce93aff8f5d86",
+    path: "generated/UpdatePullRequestInput.v1.schema.json",
   },
   {
     schemaId: "heniek://contract/VariantIntegrationRequest/v1",
