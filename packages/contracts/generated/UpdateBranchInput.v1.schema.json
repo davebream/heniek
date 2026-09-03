@@ -1,0 +1,36 @@
+{
+  "$id": "heniek://contract/UpdateBranchInput/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "repositoryId",
+    "branchName",
+    "expectedHeadSha",
+    "targetHeadSha"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "repositoryId": {
+      "minLength": 1,
+      "description": "Opaque RepositoryId.",
+      "type": "string"
+    },
+    "branchName": {
+      "minLength": 1,
+      "pattern": "^(?!refs/).+",
+      "type": "string"
+    },
+    "expectedHeadSha": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "targetHeadSha": {
+      "minLength": 1,
+      "type": "string"
+    }
+  }
+}

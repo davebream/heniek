@@ -1,0 +1,48 @@
+{
+  "$id": "heniek://contract/ForgeRef/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "forgeRefId",
+    "repositoryId",
+    "qualifiedRef",
+    "url",
+    "headSha",
+    "observedVersion"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "forgeRefId": {
+      "minLength": 1,
+      "description": "Opaque ForgeRefId.",
+      "type": "string"
+    },
+    "repositoryId": {
+      "minLength": 1,
+      "description": "Opaque RepositoryId.",
+      "type": "string"
+    },
+    "qualifiedRef": {
+      "minLength": 6,
+      "pattern": "^refs/[^/]+/.+",
+      "type": "string"
+    },
+    "url": {
+      "format": "uri",
+      "type": "string"
+    },
+    "headSha": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "observedVersion": {
+      "minLength": 1,
+      "description": "Opaque ForgeObservedVersion.",
+      "type": "string"
+    }
+  }
+}

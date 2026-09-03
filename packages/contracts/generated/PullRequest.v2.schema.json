@@ -1,0 +1,93 @@
+{
+  "$id": "heniek://contract/PullRequest/v2",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "pullRequestId",
+    "repositoryId",
+    "number",
+    "url",
+    "state",
+    "draft",
+    "sourceBranch",
+    "targetBranch",
+    "baseSha",
+    "headSha",
+    "autoMergeEnabled",
+    "observedVersion"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 2,
+      "type": "number"
+    },
+    "pullRequestId": {
+      "minLength": 1,
+      "description": "Opaque PullRequestId.",
+      "type": "string"
+    },
+    "repositoryId": {
+      "minLength": 1,
+      "description": "Opaque RepositoryId.",
+      "type": "string"
+    },
+    "number": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "url": {
+      "format": "uri",
+      "type": "string"
+    },
+    "state": {
+      "anyOf": [
+        {
+          "const": "open",
+          "type": "string"
+        },
+        {
+          "const": "closed",
+          "type": "string"
+        },
+        {
+          "const": "merged",
+          "type": "string"
+        }
+      ]
+    },
+    "draft": {
+      "type": "boolean"
+    },
+    "sourceBranch": {
+      "minLength": 1,
+      "pattern": "^(?!refs/).+",
+      "type": "string"
+    },
+    "targetBranch": {
+      "minLength": 1,
+      "pattern": "^(?!refs/).+",
+      "type": "string"
+    },
+    "baseSha": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "headSha": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "autoMergeEnabled": {
+      "type": "boolean"
+    },
+    "linkageDigest": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "observedVersion": {
+      "minLength": 1,
+      "description": "Opaque ForgeObservedVersion.",
+      "type": "string"
+    }
+  }
+}

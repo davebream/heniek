@@ -1,0 +1,66 @@
+{
+  "$id": "heniek://contract/UpdateIssueInput/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "repositoryId",
+    "number",
+    "expectedObservedVersion",
+    "patch"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "repositoryId": {
+      "minLength": 1,
+      "description": "Opaque RepositoryId.",
+      "type": "string"
+    },
+    "number": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "expectedObservedVersion": {
+      "minLength": 1,
+      "description": "Opaque ForgeObservedVersion.",
+      "type": "string"
+    },
+    "patch": {
+      "additionalProperties": false,
+      "minProperties": 1,
+      "type": "object",
+      "properties": {
+        "title": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "body": {
+          "type": "string"
+        },
+        "state": {
+          "anyOf": [
+            {
+              "const": "open",
+              "type": "string"
+            },
+            {
+              "const": "closed",
+              "type": "string"
+            }
+          ]
+        },
+        "labels": {
+          "uniqueItems": true,
+          "type": "array",
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}
