@@ -1,0 +1,39 @@
+{
+  "$id": "heniek://contract/ForgeIssueMutation/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "disposition",
+    "issue"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "disposition": {
+      "anyOf": [
+        {
+          "const": "created",
+          "type": "string"
+        },
+        {
+          "const": "adopted",
+          "type": "string"
+        },
+        {
+          "const": "updated",
+          "type": "string"
+        },
+        {
+          "const": "unchanged",
+          "type": "string"
+        }
+      ]
+    },
+    "issue": {
+      "$ref": "heniek://contract/ForgeIssue/v1"
+    }
+  }
+}

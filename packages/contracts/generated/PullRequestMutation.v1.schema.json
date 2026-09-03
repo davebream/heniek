@@ -1,0 +1,39 @@
+{
+  "$id": "heniek://contract/PullRequestMutation/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "disposition",
+    "pullRequest"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "disposition": {
+      "anyOf": [
+        {
+          "const": "created",
+          "type": "string"
+        },
+        {
+          "const": "adopted",
+          "type": "string"
+        },
+        {
+          "const": "updated",
+          "type": "string"
+        },
+        {
+          "const": "unchanged",
+          "type": "string"
+        }
+      ]
+    },
+    "pullRequest": {
+      "$ref": "heniek://contract/PullRequest/v2"
+    }
+  }
+}

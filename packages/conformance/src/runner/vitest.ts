@@ -1,4 +1,4 @@
-import type { ExecutionBackend, ForgeBackend, TaskSource } from "@heniek/contracts";
+import type { ExecutionBackend, ForgeBackendV3, TaskSource } from "@heniek/contracts";
 import { describe, it } from "vitest";
 import {
   EXECUTION_BACKEND_CASES,
@@ -65,7 +65,7 @@ export function describeTaskSourceConformance(
 }
 
 export function describeForgeBackendConformance(
-  harness: ConformanceHarness<ForgeBackend, ForgeArrangement>,
+  harness: ConformanceHarness<ForgeBackendV3, ForgeArrangement>,
   options?: DescribeConformanceOptions,
 ): void {
   describeFamily("ForgeBackend", FORGE_BACKEND_CASES, harness, options);

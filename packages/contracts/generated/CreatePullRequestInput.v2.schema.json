@@ -1,0 +1,54 @@
+{
+  "$id": "heniek://contract/CreatePullRequestInput/v2",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "repositoryId",
+    "sourceBranch",
+    "targetBranch",
+    "title",
+    "body",
+    "expectedHeadSha",
+    "idempotencyKey"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 2,
+      "type": "number"
+    },
+    "repositoryId": {
+      "minLength": 1,
+      "description": "Opaque RepositoryId.",
+      "type": "string"
+    },
+    "sourceBranch": {
+      "minLength": 1,
+      "pattern": "^(?!refs/).+",
+      "type": "string"
+    },
+    "targetBranch": {
+      "minLength": 1,
+      "pattern": "^(?!refs/).+",
+      "type": "string"
+    },
+    "title": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "body": {
+      "type": "string"
+    },
+    "draft": {
+      "type": "boolean"
+    },
+    "expectedHeadSha": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "idempotencyKey": {
+      "minLength": 1,
+      "type": "string"
+    }
+  }
+}

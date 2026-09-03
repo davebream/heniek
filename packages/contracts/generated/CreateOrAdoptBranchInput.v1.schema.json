@@ -1,0 +1,31 @@
+{
+  "$id": "heniek://contract/CreateOrAdoptBranchInput/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "repositoryId",
+    "branchName",
+    "targetSha"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "repositoryId": {
+      "minLength": 1,
+      "description": "Opaque RepositoryId.",
+      "type": "string"
+    },
+    "branchName": {
+      "minLength": 1,
+      "pattern": "^(?!refs/).+",
+      "type": "string"
+    },
+    "targetSha": {
+      "minLength": 1,
+      "type": "string"
+    }
+  }
+}

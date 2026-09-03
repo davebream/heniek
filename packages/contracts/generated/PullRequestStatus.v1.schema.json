@@ -1,0 +1,112 @@
+{
+  "$id": "heniek://contract/PullRequestStatus/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "pullRequestId",
+    "mergeability",
+    "mergeState",
+    "checks",
+    "totalCount",
+    "requiredCount",
+    "succeededCount",
+    "failedCount",
+    "pendingCount",
+    "observedVersion"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "pullRequestId": {
+      "minLength": 1,
+      "description": "Opaque PullRequestId.",
+      "type": "string"
+    },
+    "mergeability": {
+      "anyOf": [
+        {
+          "const": "unknown",
+          "type": "string"
+        },
+        {
+          "const": "mergeable",
+          "type": "string"
+        },
+        {
+          "const": "conflicting",
+          "type": "string"
+        }
+      ]
+    },
+    "mergeState": {
+      "anyOf": [
+        {
+          "const": "unknown",
+          "type": "string"
+        },
+        {
+          "const": "behind",
+          "type": "string"
+        },
+        {
+          "const": "blocked",
+          "type": "string"
+        },
+        {
+          "const": "draft",
+          "type": "string"
+        },
+        {
+          "const": "unstable",
+          "type": "string"
+        },
+        {
+          "const": "has_hooks",
+          "type": "string"
+        },
+        {
+          "const": "clean",
+          "type": "string"
+        },
+        {
+          "const": "dirty",
+          "type": "string"
+        }
+      ]
+    },
+    "checks": {
+      "type": "array",
+      "items": {
+        "$ref": "heniek://contract/CheckStatus/v1"
+      }
+    },
+    "totalCount": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "requiredCount": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "succeededCount": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "failedCount": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "pendingCount": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "observedVersion": {
+      "minLength": 1,
+      "description": "Opaque ForgeObservedVersion.",
+      "type": "string"
+    }
+  }
+}

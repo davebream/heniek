@@ -1,0 +1,37 @@
+{
+  "$id": "heniek://contract/UpdatePullRequestInput/v1",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "pullRequestId",
+    "expectedObservedVersion",
+    "expectedHeadSha"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "number"
+    },
+    "pullRequestId": {
+      "minLength": 1,
+      "description": "Opaque PullRequestId.",
+      "type": "string"
+    },
+    "expectedObservedVersion": {
+      "minLength": 1,
+      "description": "Opaque ForgeObservedVersion.",
+      "type": "string"
+    },
+    "expectedHeadSha": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "draft": {
+      "type": "boolean"
+    },
+    "autoMergeEnabled": {
+      "type": "boolean"
+    }
+  }
+}
