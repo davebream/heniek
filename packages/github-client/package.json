@@ -1,5 +1,5 @@
 {
-  "name": "@heniek/task-source-github",
+  "name": "@heniek/github-client",
   "version": "0.0.0",
   "private": true,
   "license": "MIT",
@@ -11,13 +11,9 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@heniek/contracts": "workspace:*",
-    "@heniek/github-client": "workspace:*",
-    "@heniek/secrets": "workspace:*",
-    "@heniek/state": "workspace:*"
+    "@heniek/secrets": "workspace:*"
   },
   "devDependencies": {
-    "@heniek/conformance": "workspace:*",
     "vitest": "catalog:"
   }
 }
