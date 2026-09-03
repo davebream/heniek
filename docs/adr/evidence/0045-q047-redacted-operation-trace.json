@@ -1,0 +1,49 @@
+{
+  "schemaVersion": "heniek.q047-forge-operation-trace.v1",
+  "recordedAt": "2026-09-03T00:00:00.000Z",
+  "repository": "acme/repo",
+  "credentials": "redacted-not-recorded",
+  "operations": [
+    {
+      "operation": "createOrAdoptIssue",
+      "sequence": ["search:no-match", "create:accepted-disconnect", "search:unique-match"],
+      "result": "adopted",
+      "externalRef": "ISSUE_REDACTED",
+      "observedVersion": "sha256:REDACTED"
+    },
+    {
+      "operation": "createOrAdoptBranch",
+      "beforeOid": "0000000000000000000000000000000000000000",
+      "afterOid": "COMMIT_SHA_REDACTED",
+      "force": false,
+      "result": "created"
+    },
+    {
+      "operation": "updateBranch",
+      "beforeOid": "EXPECTED_COMMIT_SHA_REDACTED",
+      "afterOid": "DIVERGENT_COMMIT_SHA_REDACTED",
+      "force": false,
+      "result": "stale_ref"
+    },
+    {
+      "operation": "createOrAdoptPullRequest",
+      "sequence": [
+        "verify-head",
+        "search:no-match",
+        "create:accepted-disconnect",
+        "search:unique-match"
+      ],
+      "draft": true,
+      "result": "adopted",
+      "externalRef": "PR_REDACTED",
+      "observedVersion": "sha256:REDACTED"
+    },
+    {
+      "operation": "observePullRequestStatus",
+      "mergeability": "mergeable",
+      "requiredChecks": 3,
+      "failedChecks": 1,
+      "statusObservedVersion": "sha256:REDACTED"
+    }
+  ]
+}
